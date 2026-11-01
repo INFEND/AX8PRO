@@ -79,8 +79,11 @@ jobs:
           mkdir -p /tmp/ax8-auto-test
           javac -d /tmp/ax8-auto-test \
             app/src/main/java/ru/xarkon/ax8/AutoPollController.java \
-            tools/AutoPollControllerTest.java
+            app/src/main/java/ru/xarkon/ax8/BackgroundSummary.java \
+            tools/AutoPollControllerTest.java \
+            tools/BackgroundSummaryTest.java
           java -cp /tmp/ax8-auto-test AutoPollControllerTest
+          java -cp /tmp/ax8-auto-test BackgroundSummaryTest
 
       - name: Test OTA manifest compatibility and integrity
         shell: bash
