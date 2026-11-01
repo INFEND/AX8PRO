@@ -1,17 +1,27 @@
-# AX 8 PRO · OTA
+# AX8 PRO CONTROL
 
-Official Android control center for OLAX AX8 Pro. Design language follows QR LINK; source project keeps router-control functions.
+Android control center for OLAX AX8 Pro. The application sources are maintained directly in this repository, under `app/`.
 
-## Initial one-time activation
+## Build, signing and OTA
 
-1. Add the `AX8PRO_SIGNING_BUNDLE` repository secret from the provided separate, private text file. Keep the secret out of public commits.
-2. Upload `AX8PRO_SOURCE.zip` to the repository root on `main` using **Add file → Upload files**. GitHub Actions will automatically import, compile, verify, sign, and publish the first release.
-3. Download `AX8PRO.apk` from Releases and install it. Future releases update from **Settings → OTA** in the app.
+The release workflow (`.github/workflows/ota-release.yml`) runs on changes to Android sources, OTA scripts and workflow configuration. It:
 
-Do not publish the signing key or the private signing bundle. The APK package is `ru.xarkon.ax8pro`, separate from older `ru.xarkon.ax8` builds because the signing identity differs.
+1. Tests automatic monitoring and OTA manifest generation.
+2. Builds the release APK with Gradle and Android SDK.
+3. Signs the APK using the existing `AX8PRO_SIGNING_BUNDLE` repository secret and checks the certificate pinned in `UpdateManager.java`.
+4. Generates `update.json` from the signed APK, including version, SHA-256 and size.
+5. Uploads the APK and manifest as Actions artifacts and publishes them to Releases.
 
-**OTA endpoint:** https://github.com/ANTIFERMENT/AX8PRO/releases/latest/download/update.json
+**Current canonical repository:** https://github.com/INFEND/AX8PRO
 
-**APK endpoint:** https://github.com/ANTIFERMENT/AX8PRO/releases/latest/download/AX8PRO.apk
+**OTA manifest:** https://github.com/INFEND/AX8PRO/releases/latest/download/update.json
 
-**Status:** Initial source ZIP and secret required before the first release.
+**APK:** https://github.com/INFEND/AX8PRO/releases/latest/download/AX8PRO.apk
+
+For compatibility with installed pre-rename clients, generated manifests continue to use the legacy `ANTIFERMENT/AX8PRO` APK URL. GitHub redirects that path to the canonical repository. The Android updater accepts both legacy and canonical release paths.
+
+**Package:** `ru.xarkon.ax8pro`. Do not change its application ID, signing certificate, or OTA trust pin when releasing an update. Every new application release requires a higher `versionCode` and an updated `versionName`.
+
+## Release status
+
+Check [Releases](https://github.com/INFEND/AX8PRO/releases) for the latest **published** version and [Actions](https://github.com/INFEND/AX8PRO/actions) for build, signing, test and publication status. A passing APK build alone does not mean a release was published. Never commit private signing material.
