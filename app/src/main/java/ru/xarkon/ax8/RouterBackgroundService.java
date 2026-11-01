@@ -299,8 +299,16 @@ public final class RouterBackgroundService extends Service {
     }
     @Override public void onDestroy(){
         stopping=true;running=false;handler.removeCallbacks(tick);releaseLocks();
-        worker.execute(()->{try{if(priority.enabled)qos.applyPriority(priority.owner,null,router.devices(),msg->{});}catch(Exception ignored){}
-            try{traffic.close();}catch(Exception ignored){}try{qos.close();}catch(Exception ignored){} });
+        // The in-flight background poll may still own CPU/Wi-Fi locks when
+        // onDestroy() is called. Release again after the queued worker cleanup,
+        // otherwise a poll can reacquire a lock after the early release above.
+        worker.execute(()->{
+            try{
+                try{if(priority.enabled)qos.applyPriority(priority.owner,null,router.devices(),msg->{});}catch(Exception ignored){}
+                try{traffic.close();}catch(Exception ignored){}
+                try{qos.close();}catch(Exception ignored){}
+            }finally{releaseLocks();}
+        });
         worker.shutdown();
         super.onDestroy();
     }
