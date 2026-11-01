@@ -148,4 +148,34 @@ public final class UpdateManager {
         }catch(Exception e){new android.app.AlertDialog.Builder(a).setTitle("Обновление OTA")
             .setMessage(friendly(e)).setPositiveButton("Понятно",null).show();}
     }
+    /** Shows a reliable Open action after an app update; Android may restrict automatic starts. */
+    public static final class InstalledReceiver extends android.content.BroadcastReceiver {
+        @Override public void onReceive(Context context,Intent intent){
+            if(intent==null || !Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction()))return;
+            try{
+                context.getSharedPreferences("ax8_control",Context.MODE_PRIVATE).edit()
+                    .putLong("ota_last_installed_at",System.currentTimeMillis()).apply();
+                if(Build.VERSION.SDK_INT>=33 &&
+                    context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return;
+                Intent launch=context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+                if(launch==null)launch=new Intent(context,MainActivity.class);
+                launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                android.app.PendingIntent pending=android.app.PendingIntent.getActivity(context,260,launch,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
+                android.app.NotificationManager manager=(android.app.NotificationManager)
+                    context.getSystemService(Context.NOTIFICATION_SERVICE);
+                if(manager==null)return;
+                String channel="ax8pro_update_complete";
+                if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(
+                    new android.app.NotificationChannel(channel,"AX8 PRO CONTROL · Обновления",
+                        android.app.NotificationManager.IMPORTANCE_DEFAULT));
+                android.app.Notification.Builder builder=Build.VERSION.SDK_INT>=26?
+                    new android.app.Notification.Builder(context,channel):new android.app.Notification.Builder(context);
+                builder.setSmallIcon(R.drawable.ic_app).setContentTitle("AX8 PRO CONTROL обновлён")
+                    .setContentText("Нажмите, чтобы открыть приложение")
+                    .setAutoCancel(true).setContentIntent(pending);
+                manager.notify(260,builder.build());
+            }catch(Exception ignored){}
+        }
+    }
 }
