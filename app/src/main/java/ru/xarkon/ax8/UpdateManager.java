@@ -143,7 +143,6 @@ public final class UpdateManager {
             intent.setDataAndType(uri,"application/vnd.android.package-archive");
             intent.setClipData(ClipData.newRawUri("AX8 PRO CONTROL",uri));
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            intent.putExtra(Intent.EXTRA_RETURN_RESULT,false);
             a.startActivity(intent);
         }catch(Exception e){new android.app.AlertDialog.Builder(a).setTitle("Обновление OTA")
             .setMessage(friendly(e)).setPositiveButton("Понятно",null).show();}
