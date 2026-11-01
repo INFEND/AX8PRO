@@ -80,10 +80,13 @@ jobs:
           javac -d /tmp/ax8-auto-test \
             app/src/main/java/ru/xarkon/ax8/AutoPollController.java \
             app/src/main/java/ru/xarkon/ax8/BackgroundSummary.java \
+            app/src/main/java/ru/xarkon/ax8/SmsAlertPlanner.java \
             tools/AutoPollControllerTest.java \
-            tools/BackgroundSummaryTest.java
+            tools/BackgroundSummaryTest.java \
+            tools/SmsAlertPlannerTest.java
           java -cp /tmp/ax8-auto-test AutoPollControllerTest
           java -cp /tmp/ax8-auto-test BackgroundSummaryTest
+          java -cp /tmp/ax8-auto-test SmsAlertPlannerTest
 
       - name: Test OTA manifest compatibility and integrity
         shell: bash

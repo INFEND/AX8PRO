@@ -143,7 +143,9 @@ public final class RouterBackgroundService extends Service {
                 .setContentIntent(open).setAutoCancel(true)
                 .setStyle(new Notification.BigTextStyle().bigText(text.isEmpty()?"Получено новое сообщение":text))
                 .build();
-            nm.notify(SMS_NOTIFICATION,n);
+            // Tagged notifications preserve separate SMS alerts instead of overwriting
+            // the previous message when several arrive between two background polls.
+            nm.notify("ax8_sms_"+(sms.id==null?"test":sms.id),SMS_NOTIFICATION,n);
             prefs.edit().putLong("bg_last_notification_at",System.currentTimeMillis()).putString("bg_notification_error","").apply();
         }catch(Exception e){prefs.edit().putString("bg_notification_error",e.toString()).apply();}
     }
@@ -203,27 +205,32 @@ public final class RouterBackgroundService extends Service {
         // SMS is polled first; a Telnet/QoS or Wi-Fi-client error must never suppress SMS alerts.
         try{smsList=router.sms();}catch(Exception e){smsIssue=e.getMessage()==null?e.toString():e.getMessage();}
         if(smsList!=null){
-            int unread=0;RouterClient.Sms newest=null;
+            int unread=0;
             LinkedHashSet<String> seen=new LinkedHashSet<>();
+            List<String> unreadIds=new ArrayList<>();
             for(RouterClient.Sms item:smsList){
                 if(item.id!=null&&!item.id.isEmpty())seen.add(item.id);
-                if(item.unread()){unread++;}
+                if(item.unread()){
+                    unread++;
+                    if(item.id!=null&&!item.id.isEmpty())unreadIds.add(item.id);
+                }
             }
             String currentIds=String.join(",",seen);
             String previous=prefs.getString("bg_sms_seen_ids","");
             boolean initialized=prefs.getBoolean("bg_sms_seen_initialized",false);
-            Set<String> prior=new HashSet<>();
-            if(!previous.isEmpty())Collections.addAll(prior,previous.split(","));
-            if(initialized)for(RouterClient.Sms item:smsList){
-                if(item.unread()&&item.id!=null&&!item.id.isEmpty()&&!prior.contains(item.id)){
-                    newest=item;break;
-                }
-            }
+            List<String> freshIds=SmsAlertPlanner.newUnreadIds(unreadIds,previous,initialized);
             prefs.edit().putInt("bg_sms",smsList.size()).putInt("bg_sms_unread",unread)
                 .putString("bg_sms_seen_ids",currentIds).putBoolean("bg_sms_seen_initialized",true)
                 .putString("bg_sms_json",smsJson(smsList).toString()).putLong("bg_sms_at",System.currentTimeMillis()).apply();
-            // First scan establishes a baseline. Only subsequent newly seen unread SMS alert.
-            if(newest!=null)notifyNewSms(newest,unread);
+            // The first scan establishes a baseline. Notify for every new unread message,
+            // oldest first, rather than silently dropping all but one from a batch.
+            if(!freshIds.isEmpty()){
+                Set<String> pending=new HashSet<>(freshIds);
+                for(int i=smsList.size()-1;i>=0;i--){
+                    RouterClient.Sms item=smsList.get(i);
+                    if(pending.remove(item.id))notifyNewSms(item,unread);
+                }
+            }
         }
         try{radio=router.status();}catch(Exception e){statusIssue=e.getMessage()==null?e.toString():e.getMessage();}
         try{devices=router.devices();}catch(Exception e){deviceIssue=e.getMessage()==null?e.toString():e.getMessage();}
