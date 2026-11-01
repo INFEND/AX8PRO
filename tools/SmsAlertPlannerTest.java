@@ -45,6 +45,16 @@ public final class SmsAlertPlannerTest {
         String[] ids=capped.split(",");
         check(ids.length==1000 && ids[0].equals("100") && ids[999].equals("1099"),
             "history must be bounded to the newest 1000 observed IDs");
-        System.out.println("SMS alert planner: 16 cases PASSED");
+        // A foreground visit may show only the newest SMS page. Returning to
+        // background must MERGE with the stored history rather than replacing it.
+        String afterForeground=merge("10,11,12",Arrays.asList("12","13"));
+        check(afterForeground.equals("10,11,12,13"),
+            "foreground-to-background handoff must retain IDs absent from the UI page");
+        check(plan(Arrays.asList("10","13","14"),afterForeground,true)
+            .equals(Collections.singletonList("14")),
+            "old SMS returning after a foreground visit must not alert twice");
+        check(merge(afterForeground,Collections.emptyList()).equals(afterForeground),
+            "empty foreground page must not reset persisted history");
+        System.out.println("SMS alert planner: 19 cases PASSED");
     }
 }

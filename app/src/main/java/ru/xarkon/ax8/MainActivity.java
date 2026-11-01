@@ -122,7 +122,8 @@ public final class MainActivity extends Activity {
         if(smsAt>0){
             java.util.LinkedHashSet<String> ids=new java.util.LinkedHashSet<>();
             for(RouterClient.Sms x:messages)if(x.id!=null&&!x.id.isEmpty())ids.add(x.id);
-            bg.putString("bg_sms_seen_ids",String.join(",",ids))
+            bg.putString("bg_sms_seen_ids",SmsAlertPlanner.mergeSeenIds(
+                prefs.getString("bg_sms_seen_ids",""),ids))
                 .putBoolean("bg_sms_seen_initialized",true)
                 .putInt("bg_sms_unread",(int)messages.stream().filter(RouterClient.Sms::unread).count());
         }
