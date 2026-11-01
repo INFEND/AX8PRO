@@ -215,12 +215,14 @@ public final class RouterBackgroundService extends Service {
                     if(item.id!=null&&!item.id.isEmpty())unreadIds.add(item.id);
                 }
             }
-            String currentIds=String.join(",",seen);
             String previous=prefs.getString("bg_sms_seen_ids","");
             boolean initialized=prefs.getBoolean("bg_sms_seen_initialized",false);
             List<String> freshIds=SmsAlertPlanner.newUnreadIds(unreadIds,previous,initialized);
+            // Preserve recently observed IDs even if the router returns a valid
+            // but temporarily empty or truncated page. A missing ID is not a new SMS.
+            String mergedIds=SmsAlertPlanner.mergeSeenIds(previous,seen);
             prefs.edit().putInt("bg_sms",smsList.size()).putInt("bg_sms_unread",unread)
-                .putString("bg_sms_seen_ids",currentIds).putBoolean("bg_sms_seen_initialized",true)
+                .putString("bg_sms_seen_ids",mergedIds).putBoolean("bg_sms_seen_initialized",true)
                 .putString("bg_sms_json",smsJson(smsList).toString()).putLong("bg_sms_at",System.currentTimeMillis()).apply();
             // The first scan establishes a baseline. Notify for every new unread message,
             // oldest first, rather than silently dropping all but one from a batch.

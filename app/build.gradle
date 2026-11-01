@@ -8,8 +8,8 @@ android {
         applicationId 'ru.xarkon.ax8pro'
         minSdk 26
         targetSdk 35
-        versionCode 26
-        versionName '1.5.8'
+        versionCode 27
+        versionName '1.5.9'
     }
     // GitHub Actions signs release APK with the permanent AX8PRO key.
     // Debug builds use the normal local debug signer only for development.
