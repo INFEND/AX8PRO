@@ -262,9 +262,13 @@ public final class RouterBackgroundService extends Service {
             editor.putLong("bg_fallback_ul_bits",Double.doubleToRawLongBits(tx));
         }
         if(devices!=null){editor.putInt("bg_clients",devices.size())
-            .putString("bg_devices_json",devicesJson(devices).toString());}
+            .putString("bg_devices_json",devicesJson(devices).toString())
+            .putLong("bg_devices_at",now);}
         if(blockState!=null){editor.putInt("bg_blocked",blockState.black.size())
-            .putString("bg_blocked_json",blockedJson(blockState).toString());}
+            .putString("bg_blocked_json",blockedJson(blockState).toString())
+            .putLong("bg_blocked_at",now);}
+        // Link SMS to this completed cycle, not merely to a previous successful read.
+        if(smsList!=null)editor.putLong("bg_sms_cycle_at",now);
         String issues=(!statusIssue.isEmpty()?"LTE: "+statusIssue+"; ":"")+
             (!smsIssue.isEmpty()?"SMS: "+smsIssue+"; ":"")+
             (!deviceIssue.isEmpty()?"Клиенты: "+deviceIssue+"; ":"")+qosIssue;

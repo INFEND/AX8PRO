@@ -269,18 +269,33 @@ public final class MainActivity extends Activity {
         try{
             String rawStatus=prefs.getString("bg_status_json","");
             if(rawStatus!=null&&!rawStatus.trim().isEmpty())status=new JSONObject(rawStatus);
-            String rawDevices=prefs.getString("bg_devices_json","");
-            if(rawDevices!=null&&!rawDevices.trim().isEmpty())devices=parseDevices(new JSONArray(rawDevices));
-            String rawSms=prefs.getString("bg_sms_json","");
-            if(rawSms!=null&&!rawSms.trim().isEmpty())messages=parseSms(new JSONArray(rawSms));
-            String rawBlocked=prefs.getString("bg_blocked_json","");
-            if(rawBlocked!=null&&!rawBlocked.trim().isEmpty())blocked=parseBlocked(new JSONObject(rawBlocked));
+            // Do not give stale clients, SMS or ACL data a newer LTE timestamp.
+            long deviceAt=prefs.getLong("bg_devices_at",0L);
+            if(deviceAt==ts && BackgroundSummary.isFresh(deviceAt,now,limit)){
+                String rawDevices=prefs.getString("bg_devices_json","");
+                devices=rawDevices==null||rawDevices.trim().isEmpty()
+                    ?new ArrayList<>():parseDevices(new JSONArray(rawDevices));
+                clientsAt=deviceAt;
+            }else{devices=new ArrayList<>();clientsAt=0;}
+            long smsTime=prefs.getLong("bg_sms_at",0L);
+            if(prefs.getLong("bg_sms_cycle_at",0L)==ts &&
+                    BackgroundSummary.isFresh(smsTime,now,limit)){
+                String rawSms=prefs.getString("bg_sms_json","");
+                messages=rawSms==null||rawSms.trim().isEmpty()
+                    ?new ArrayList<>():parseSms(new JSONArray(rawSms));
+                smsAt=smsTime;
+            }else{messages=new ArrayList<>();smsAt=0;}
+            long blockedAt=prefs.getLong("bg_blocked_at",0L);
+            if(blockedAt==ts && BackgroundSummary.isFresh(blockedAt,now,limit)){
+                String rawBlocked=prefs.getString("bg_blocked_json","");
+                blocked=rawBlocked==null||rawBlocked.trim().isEmpty()
+                    ?null:parseBlocked(new JSONObject(rawBlocked));
+            }else blocked=null;
             fallbackDl=Double.longBitsToDouble(prefs.getLong("bg_fallback_dl_bits",Double.doubleToRawLongBits(fallbackDl)));
             fallbackUl=Double.longBitsToDouble(prefs.getLong("bg_fallback_ul_bits",Double.doubleToRawLongBits(fallbackUl)));
             String rawDl=prefs.getString("bg_history_dl","");if(rawDl!=null&&!rawDl.isEmpty())restoreHistory(rawDl,historyDl);
             String rawUl=prefs.getString("bg_history_ul","");if(rawUl!=null&&!rawUl.isEmpty())restoreHistory(rawUl,historyUl);
-            statusAt=clientsAt=lastCompleteAt=ts;
-            smsAt=Math.max(ts,prefs.getLong("bg_sms_at",0L));
+            statusAt=lastCompleteAt=ts;
             error="";sectionError="";
             updateConnection();rebuildNav();draw(true);
         }catch(Exception ignored){}
