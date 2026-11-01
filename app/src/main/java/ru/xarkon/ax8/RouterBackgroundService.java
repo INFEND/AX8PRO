@@ -271,7 +271,7 @@ public final class RouterBackgroundService extends Service {
         editor.putString("bg_error",issues).putString("bg_qos",qosIssue.isEmpty()?watchdog.status():qosIssue)
             .putString("bg_priority_status",priority.mode).apply();
         if(!issues.isEmpty())notifyState("AX8: "+issues);
-        else notifyState("Клиентов: "+BackgroundSummary.clientCount(devices)+" · SMS: +(smsList==null?"?":smsList.size())+
+        else notifyState("Клиентов: "+BackgroundSummary.clientCount(devices)+" · SMS: "+(smsList==null?"?":smsList.size())+
             " · "+(radio!=null&&"ppp_connected".equals(radio.optString("ppp_status"))?"LTE online":"LTE проверяется"));
     }
     private ArrayDeque<Float> history(String key){
