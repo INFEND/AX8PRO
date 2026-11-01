@@ -13,6 +13,10 @@
   <application android:allowBackup="false" android:usesCleartextTraffic="true"
       android:theme="@style/AppTheme" android:label="AX8 PRO CONTROL" android:icon="@drawable/ic_app"
       android:supportsRtl="true">
+    <receiver android:name=".UpdateManager$InstalledReceiver"
+        android:enabled="true" android:exported="false">
+      <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
+    </receiver>
     <provider android:name=".UpdateProvider" android:authorities="ru.xarkon.ax8pro.ota" android:exported="false" android:grantUriPermissions="true" />
     <service android:name=".UpdateJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="true" />
     <service android:name=".RouterBackgroundService" android:exported="false" android:foregroundServiceType="connectedDevice" android:stopWithTask="false" />
