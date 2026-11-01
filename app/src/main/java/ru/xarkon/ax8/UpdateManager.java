@@ -16,10 +16,11 @@ import java.util.Locale;
 /** A pinned, immutable official update channel. No user-editable endpoints. */
 public final class UpdateManager {
     private UpdateManager(){}
-    public static final String MANIFEST_URL="https://github.com/ANTIFERMENT/AX8PRO/releases/latest/download/update.json";
+    public static final String MANIFEST_URL="https://github.com/INFEND/AX8PRO/releases/latest/download/update.json";
     public static final String TRUSTED_CERT_SHA256="BD4A9D2F3DE3117714C900E9FF5A5D632A0AAE0B3BD3DC58C8F2AC83363E585A";
     public static final String PACKAGE="ru.xarkon.ax8pro";
     private static final String RELEASE_PREFIX="/ANTIFERMENT/AX8PRO/releases/download/";
+    private static final String RELEASE_PREFIX_NEW="/INFEND/AX8PRO/releases/download/";
     private static final long MAX_APK=200L*1024L*1024L;
     private static final String APK_NAME="AX8PRO-update.apk";
     public interface Listener {
@@ -40,7 +41,7 @@ public final class UpdateManager {
             sizeBytes=j.optLong("sizeBytes",-1);notes=j.optString("notes","");
             URL url=new URL(apkUrl);
             if(!"https".equals(url.getProtocol())||!"github.com".equalsIgnoreCase(url.getHost())||
-                !url.getPath().startsWith(RELEASE_PREFIX)||!url.getPath().endsWith("/AX8PRO.apk")||
+                (!url.getPath().startsWith(RELEASE_PREFIX)&&!url.getPath().startsWith(RELEASE_PREFIX_NEW))||!url.getPath().endsWith("/AX8PRO.apk")||
                 versionCode<1||sizeBytes>MAX_APK||!sha256.matches("[A-F0-9]{64}"))
                 throw new IOException("Недоверенный APK или неверные метаданные");
         }
