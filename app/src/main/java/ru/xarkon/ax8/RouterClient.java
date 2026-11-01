@@ -205,7 +205,18 @@ public final class RouterClient {
     public synchronized List<Sms> sms() throws Exception {
         ensureAuth();
         JSONObject obj=request("/goform/goform_get_cmd_process",map("isTest","false","cmd","sms_data_total","page","0","data_per_page","500","mem_store","1","tags","10","order_by","order by id desc"),false,6000);
-        ArrayList<Sms> out=new ArrayList<>();JSONArray rows=obj.optJSONArray("messages");if(rows==null)return out;
+        ArrayList<Sms> out=new ArrayList<>();JSONArray rows=obj.optJSONArray("messages");
+        // A malformed/partial response must not be treated as an empty inbox:
+        // the background monitor would otherwise forget previously seen SMS IDs
+        // and announce old messages again after the next successful request.
+        if(rows==null){
+            Object raw=obj.opt("messages");
+            if(raw instanceof String){
+                try{rows=new JSONArray((String)raw);}
+                catch(org.json.JSONException e){throw new IOException("AX8: повреждён список SMS",e);}
+            }
+            if(rows==null)throw new IOException("AX8: ответ SMS не содержит массив messages");
+        }
         for(int i=0;i<rows.length();i++) {JSONObject x=rows.optJSONObject(i);if(x==null)continue;
             Sms s=new Sms();s.id=clean(x.optString("id","?"));s.number=clean(x.optString("number","?"));s.tag=x.optString("tag","");s.date=smsDate(x.optString("date",""));s.content=decodeSms(x.optString("content",""));out.add(s);
         }return out;
