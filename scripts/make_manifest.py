@@ -37,7 +37,7 @@ def main():
         "packageName": package_name,
         "versionCode": int(code),
         "versionName": version,
-        "apkUrl": f"https://github.com/{args.repo}/releases/download/{quote(tag)}/AX8PRO.apk",
+        "apkUrl": f"https://github.com/ANTIFERMENT/AX8PRO/releases/download/{quote(tag)}/AX8PRO.apk",
         "sha256": sha,
         "sizeBytes": apk.stat().st_size,
         "publishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
