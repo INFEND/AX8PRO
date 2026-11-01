@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--github-output", required=True)
     args = parser.parse_args()
 
-    if args.repo.casefold() != "antiferment/ax8pro":
+    if args.repo.casefold() not in ("antiferment/ax8pro", "infend/ax8pro"):
         raise SystemExit("Unexpected repository: " + args.repo)
     apk = Path(args.apk)
     if not apk.is_file():
@@ -30,6 +30,8 @@ def main():
     package_name, code, version = match.groups()
     if not re.fullmatch(r"[A-Za-z0-9._-]+", version):
         raise SystemExit("Invalid versionName for a Git tag")
+    if package_name != "ru.xarkon.ax8pro" or int(code) < 1:
+        raise SystemExit("Unexpected APK package or versionCode: " + package_name + " " + code)
     tag = "v" + version
     sha = hashlib.sha256(apk.read_bytes()).hexdigest()
     data = {
@@ -37,6 +39,8 @@ def main():
         "packageName": package_name,
         "versionCode": int(code),
         "versionName": version,
+        # Keep the pre-rename URL for OTA clients that pin the legacy path.
+        # GitHub redirects it to the canonical INFEND/AX8PRO repository.
         "apkUrl": f"https://github.com/ANTIFERMENT/AX8PRO/releases/download/{quote(tag)}/AX8PRO.apk",
         "sha256": sha,
         "sizeBytes": apk.stat().st_size,
