@@ -41,7 +41,7 @@ def main():
         "sha256": sha,
         "sizeBytes": apk.stat().st_size,
         "publishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "notes": f"AX 8 PRO {version}. Список изменений опубликован в GitHub Releases."
+        "notes": f"AX8 PRO CONTROL {version}. Исправления интерфейса, мониторинга и обновлений."
     }
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
