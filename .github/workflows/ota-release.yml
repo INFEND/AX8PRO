@@ -82,6 +82,10 @@ jobs:
             tools/AutoPollControllerTest.java
           java -cp /tmp/ax8-auto-test AutoPollControllerTest
 
+      - name: Test OTA manifest compatibility and integrity
+        shell: bash
+        run: python3 -m unittest discover -s tools -p 'test_*.py' -v
+
       - name: Android SDK
         uses: android-actions/setup-android@v4
 
