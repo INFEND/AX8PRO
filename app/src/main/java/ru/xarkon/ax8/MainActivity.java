@@ -65,6 +65,7 @@ public final class MainActivity extends Activity {
     private RouterClient.BlockState blocked;
     private volatile boolean actionBusy=false,refreshBusy=false;
     private volatile boolean running=false;
+    private final RefreshSession refreshSession=new RefreshSession();
     private int tab=0,lastNavTab=-1,lastNavUnread=-1;
     private String error="",notice="";
     private long statusAt=0,clientsAt=0,smsAt=0,lastBytesAt=0;
@@ -113,6 +114,9 @@ public final class MainActivity extends Activity {
         }
     }
     @Override protected void onPause(){
+        // A foreground poll may complete after the Activity is paused or resumed.
+        // Reject its queued UI callbacks without allowing overlapping WebUI requests.
+        refreshSession.invalidate();
         running=false;handler.removeCallbacks(ticker);
         boolean persistent=prefs.getBoolean("background_mode",false)&&RouterBackgroundService.isRunning();
         // Update foreground state NOW, not after Telnet cleanup. Otherwise the background
@@ -382,6 +386,7 @@ public final class MainActivity extends Activity {
         boolean wantSms=wantStatus;
         if(!wantStatus&&!wantClients&&!wantBlocked&&!wantSms)return;
         refreshBusy=true;
+        final long cycleGeneration=refreshSession.capture();
         final long cycleStart=android.os.SystemClock.elapsedRealtime();
         workers.execute(()->{
             JSONObject next=null;List<RouterClient.Device> d=null;List<RouterClient.Sms> m=null;RouterClient.BlockState b=null;
@@ -391,7 +396,7 @@ public final class MainActivity extends Activity {
                 if(next!=null && forced && !bandTracker.isPending()){
                     final JSONObject early=next;
                     handler.post(()->{
-                        if(!running||bandTracker.isPending())return;
+                        if(!refreshSession.accepts(cycleGeneration,running)||bandTracker.isPending())return;
                         status=early;statusAt=System.currentTimeMillis();error="";
                         updateConnection();
                         if(tab==0)draw(true);
@@ -422,6 +427,8 @@ public final class MainActivity extends Activity {
             final RouterClient.BlockState blacklist=b;final String fail=failure;
             handler.post(()->{
                 refreshBusy=false;
+                // Do not publish data obtained before a pause/resume transition.
+                if(!refreshSession.accepts(cycleGeneration,running)||isFinishing()||isDestroyed())return;
                 observePoll(android.os.SystemClock.elapsedRealtime()-cycleStart,
                     status2!=null && sms2!=null && devices2!=null);
                 if(status2!=null){

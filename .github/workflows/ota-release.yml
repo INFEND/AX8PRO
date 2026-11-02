@@ -80,6 +80,7 @@ jobs:
           mkdir -p /tmp/ax8-auto-test
           javac -d /tmp/ax8-auto-test \
             app/src/main/java/ru/xarkon/ax8/AutoPollController.java \
+            app/src/main/java/ru/xarkon/ax8/RefreshSession.java \
             app/src/main/java/ru/xarkon/ax8/ClientSnapshotPolicy.java \
             app/src/main/java/ru/xarkon/ax8/BackgroundSummary.java \
             app/src/main/java/ru/xarkon/ax8/SmsAlertPlanner.java \
@@ -91,6 +92,7 @@ jobs:
             app/src/main/java/ru/xarkon/ax8/ReleaseNotes.java \
             app/src/main/java/ru/xarkon/ax8/OtaHistory.java \
             tools/AutoPollControllerTest.java \
+            tools/RefreshSessionTest.java \
             tools/ClientSnapshotPolicyTest.java \
             tools/BackgroundSummaryTest.java \
             tools/SmsAlertPlannerTest.java \
@@ -101,6 +103,7 @@ jobs:
             tools/BatteryLevelPolicyTest.java \
             tools/OtaHistoryTest.java
           java -cp /tmp/ax8-auto-test AutoPollControllerTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.RefreshSessionTest
           java -cp /tmp/ax8-auto-test ClientSnapshotPolicyTest
           java -cp /tmp/ax8-auto-test BackgroundSummaryTest
           java -cp /tmp/ax8-auto-test SmsAlertPlannerTest
