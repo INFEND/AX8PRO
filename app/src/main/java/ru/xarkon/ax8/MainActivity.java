@@ -29,11 +29,17 @@ public final class MainActivity extends Activity {
     private final ExecutorService workers=Executors.newSingleThreadExecutor();
     // Internet tests never delay the WebUI/SMS/QoS polling worker.
     private final ExecutorService internetWorker=Executors.newSingleThreadExecutor();
-    private boolean internetBusy=false,internetWatching=false;
+    private boolean internetBusy=false,internetWatching=false,internetChangeScheduled=false;
     private long internetLastStart=0L,internetCheckedAt=0L,internetRevision=0L;
     private int internetResult=InternetStatusPolicy.UNKNOWN;
+    private String internetNetworkSignature="";
     private final Runnable internetChange=()->{
+        internetChangeScheduled=false;
         if(!MainActivity.this.running)return;
+        String signature=routerNetworkFingerprint();
+        // Repeated capability callbacks must not invalidate a still-valid probe.
+        if(signature.equals(internetNetworkSignature))return;
+        internetNetworkSignature=signature;
         resetInternetResult();
         updateInternetChip();
         maybeProbeInternet(true);
@@ -41,12 +47,17 @@ public final class MainActivity extends Activity {
     private final ConnectivityManager.NetworkCallback internetCallback=
         new ConnectivityManager.NetworkCallback(){
             private void changed(){
-                handler.removeCallbacks(internetChange);
-                handler.postDelayed(internetChange,450L);
+                handler.post(()->{
+                    if(!running||internetChangeScheduled)return;
+                    // Fixed delay: event storms cannot indefinitely postpone checking.
+                    internetChangeScheduled=true;
+                    handler.postDelayed(internetChange,450L);
+                });
             }
             @Override public void onAvailable(Network network){changed();}
             @Override public void onLost(Network network){changed();}
             @Override public void onCapabilitiesChanged(Network network,NetworkCapabilities c){changed();}
+            @Override public void onLinkPropertiesChanged(Network network,android.net.LinkProperties lp){changed();}
         };
     private final ArrayDeque<Float> historyDl=new ArrayDeque<>();
     private final ArrayDeque<Float> historyUl=new ArrayDeque<>();
@@ -133,7 +144,9 @@ public final class MainActivity extends Activity {
         if(prefs.getBoolean("background_mode",false)&&prefs.getBoolean("background_priority",false)
                 &&monitorOn&&!ownerMac.isEmpty()&&!priority.enabled)priority.enable(ownerMac);
         autoPollMs=AutoPollController.clamp(prefs.getInt("auto_poll_ms",500));
-        running=true;resetInternetResult();watchRouterNetwork();
+        running=true;resetInternetResult();
+        internetNetworkSignature=routerNetworkFingerprint();
+        watchRouterNetwork();
         handler.removeCallbacks(ticker);refresh(true);maybeProbeInternet(true);
         handler.postDelayed(ticker,refreshInterval());
         if(!startupOtaChecked){
@@ -560,6 +573,34 @@ public final class MainActivity extends Activity {
         internetResult=InternetStatusPolicy.UNKNOWN;
         internetLastStart=0L;internetCheckedAt=0L;
     }
+    /** Physical-network identity: ignore VPN and unrelated Android capability churn. */
+    private String routerNetworkFingerprint(){
+        try{
+            ConnectivityManager cm=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
+            if(cm==null)return "";
+            List<String> links=new ArrayList<>();
+            for(Network network:cm.getAllNetworks()){
+                NetworkCapabilities caps=cm.getNetworkCapabilities(network);
+                if(caps==null||caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)||
+                        (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)&&
+                         !caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)))continue;
+                StringBuilder link=new StringBuilder().append(network.getNetworkHandle())
+                    .append(":validated=")
+                    .append(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
+                android.net.LinkProperties properties=cm.getLinkProperties(network);
+                if(properties!=null){
+                    link.append(":iface=").append(properties.getInterfaceName());
+                    for(android.net.RouteInfo route:properties.getRoutes())
+                        if(route.isDefaultRoute())link.append(":gateway=").append(route.getGateway());
+                    for(java.net.InetAddress dns:properties.getDnsServers())
+                        link.append(":dns=").append(dns.getHostAddress());
+                }
+                links.add(link.toString());
+            }
+            Collections.sort(links);
+            return String.join("|",links);
+        }catch(Exception ignored){return "";}
+    }
     private void watchRouterNetwork(){
         if(internetWatching)return;
         try{
@@ -574,6 +615,7 @@ public final class MainActivity extends Activity {
     }
     private void stopWatchingRouterNetwork(){
         handler.removeCallbacks(internetChange);
+        internetChangeScheduled=false;
         if(!internetWatching)return;
         internetWatching=false;
         try{
