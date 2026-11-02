@@ -1734,8 +1734,41 @@ public final class MainActivity extends Activity {
             });
         theme.addView(batteryToggle[0]);
         Ui.addSpace(theme,this,5);
-        theme.addView(Ui.text(this,"Молния видна только во время подтверждённой зарядки. Настройка силуэта батареи на неё не влияет.",
+        theme.addView(Ui.text(this,"Молния появляется только при подтверждении зарядки роутером, независимо от значка уровня.",
             12,Ui.MUTED,false));
+        Ui.addSpace(theme,this,8);
+        theme.addView(Ui.button(this,"⚡  Проверить состояние зарядки",Ui.CARD2,Ui.CYAN,()->{
+            workers.execute(()->{
+                try{
+                    JSONObject info=api.batteryDiagnostics();
+                    String grouped=info.optString("multi_battery_charging","");
+                    String single=info.optString("single_battery_charging","");
+                    int multiState=BatteryLevelPolicy.chargingState(grouped);
+                    int singleState=BatteryLevelPolicy.chargingState(single);
+                    int state=singleState>=0?singleState:multiState;
+                    String title=state==1?"Заряжается":state==0?"Не заряжается":"Роутер не сообщил состояние";
+                    String report="Состояние: "+title+"\n"+
+                        "Общий запрос: "+(grouped.isEmpty()?"нет данных":grouped)+"\n"+
+                        "Отдельный запрос: "+(single.isEmpty()?"нет данных":single)+"\n"+
+                        "Уровень (WebUI): "+info.optString("Battery_voltage","—")+"\n"+
+                        "Заряд (резервное поле): "+info.optString("battery_vol_percent","—")+"\n"+
+                        "Индекс уровня: "+info.optString("battery_pers","—")+"\n\n"+
+                        "Если оба ответа пустые, значок зарядки нельзя показывать достоверно.";
+                    handler.post(()->{
+                        if(isFinishing()||isDestroyed())return;
+                        LinearLayout content=Ui.vertical(this);
+                        TextView value=Ui.text(this,report,13,Ui.TEXT,false);
+                        value.setTextIsSelectable(true);content.addView(value);
+                        Ui.sheet(this,"Зарядка AX8",title,content);
+                    });
+                }catch(Exception e){
+                    handler.post(()->{
+                        if(!isFinishing()&&!isDestroyed())
+                            alert("Диагностика зарядки","Не удалось прочитать поля AX8: "+e.getMessage());
+                    });
+                }
+            });
+        }));
         Ui.addSpace(theme,this,13);
         theme.addView(Ui.button(this,"Aa  Шрифт · "+fontLabel(prefs.getString("font","sans-serif")),Ui.CARD2,Ui.TEXT,()->chooseFont()));
         Ui.addSpace(theme,this,12);
