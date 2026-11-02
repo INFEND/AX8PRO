@@ -177,17 +177,17 @@ public final class RouterClient {
     /** Diagnostic-only GET queries: no settings are changed on the router. */
     public synchronized JSONObject batteryDiagnostics() throws Exception {
         ensureAuth();
-        JSONObject result=new JSONObject();
-        JSONObject grouped=get(BATTERY_FIELDS);
-        JSONObject individual=getSingle("battery_charging");
-        try{
-            result.put("multi_battery_charging",grouped.optString("battery_charging",""));
-            result.put("single_battery_charging",individual.optString("battery_charging",""));
-            result.put("battery_vol_percent",grouped.optString("battery_vol_percent",""));
-            result.put("Battery_voltage",grouped.optString("Battery_voltage",""));
-            result.put("battery_pers",grouped.optString("battery_pers",""));
-            result.put("battery_value",grouped.optString("battery_value",""));
-        }catch(Exception ignored){}
+        JSONObject grouped=new JSONObject(),individual=new JSONObject(),result=new JSONObject();
+        String multiError="",singleError="";
+        try{grouped=get(BATTERY_FIELDS);}catch(Exception e){multiError=String.valueOf(e.getMessage());}
+        try{individual=getSingle("battery_charging");}catch(Exception e){singleError=String.valueOf(e.getMessage());}
+        result.put("multi_battery_charging",grouped.optString("battery_charging",""));
+        result.put("single_battery_charging",individual.optString("battery_charging",""));
+        result.put("battery_vol_percent",grouped.optString("battery_vol_percent",""));
+        result.put("Battery_voltage",grouped.optString("Battery_voltage",""));
+        result.put("battery_pers",grouped.optString("battery_pers",""));
+        result.put("battery_value",grouped.optString("battery_value",""));
+        result.put("multi_error",multiError);result.put("single_error",singleError);
         return result;
     }
     public synchronized void network(boolean enabled) throws Exception {
