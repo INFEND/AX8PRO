@@ -28,6 +28,14 @@ final class BatteryLevelPolicy {
         return (int)(Math.min(4,Math.rint(value))*25);
     }
 
+    /** Charging must come from the router's explicit battery_charging field, never from charge level. */
+    static boolean isCharging(String raw){
+        if(raw==null)return false;
+        String value=raw.trim().toLowerCase(java.util.Locale.ROOT);
+        return "1".equals(value)||"true".equals(value)||"charging".equals(value)
+            ||"yes".equals(value)||"on".equals(value);
+    }
+
     static int color(int level,boolean light){
         if(level<0)return light?0xFF617180:0xFF9BA9B8;
         int l=Math.max(0,Math.min(100,level));
