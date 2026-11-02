@@ -50,7 +50,10 @@ public final class RouterBackgroundService extends Service {
                         .putString("bg_error",reason).apply();
                     notifyState("Фоновый опрос AX8: "+reason);
                 }finally{
-                    if(prefs.getBoolean("refresh_auto",true)){
+                    // A queued poll may outlive stopSelf()/onDestroy(). Never
+                    // keep its wake locks or tune cadence after shutdown.
+                    if(stopping)releaseLocks();
+                    if(!stopping && prefs.getBoolean("refresh_auto",true)){
                         long elapsed=android.os.SystemClock.elapsedRealtime()-started;
                         int old=prefs.getInt("auto_poll_ms",500);
                         // A current successful radio sample confirms that AX8 has answered.
@@ -196,8 +199,10 @@ public final class RouterBackgroundService extends Service {
         try{return Double.parseDouble(String.valueOf(raw).replace("%","").trim());}catch(Exception e){return Double.NaN;}
     }
     private void backgroundCycle(){
+        // A queued worker can start after the service has been destroyed.
+        if(stopping)return;
         acquireLocks();
-        if(prefs.getBoolean("ui_visible",true)){releaseLocks();return;}
+        if(stopping || prefs.getBoolean("ui_visible",true)){releaseLocks();return;}
         backgroundActive=true;
         JSONObject radio=null;
         List<RouterClient.Device> devices=null;
@@ -206,6 +211,7 @@ public final class RouterBackgroundService extends Service {
         String statusIssue="",deviceIssue="",smsIssue="",qosIssue="";
         // SMS is polled first; a Telnet/QoS or Wi-Fi-client error must never suppress SMS alerts.
         try{smsList=router.sms();}catch(Exception e){smsIssue=e.getMessage()==null?e.toString():e.getMessage();}
+        if(stopping){releaseLocks();return;}
         if(smsList!=null){
             int unread=0;
             LinkedHashSet<String> seen=new LinkedHashSet<>();
@@ -230,14 +236,16 @@ public final class RouterBackgroundService extends Service {
             // oldest first, rather than silently dropping all but one from a batch.
             if(!freshIds.isEmpty()){
                 Set<String> pending=new HashSet<>(freshIds);
-                for(int i=smsList.size()-1;i>=0;i--){
+                for(int i=smsList.size()-1;i>=0&&!stopping;i--){
                     RouterClient.Sms item=smsList.get(i);
                     if(pending.remove(item.id))notifyNewSms(item,unread);
                 }
             }
         }
         try{radio=router.status();}catch(Exception e){statusIssue=e.getMessage()==null?e.toString():e.getMessage();}
+        if(stopping){releaseLocks();return;}
         try{devices=router.devices();}catch(Exception e){deviceIssue=e.getMessage()==null?e.toString():e.getMessage();}
+        if(stopping){releaseLocks();return;}
         try{blockState=router.blockState();}catch(Exception ignored){}
         if(devices!=null){
             try{qos.resyncAddresses(devices,note->{});}catch(Exception e){qosIssue="QoS: "+e.getMessage();}
@@ -256,6 +264,8 @@ public final class RouterBackgroundService extends Service {
                 }else if(priority.enabled){qos.applyPriority("",null,devices,msg->{});priority.disable();}
             }catch(Exception e){qosIssue="QoS: "+(e.getMessage()==null?e.toString():e.getMessage());}
         }
+        // Never publish a completed snapshot from a poll whose service was stopped.
+        if(stopping){releaseLocks();return;}
         long now=System.currentTimeMillis();
         android.content.SharedPreferences.Editor editor=prefs.edit().putLong("bg_last_poll",now);
         if(radio!=null){
@@ -285,6 +295,7 @@ public final class RouterBackgroundService extends Service {
             (!deviceIssue.isEmpty()?"Клиенты: "+deviceIssue+"; ":"")+qosIssue;
         editor.putString("bg_error",issues).putString("bg_qos",qosIssue.isEmpty()?watchdog.status():qosIssue)
             .putString("bg_priority_status",priority.mode).apply();
+        if(stopping)return;
         if(!issues.isEmpty())notifyState("AX8: "+issues);
         else notifyState("Клиентов: "+BackgroundSummary.clientCount(devices)+" · SMS: "+(smsList==null?"?":smsList.size())+
             " · "+(radio!=null&&"ppp_connected".equals(radio.optString("ppp_status"))?"LTE online":"LTE проверяется"));
