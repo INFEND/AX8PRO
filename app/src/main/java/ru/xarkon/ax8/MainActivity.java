@@ -868,8 +868,7 @@ public final class MainActivity extends Activity {
             TextView[] incoming={null};body.addView(clientMetric("↓  Входящая",humanRate(rate.dl),Ui.CYAN,incoming));
             TextView[] outgoing={null};body.addView(clientMetric("↑  Исходящая",humanRate(rate.ul),Ui.ORANGE,outgoing));}
         addRows(body,new String[][]{{"IPv4",dev.ip.isEmpty()?"—":dev.ip},
-            {"MAC",dev.mac},{"IPv6",dev.ipv6.isEmpty()?"—":String.join(", ",dev.ipv6)},
-            {"Тип подключения",dev.type}});
+            {"MAC",dev.mac},{"IPv6",dev.ipv6.isEmpty()?"—":String.join(", ",dev.ipv6)}});
         TextView[] limitValue={null};body.addView(strongMetric("◈","Лимит",limitName(qos.effectiveLimit(dev.mac)),qos.effectiveLimit(dev.mac)==null?Ui.GREEN:Ui.RED,limitValue));
         Ui.addSpace(body,this,9);
         body.addView(Ui.button(this,"◎ Проверить ограничения на роутере",Ui.CARD2,Ui.YELLOW,()->{
