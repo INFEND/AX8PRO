@@ -706,14 +706,14 @@ public final class MainActivity extends Activity {
         setLive("EARFCN",stat("nv_arfcn"));setLive("PCI",stat("nv_pci"));
         setLive("eNodeB",stat("nv_enodbid"));setLive("CELL ID",stat("nv_globecellid"));
         setLive("TX Power",txPower());setLive("Устройств Wi‑Fi",wifiCount());
-        if(overviewBattery!=null)overviewBattery.setBattery(batteryIconLevel(),battery());
+        if(overviewBattery!=null)overviewBattery.setBattery(batteryIconLevel(),battery(),
+            prefs.getBoolean("battery_level_icon",true),batteryCharging());
         if(overviewGauge!=null && newSample)overviewGauge.setLevel(quality());
         if(overviewGraph!=null && newSample)overviewGraph.push(historyDl.isEmpty()?0f:historyDl.peekLast(),historyUl.isEmpty()?0f:historyUl.peekLast());
     }
     private boolean batteryCharging(){
-        String value=stat("battery_charging").trim().toLowerCase(Locale.US);
-        return value.equals("1")||value.equals("true")||value.equals("charging")||
-            value.equals("yes")||value.equals("on");
+        // A full battery is not evidence of charging; only trust the router's charge flag.
+        return BatteryLevelPolicy.isCharging(s("battery_charging"));
     }
     /** Only the router's actual percent field is precise. battery_pers is a coarse icon step. */
     private int batteryPercent(){
@@ -731,7 +731,8 @@ public final class MainActivity extends Activity {
         LinearLayout line=Ui.infoRow(this,rows[i][0],rows[i][1],rows[i][1].equals("—")?Ui.MUTED:i%2==0?Ui.TEXT:Ui.CYAN);
         if(tab==0&&"Батарея".equals(rows[i][0])){
             BatteryIndicator indicator=new BatteryIndicator(this);
-            indicator.setBattery(batteryIconLevel(),rows[i][1]);
+            indicator.setBattery(batteryIconLevel(),rows[i][1],
+                prefs.getBoolean("battery_level_icon",true),batteryCharging());
             line.removeViewAt(1);
             line.addView(indicator,new LinearLayout.LayoutParams(0,-2,1.06f));
             overviewBattery=indicator;
@@ -1721,6 +1722,20 @@ public final class MainActivity extends Activity {
         theme.addView(Ui.button(this,"▣  Цвет фона",Ui.CARD2,Ui.TEXT,()->pickColor("background_color","Цвет фона",Ui.BG)));
         Ui.addSpace(theme,this,8);
         theme.addView(Ui.button(this,"▤  Цвет карточек",Ui.CARD2,Ui.TEXT,()->pickColor("card_color","Цвет карточек",Ui.CARD)));
+        Ui.addSpace(theme,this,10);
+        final TextView[] batteryToggle={null};
+        boolean showBattery=prefs.getBoolean("battery_level_icon",true);
+        batteryToggle[0]=Ui.button(this,"▣  Значок уровня батареи · "+(showBattery?"ВКЛ":"ВЫКЛ"),
+            Ui.CARD2,Ui.TEXT,()->{
+                boolean enabled=!prefs.getBoolean("battery_level_icon",true);
+                prefs.edit().putBoolean("battery_level_icon",enabled).apply();
+                batteryToggle[0].setText("▣  Значок уровня батареи · "+(enabled?"ВКЛ":"ВЫКЛ"));
+                // No screen rebuild: keep the current personalization scroll position.
+            });
+        theme.addView(batteryToggle[0]);
+        Ui.addSpace(theme,this,5);
+        theme.addView(Ui.text(this,"Молния видна только во время подтверждённой зарядки. Настройка силуэта батареи на неё не влияет.",
+            12,Ui.MUTED,false));
         Ui.addSpace(theme,this,13);
         theme.addView(Ui.button(this,"Aa  Шрифт · "+fontLabel(prefs.getString("font","sans-serif")),Ui.CARD2,Ui.TEXT,()->chooseFont()));
         Ui.addSpace(theme,this,12);
@@ -1747,7 +1762,8 @@ public final class MainActivity extends Activity {
         }));Ui.addSpace(theme,this,8);
         theme.addView(Ui.button(this,"↺  Сбросить оформление",Ui.CARD2,Ui.ORANGE,()->confirm("Сброс оформления","Восстановить стандартную тёмную тему и цвета?",()->{
             prefs.edit().remove("theme").remove("accent_color").remove("background_color").remove("card_color")
-                .remove("font").remove("font_scale").remove("corner").remove("motion").remove("compact").apply();applyAppearance();
+                .remove("font").remove("font_scale").remove("corner").remove("motion").remove("compact")
+                .remove("battery_level_icon").apply();applyAppearance();
         })));
         addCard(theme);
     }
