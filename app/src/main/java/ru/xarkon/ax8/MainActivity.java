@@ -444,6 +444,11 @@ public final class MainActivity extends Activity {
         });
     }
     private interface Work{void run(RouterClient.Progress p)throws Exception;}
+    /** Never let a poll from an earlier foreground session operate on router QoS. */
+    private boolean foregroundCycleActive(long generation){
+        return refreshSession.accepts(generation,running)
+            && prefs.getBoolean("ui_visible",true);
+    }
     private void refresh(boolean forced){
         if(refreshBusy){
             // A forced foreground refresh must not disappear behind a poll
@@ -465,7 +470,7 @@ public final class MainActivity extends Activity {
         workers.execute(()->{
             JSONObject next=null;List<RouterClient.Device> d=null;List<RouterClient.Sms> m=null;RouterClient.BlockState b=null;
             String failure=null,partialFailure=null;
-            if(wantStatus)try{
+            if(wantStatus&&foregroundCycleActive(cycleGeneration))try{
                 next=api.status();
                 if(next!=null && forced && !bandTracker.isPending()){
                     final JSONObject early=next;
@@ -482,24 +487,41 @@ public final class MainActivity extends Activity {
             // After a requested Band reboot only status is needed. Other WebUI calls
             // would multiply failed login attempts and delay recovery by many seconds.
             if(!bandTracker.isPending()){
-                if(wantClients)try{d=api.devices();}catch(Exception e){partialFailure="Устройства: "+e.getMessage();}
-                if(wantBlocked)try{b=api.blockState();}catch(Exception e){if(tab==1)partialFailure="Список блокировок: "+e.getMessage();}
-                if(wantSms)try{m=api.sms();}catch(Exception e){partialFailure="SMS: "+e.getMessage();}
+                if(wantClients&&foregroundCycleActive(cycleGeneration))try{d=api.devices();}catch(Exception e){partialFailure="Устройства: "+e.getMessage();}
+                if(wantBlocked&&foregroundCycleActive(cycleGeneration))try{b=api.blockState();}catch(Exception e){if(tab==1)partialFailure="Список блокировок: "+e.getMessage();}
+                if(wantSms&&foregroundCycleActive(cycleGeneration))try{m=api.sms();}catch(Exception e){partialFailure="SMS: "+e.getMessage();}
             }
             // Optional Telnet counters: the entire snapshot is still governed by the same
             // refresh interval, with skipped ticks if AX8 has not yet answered.
             String qosIssue="";
-            if(d!=null){try{qos.resyncAddresses(d,message->{});}catch(Exception e){qosIssue="QoS: "+e.getMessage();}}
-            if(monitorOn&&d!=null){
-                // Never run traffic/QoS writes against the previous client list
-                // when the current AX8 client request has failed.
-                try{traffic.sample(d);trafficError=qosIssue;
-                    if(traffic.error().isEmpty()){
-                        if(priority.enabled)priority.update(d,traffic,qos);
-                        if(prefs.getBoolean("background_qos_watch",true))uiQosWatch.check(d,traffic,qos);
+            // A poll can outlive onPause(), while the background service takes
+            // ownership of QoS. Reject its router-side effects and stale follow-up
+            // reads, not only its eventual UI callback.
+            if(d!=null&&foregroundCycleActive(cycleGeneration)){
+                try{qos.resyncAddresses(d,message->{});}
+                catch(Exception e){qosIssue="QoS: "+e.getMessage();}
+            }
+            if(monitorOn&&d!=null&&foregroundCycleActive(cycleGeneration)){
+                // Never run traffic/QoS writes against a failed client fetch or
+                // a foreground generation that no longer owns router monitoring.
+                try{
+                    traffic.sample(d);
+                    if(foregroundCycleActive(cycleGeneration)){
+                        trafficError=qosIssue;
+                        if(traffic.error().isEmpty()){
+                            if(priority.enabled&&foregroundCycleActive(cycleGeneration))
+                                priority.update(d,traffic,qos);
+                            if(prefs.getBoolean("background_qos_watch",true)
+                                    &&foregroundCycleActive(cycleGeneration))
+                                uiQosWatch.check(d,traffic,qos);
+                        }
                     }
-                }catch(Exception e){trafficError=e.getMessage()==null?e.toString():e.getMessage();}
-            }else if(monitorOn)trafficError="Список клиентов временно недоступен";
+                }catch(Exception e){
+                    if(foregroundCycleActive(cycleGeneration))
+                        trafficError=e.getMessage()==null?e.toString():e.getMessage();
+                }
+            }else if(monitorOn&&foregroundCycleActive(cycleGeneration))
+                trafficError="Список клиентов временно недоступен";
             final String limitedError=partialFailure;
             final JSONObject status2=next;final List<RouterClient.Device> devices2=d;final List<RouterClient.Sms> sms2=m;
             final RouterClient.BlockState blacklist=b;final String fail=failure;

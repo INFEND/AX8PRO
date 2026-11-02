@@ -2,7 +2,8 @@ package ru.xarkon.ax8;
 
 /** Rejects stale polling results and preserves a forced request across an in-flight cycle. */
 final class RefreshSession {
-    private long generation;
+    // Read by the WebUI worker and written on the main lifecycle thread.
+    private volatile long generation;
     private boolean deferredForced;
 
     long capture() { return generation; }

@@ -32,6 +32,10 @@ public final class RefreshSessionTest {
         session.invalidate();
         check(!session.accepts(resumed, true), "multiple pauses invalidate old work");
         check(session.accepts(session.capture(), true), "latest cycle must be accepted");
+        // The worker thread must see lifecycle invalidation across threads.
+        final long oldGeneration = session.capture();
+        session.invalidate();
+        check(!session.accepts(oldGeneration, true), "worker must reject invalidated generation");
         System.out.println("Refresh session: " + checks + " checks passed.");
     }
 }
