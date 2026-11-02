@@ -43,8 +43,8 @@ final class TelnetShell implements Closeable {
         return b.toString("UTF-8");
     }
     private String until(String[] needles,int totalMs)throws Exception {
-        long deadline=System.currentTimeMillis()+totalMs;StringBuilder result=new StringBuilder();
-        while(System.currentTimeMillis()<deadline){result.append(read(550));for(String s:needles)if(result.toString().contains(s))return result.toString();}
+        long deadline=TelnetReadPolicy.deadlineAfter(totalMs);StringBuilder result=new StringBuilder();
+        while(!TelnetReadPolicy.expired(deadline)){TelnetReadPolicy.appendBounded(result,read(550));for(String s:needles)if(result.indexOf(s)>=0)return result.toString();}
         throw new SocketTimeoutException("Telnet не отвечает: "+String.join("/",needles));
     }
     private void connect()throws Exception {
@@ -65,9 +65,9 @@ final class TelnetShell implements Closeable {
             java.util.regex.Pattern markerPattern=java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(marker)+":(\\d+)");
             StringBuilder outputBuffer=new StringBuilder();
             java.util.regex.Matcher match=markerPattern.matcher(outputBuffer);
-            long deadline=System.currentTimeMillis()+timeoutMs;
-            while(!match.find() && System.currentTimeMillis()<deadline) {
-                outputBuffer.append(read(450));
+            long deadline=TelnetReadPolicy.deadlineAfter(timeoutMs);
+            while(!match.find() && !TelnetReadPolicy.expired(deadline)) {
+                TelnetReadPolicy.appendBounded(outputBuffer,read(450));
                 match=markerPattern.matcher(outputBuffer);
             }
             if(!match.find(0))throw new SocketTimeoutException("Не получен код ответа Telnet");

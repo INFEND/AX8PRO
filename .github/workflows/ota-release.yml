@@ -82,14 +82,17 @@ jobs:
             app/src/main/java/ru/xarkon/ax8/ClientSnapshotPolicy.java \
             app/src/main/java/ru/xarkon/ax8/BackgroundSummary.java \
             app/src/main/java/ru/xarkon/ax8/SmsAlertPlanner.java \
+            app/src/main/java/ru/xarkon/ax8/TelnetReadPolicy.java \
             tools/AutoPollControllerTest.java \
             tools/ClientSnapshotPolicyTest.java \
             tools/BackgroundSummaryTest.java \
-            tools/SmsAlertPlannerTest.java
+            tools/SmsAlertPlannerTest.java \
+            tools/TelnetReadPolicyTest.java
           java -cp /tmp/ax8-auto-test AutoPollControllerTest
           java -cp /tmp/ax8-auto-test ClientSnapshotPolicyTest
           java -cp /tmp/ax8-auto-test BackgroundSummaryTest
           java -cp /tmp/ax8-auto-test SmsAlertPlannerTest
+          java -cp /tmp/ax8-auto-test TelnetReadPolicyTest
 
       - name: Test OTA manifest compatibility and integrity
         shell: bash
