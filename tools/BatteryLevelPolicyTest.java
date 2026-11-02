@@ -49,6 +49,13 @@ public final class BatteryLevelPolicyTest {
         ok(!BatteryLevelPolicy.isCharging("100"),"100% is never interpreted as charging");
         ok(!BatteryLevelPolicy.isCharging("—"),"unknown charger state hides lightning");
         ok(!BatteryLevelPolicy.isCharging(null),"missing charger state hides lightning");
+        eq(1,BatteryLevelPolicy.chargingState("1"),"explicit charging from AX8");
+        eq(1,BatteryLevelPolicy.chargingState("CHARGING"),"text charging from AX8");
+        eq(0,BatteryLevelPolicy.chargingState("0"),"explicit not charging");
+        eq(0,BatteryLevelPolicy.chargingState("false"),"explicit false charging");
+        eq(-1,BatteryLevelPolicy.chargingState(""),"missing response stays unknown");
+        eq(-1,BatteryLevelPolicy.chargingState("100"),"battery percent cannot be charge state");
+        eq(-1,BatteryLevelPolicy.chargingState(null),"missing field stays unknown");
         System.out.println("Battery level policy: "+assertions+" assertions passed.");
     }
 }
