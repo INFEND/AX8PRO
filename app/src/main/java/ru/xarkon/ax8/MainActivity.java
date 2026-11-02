@@ -1637,6 +1637,9 @@ public final class MainActivity extends Activity {
         EditText telnetPass=settingField(stack,"Telnet пароль",prefs.getString("telnet_pass","admin"),true);
         Ui.modal(this,"Настройки подключения","Пароли используются только для подключения к AX8",stack,"Сохранить",()->{
             String h=host.getText().toString().trim();if(h.isEmpty()||h.contains(" ")){toast("Укажите корректный адрес");return;}
+            RouterEndpointConfig previous=new RouterEndpointConfig(prefs.getString("host","192.168.150.1"),"","");
+            RouterEndpointConfig selected=new RouterEndpointConfig(h,"","");
+            if(!previous.sameHost(selected))RouterBackgroundService.clearCachedSnapshot(prefs);
             prefs.edit().putString("host",h).putString("username",username.getText().toString())
                 .putString("password",password.getText().toString()).putString("telnet_user",telnetUser.getText().toString())
                 .putString("telnet_pass",telnetPass.getText().toString()).apply();

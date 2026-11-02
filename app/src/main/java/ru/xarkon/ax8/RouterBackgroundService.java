@@ -26,6 +26,7 @@ public final class RouterBackgroundService extends Service {
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private android.content.SharedPreferences prefs;
     private RouterClient router;
+    private RouterEndpointConfig endpoint;
     private QosController qos;
     private DeviceTrafficMonitor traffic;
     private OwnerPriorityController priority;
@@ -82,10 +83,47 @@ public final class RouterBackgroundService extends Service {
         NotificationChannel sms=new NotificationChannel(CHANNEL_SMS,"AX8 · SMS",NotificationManager.IMPORTANCE_HIGH);
         sms.enableVibration(true);nm.createNotificationChannel(sms);
     }
+    private RouterEndpointConfig configuredEndpoint(){
+        return new RouterEndpointConfig(prefs.getString("host","192.168.150.1"),
+            prefs.getString("username","root"),prefs.getString("password","admin"));
+    }
     private synchronized void openControllers(){
-        router=new RouterClient(prefs.getString("host","192.168.150.1"),prefs.getString("username","root"),prefs.getString("password","admin"));
+        endpoint=configuredEndpoint();
+        router=new RouterClient(endpoint.host,endpoint.username,endpoint.password);
         qos=new QosController(router,prefs);traffic=new DeviceTrafficMonitor(router,prefs);
         priority=new OwnerPriorityController();watchdog=new QosWatchdog();
+    }
+    /** Invalidate data and SMS deduplication only when switching to another router. */
+    static void clearCachedSnapshot(android.content.SharedPreferences preferences){
+        android.content.SharedPreferences.Editor edit=preferences.edit();
+        for(String key:new String[]{
+            "bg_status_json","bg_snapshot_at","bg_wan","bg_devices_json","bg_devices_at","bg_clients",
+            "bg_sms_json","bg_sms_at","bg_sms_cycle_at","bg_sms","bg_sms_unread",
+            "bg_sms_seen_ids","bg_sms_seen_initialized","bg_blocked_json","bg_blocked_at","bg_blocked",
+            "bg_history_dl","bg_history_ul","bg_fallback_dl_bits","bg_fallback_ul_bits",
+            "bg_last_poll","bg_error","bg_qos","bg_priority_status"
+        })edit.remove(key);
+        edit.apply();
+    }
+    /** Runs on the single background worker, never concurrently with a router poll. */
+    private void syncEndpoint(){
+        RouterEndpointConfig desired=configuredEndpoint();
+        if(endpoint.sameConnection(desired))return;
+        String warning="";
+        if(priority.enabled){
+            try{qos.applyPriority(priority.owner,null,router.devices(),note->{});}
+            catch(Exception e){warning="Не удалось снять временный QoS с прежнего AX8: "+
+                (e.getMessage()==null?e.toString():e.getMessage());}
+            finally{priority.disable();}
+        }
+        try{traffic.close();}
+        catch(Exception e){warning+=" Не удалось остановить прежний монитор трафика: "+
+            (e.getMessage()==null?e.toString():e.getMessage());}
+        try{qos.close();}catch(Exception ignored){}
+        boolean hostChanged=!endpoint.sameHost(desired);
+        openControllers();
+        if(hostChanged)clearCachedSnapshot(prefs);
+        prefs.edit().putString("bg_rebind_warning",warning.trim()).apply();
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         if(intent!=null && ACTION_STOP.equals(intent.getAction())){
@@ -203,6 +241,10 @@ public final class RouterBackgroundService extends Service {
         if(stopping)return;
         acquireLocks();
         if(stopping || prefs.getBoolean("ui_visible",true)){releaseLocks();return;}
+        // Credentials or router address may have changed in the visible settings.
+        // Never keep polling the old router with a stale authenticated session.
+        syncEndpoint();
+        if(stopping || prefs.getBoolean("ui_visible",true)){releaseLocks();return;}
         backgroundActive=true;
         JSONObject radio=null;
         List<RouterClient.Device> devices=null;
@@ -211,7 +253,8 @@ public final class RouterBackgroundService extends Service {
         String statusIssue="",deviceIssue="",smsIssue="",qosIssue="";
         // SMS is polled first; a Telnet/QoS or Wi-Fi-client error must never suppress SMS alerts.
         try{smsList=router.sms();}catch(Exception e){smsIssue=e.getMessage()==null?e.toString():e.getMessage();}
-        if(stopping){releaseLocks();return;}
+        if(stopping || prefs.getBoolean("ui_visible",true)
+                || !endpoint.sameConnection(configuredEndpoint())){releaseLocks();return;}
         if(smsList!=null){
             int unread=0;
             LinkedHashSet<String> seen=new LinkedHashSet<>();
@@ -247,6 +290,9 @@ public final class RouterBackgroundService extends Service {
         try{devices=router.devices();}catch(Exception e){deviceIssue=e.getMessage()==null?e.toString():e.getMessage();}
         if(stopping){releaseLocks();return;}
         try{blockState=router.blockState();}catch(Exception ignored){}
+        // No QoS write may target an endpoint whose settings changed mid-poll.
+        if(stopping || prefs.getBoolean("ui_visible",true)
+                || !endpoint.sameConnection(configuredEndpoint())){releaseLocks();return;}
         if(devices!=null){
             try{qos.resyncAddresses(devices,note->{});}catch(Exception e){qosIssue="QoS: "+e.getMessage();}
             try{
@@ -265,7 +311,8 @@ public final class RouterBackgroundService extends Service {
             }catch(Exception e){qosIssue="QoS: "+(e.getMessage()==null?e.toString():e.getMessage());}
         }
         // Never publish a completed snapshot from a poll whose service was stopped.
-        if(stopping){releaseLocks();return;}
+        if(stopping || prefs.getBoolean("ui_visible",true)
+                || !endpoint.sameConnection(configuredEndpoint())){releaseLocks();return;}
         long now=System.currentTimeMillis();
         android.content.SharedPreferences.Editor editor=prefs.edit().putLong("bg_last_poll",now);
         if(radio!=null){
@@ -290,7 +337,9 @@ public final class RouterBackgroundService extends Service {
             .putLong("bg_blocked_at",now);}
         // Link SMS to this completed cycle, not merely to a previous successful read.
         if(smsList!=null)editor.putLong("bg_sms_cycle_at",now);
-        String issues=(!statusIssue.isEmpty()?"LTE: "+statusIssue+"; ":"")+
+        String rebindWarning=prefs.getString("bg_rebind_warning","");
+        String issues=(!rebindWarning.isEmpty()?"Подключение: "+rebindWarning+"; ":"")+
+            (!statusIssue.isEmpty()?"LTE: "+statusIssue+"; ":"")+
             (!smsIssue.isEmpty()?"SMS: "+smsIssue+"; ":"")+
             (!deviceIssue.isEmpty()?"Клиенты: "+deviceIssue+"; ":"")+qosIssue;
         editor.putString("bg_error",issues).putString("bg_qos",qosIssue.isEmpty()?watchdog.status():qosIssue)
