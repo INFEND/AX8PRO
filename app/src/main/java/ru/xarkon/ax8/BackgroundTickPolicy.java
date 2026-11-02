@@ -1,12 +1,16 @@
 package ru.xarkon.ax8;
 
-/** Prevents repeated Handler wakeups while a router request is still running. */
+/** Avoids unnecessary Handler wakeups while the UI handles monitoring. */
 public final class BackgroundTickPolicy {
+    private static final int VISIBLE_IDLE_MS = 5000;
     private BackgroundTickPolicy(){}
 
-    /** -1 means the worker will schedule the next tick after completion. */
-    public static int nextDelay(boolean stopping, boolean workerBusy, int requestedMs){
+    /** -1 means no Handler tick should be scheduled (a busy worker owns the next cycle). */
+    public static int nextDelay(boolean stopping, boolean workerBusy, boolean uiVisible, int requestedMs){
         if(stopping || workerBusy)return -1;
+        // MainActivity signals ACTION_BACKGROUND_NOW on pause; a bounded fallback
+        // still detects backgrounding if that immediate start cannot be delivered.
+        if(uiVisible)return VISIBLE_IDLE_MS;
         return AutoPollController.clamp(requestedMs);
     }
 }

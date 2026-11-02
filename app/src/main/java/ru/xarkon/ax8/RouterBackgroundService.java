@@ -85,7 +85,7 @@ public final class RouterBackgroundService extends Service {
         if(stopping)return;
         int requested=prefs.getBoolean("refresh_auto",true)?
             prefs.getInt("auto_poll_ms",500):prefs.getInt("refresh_ms",500);
-        int delay=BackgroundTickPolicy.nextDelay(stopping,busy,requested);
+        int delay=BackgroundTickPolicy.nextDelay(stopping,busy,prefs.getBoolean("ui_visible",true),requested);
         if(delay<0)return;
         handler.removeCallbacks(tick);
         handler.postDelayed(tick,delay);
