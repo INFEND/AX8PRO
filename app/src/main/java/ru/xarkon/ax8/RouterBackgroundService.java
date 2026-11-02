@@ -126,26 +126,43 @@ public final class RouterBackgroundService extends Service {
         prefs.edit().putString("bg_rebind_warning",warning.trim()).apply();
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
-        if(intent!=null && ACTION_STOP.equals(intent.getAction())){
-            prefs.edit().putBoolean("background_mode",false).apply();stopSelf();return START_NOT_STICKY;
+        String action=intent==null?null:intent.getAction();
+        boolean stopRequested=ACTION_STOP.equals(action);
+        boolean testRequested=ACTION_TEST_SMS.equals(action);
+        BackgroundCommandPolicy.Decision decision=BackgroundCommandPolicy.decide(
+            prefs.getBoolean("background_mode",false),stopRequested,testRequested);
+        if(stopRequested){
+            prefs.edit().putBoolean("background_mode",false).apply();
+            stopSelf();return START_NOT_STICKY;
         }
-        if(!prefs.getBoolean("background_mode",false)){stopSelf();return START_NOT_STICKY;}
+        if(decision==BackgroundCommandPolicy.Decision.TEST_ONLY){
+            // A notification test must also work when background monitoring is off.
+            sendTestSms();
+            stopSelfResult(startId);
+            return START_NOT_STICKY;
+        }
+        if(decision==BackgroundCommandPolicy.Decision.STOP){
+            stopSelfResult(startId);return START_NOT_STICKY;
+        }
         try {
             if(Build.VERSION.SDK_INT>=29)startForeground(NOTIFICATION,notification("Ожидание сворачивания приложения"),ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
             else startForeground(NOTIFICATION,notification("Ожидание сворачивания приложения"));
         }catch(Exception e){prefs.edit().putString("bg_error",e.toString()).putBoolean("background_mode",false).apply();stopSelf();return START_NOT_STICKY;}
-        if(intent!=null && ACTION_BACKGROUND_NOW.equals(intent.getAction())){
+        if(ACTION_BACKGROUND_NOW.equals(action)){
             handler.removeCallbacks(tick);handler.post(tick);
             return START_STICKY;
         }
-        if(intent!=null && ACTION_TEST_SMS.equals(intent.getAction())){
-            RouterClient.Sms test=new RouterClient.Sms();test.number="Тестовое SMS";
-            test.content="Проверка уведомлений AX 8 PRO. Новое SMS не получено.";
-            notifyNewSms(test,1);
+        if(testRequested){
+            sendTestSms();
             return START_STICKY;
         }
         handler.removeCallbacks(tick);handler.post(tick);
         return START_STICKY;
+    }
+    private void sendTestSms(){
+        RouterClient.Sms test=new RouterClient.Sms();test.number="Тестовое SMS";
+        test.content="Проверка уведомлений AX 8 PRO. Новое SMS не получено.";
+        notifyNewSms(test,1);
     }
     private Notification notification(String status){
         Intent launch=new Intent(this,MainActivity.class);
