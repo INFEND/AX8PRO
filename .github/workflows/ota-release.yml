@@ -85,13 +85,15 @@ jobs:
             app/src/main/java/ru/xarkon/ax8/TelnetReadPolicy.java \
             app/src/main/java/ru/xarkon/ax8/RetryBackoff.java \
             app/src/main/java/ru/xarkon/ax8/QosRecoveryPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/QosResyncPolicy.java \
             tools/AutoPollControllerTest.java \
             tools/ClientSnapshotPolicyTest.java \
             tools/BackgroundSummaryTest.java \
             tools/SmsAlertPlannerTest.java \
             tools/TelnetReadPolicyTest.java \
             tools/RetryBackoffTest.java \
-            tools/QosRecoveryPolicyTest.java
+            tools/QosRecoveryPolicyTest.java \
+            tools/QosResyncPolicyTest.java
           java -cp /tmp/ax8-auto-test AutoPollControllerTest
           java -cp /tmp/ax8-auto-test ClientSnapshotPolicyTest
           java -cp /tmp/ax8-auto-test BackgroundSummaryTest
@@ -99,6 +101,7 @@ jobs:
           java -cp /tmp/ax8-auto-test TelnetReadPolicyTest
           java -cp /tmp/ax8-auto-test RetryBackoffTest
           java -cp /tmp/ax8-auto-test ru.xarkon.ax8.QosRecoveryPolicyTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.QosResyncPolicyTest
 
       - name: Test OTA manifest compatibility and integrity
         shell: bash

@@ -13,8 +13,7 @@ final class QosController implements AutoCloseable {
     private final RouterClient api;
     private String diagnostics="Не применялось";
     private Map<String,Integer> priorityOverrides=new HashMap<>();
-    private String lastAddressSignature="";
-    private long lastResyncAt=0;
+    private final QosResyncPolicy resyncPolicy=new QosResyncPolicy();
     QosController(RouterClient client,SharedPreferences p){api=client;prefs=p;shell=new TelnetShell(client,p.getString("telnet_user","admin"),p.getString("telnet_pass","admin"));}
     Map<String,Integer> limits(){
         Map<String,Integer> out=new HashMap<>();
@@ -188,12 +187,12 @@ final class QosController implements AutoCloseable {
             ids.add(d.mac+"="+d.ip+"/"+String.join(",",ipv6)+"/"+saved.get(d.mac));
         }
         Collections.sort(ids);String signature=String.join(";",ids);
-        if(signature.isEmpty()||signature.equals(lastAddressSignature))return;
-        long now=System.currentTimeMillis();if(now-lastResyncAt<30000)return;
-        lastResyncAt=now;
+        long nowNs=System.nanoTime();
+        if(!resyncPolicy.shouldResync(signature,nowNs))return;
+        resyncPolicy.onAttempt(nowNs);
         progress.note("QoS: проверка соответствия MAC и IP...");
         apply(devices,saved,progress);
-        lastAddressSignature=signature;
+        resyncPolicy.onSuccess(signature);
     }
     /** Query actual tc classes and ingress/egress filters on the router. Presence of filters
      *  is not proof of effective shaping if the firmware uses hardware/offload forwarding.
