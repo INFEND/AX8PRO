@@ -1,0 +1,30 @@
+"""Prevent a PPP-only or phone-mobile internet shortcut from returning in the LTE badge."""
+from pathlib import Path
+import unittest
+
+ROOT=Path(__file__).resolve().parents[1]
+SRC=ROOT/"app/src/main/java/ru/xarkon/ax8"
+
+class InternetBadgeSourceTests(unittest.TestCase):
+    def test_uses_router_bound_external_check(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        self.assertIn("network.openConnection",source)
+        self.assertIn("network.getSocketFactory()",source)
+        self.assertIn("TRANSPORT_WIFI",source)
+        self.assertIn("TRANSPORT_ETHERNET",source)
+        self.assertIn("getResponseCode()==204",source)
+        self.assertNotIn("TRANSPORT_CELLULAR",source)
+    def test_badges_use_independent_policy(self):
+        main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
+        self.assertIn('else label=online?"●  ONLINE"',main)
+        self.assertIn("InternetStatusPolicy.label(internetState)",main)
+        self.assertIn("RouterInternetProbe.check(getApplicationContext(),target)",main)
+        self.assertNotIn('setLive("ppp",connected?',main)
+        self.assertIn("internetWorker.execute",main)
+    def test_policy_has_nonpositive_states(self):
+        policy=(SRC/"InternetStatusPolicy.java").read_text(encoding="utf-8")
+        self.assertIn("if(!pppConnected)return OFFLINE",policy)
+        self.assertIn("isFresh(checkedAt,now)?result:UNKNOWN",policy)
+        self.assertIn("PROBE_INTERVAL_MS=15000L",policy)
+if __name__=="__main__":
+    unittest.main()

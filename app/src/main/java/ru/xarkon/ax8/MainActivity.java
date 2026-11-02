@@ -7,6 +7,10 @@ import android.content.pm.PackageManager;
 import android.provider.ContactsContract;
 import android.database.Cursor;
 import android.net.Uri;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.view.*;
@@ -23,6 +27,27 @@ public final class MainActivity extends Activity {
     private static final String[] SYMBOL={"⌂","◫","✉","⌁","⚙"};
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService workers=Executors.newSingleThreadExecutor();
+    // Internet tests never delay the WebUI/SMS/QoS polling worker.
+    private final ExecutorService internetWorker=Executors.newSingleThreadExecutor();
+    private boolean internetBusy=false,internetWatching=false;
+    private long internetLastStart=0L,internetCheckedAt=0L,internetRevision=0L;
+    private int internetResult=InternetStatusPolicy.UNKNOWN;
+    private final Runnable internetChange=()->{
+        if(!running)return;
+        resetInternetResult();
+        updateInternetChip();
+        maybeProbeInternet(true);
+    };
+    private final ConnectivityManager.NetworkCallback internetCallback=
+        new ConnectivityManager.NetworkCallback(){
+            private void changed(){
+                handler.removeCallbacks(internetChange);
+                handler.postDelayed(internetChange,450L);
+            }
+            @Override public void onAvailable(Network network){changed();}
+            @Override public void onLost(Network network){changed();}
+            @Override public void onCapabilitiesChanged(Network network,NetworkCapabilities c){changed();}
+        };
     private final ArrayDeque<Float> historyDl=new ArrayDeque<>();
     private final ArrayDeque<Float> historyUl=new ArrayDeque<>();
     private RouterClient api;
@@ -73,6 +98,8 @@ public final class MainActivity extends Activity {
     private final Runnable ticker=new Runnable(){@Override public void run(){
         if(!running)return;
         refresh(false);
+        maybeProbeInternet(false);
+        updateInternetChip();
         // Never hammer a router WebUI while it is still booting.
         handler.postDelayed(this,bandTracker.isPending()?Math.max(1500,refreshInterval()):refreshInterval());
     }};
@@ -106,7 +133,9 @@ public final class MainActivity extends Activity {
         if(prefs.getBoolean("background_mode",false)&&prefs.getBoolean("background_priority",false)
                 &&monitorOn&&!ownerMac.isEmpty()&&!priority.enabled)priority.enable(ownerMac);
         autoPollMs=AutoPollController.clamp(prefs.getInt("auto_poll_ms",500));
-        running=true;handler.removeCallbacks(ticker);refresh(true);handler.postDelayed(ticker,refreshInterval());
+        running=true;resetInternetResult();watchRouterNetwork();
+        handler.removeCallbacks(ticker);refresh(true);maybeProbeInternet(true);
+        handler.postDelayed(ticker,refreshInterval());
         if(!startupOtaChecked){
             startupOtaChecked=true;
             if(prefs.getBoolean("ota_on_launch",true))
@@ -118,6 +147,7 @@ public final class MainActivity extends Activity {
         // Reject its queued UI callbacks without allowing overlapping WebUI requests.
         refreshSession.invalidate();
         running=false;handler.removeCallbacks(ticker);
+        stopWatchingRouterNetwork();resetInternetResult();
         boolean persistent=prefs.getBoolean("background_mode",false)&&RouterBackgroundService.isRunning();
         // Update foreground state NOW, not after Telnet cleanup. Otherwise the background
         // service may wait several cycles before checking SMS.
@@ -151,7 +181,9 @@ public final class MainActivity extends Activity {
             intent.removeExtra("open_tab");showTab(2);
         }
     }
-    @Override protected void onDestroy(){workers.shutdown();super.onDestroy();}
+    @Override protected void onDestroy(){
+        internetWorker.shutdownNow();workers.shutdown();super.onDestroy();
+    }
     private void applySystemBarTheme(){
         getWindow().setStatusBarColor(Ui.BG);getWindow().setNavigationBarColor(Ui.BG);
         int flags=Ui.isLight()?View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR:0;
@@ -399,6 +431,7 @@ public final class MainActivity extends Activity {
                         if(!refreshSession.accepts(cycleGeneration,running)||bandTracker.isPending())return;
                         status=early;statusAt=System.currentTimeMillis();error="";
                         updateConnection();
+                        maybeProbeInternet(true);
                         if(tab==0)draw(true);
                     });
                 }
@@ -495,6 +528,7 @@ public final class MainActivity extends Activity {
                 if(limitedError!=null)sectionError=limitedError;
                 else if(devices2!=null||sms2!=null||blacklist!=null)sectionError="";
                 updateConnection();
+                maybeProbeInternet(false);
                 if(!actionBusy){
                     // Every value is polled on the selected interval, but View hierarchies
                     // survive a poll: focus, touch interactions, scroll and gauge are retained.
@@ -513,6 +547,79 @@ public final class MainActivity extends Activity {
         bandTracker.clear();
         prefs.edit().remove("pending_band").remove("pending_band_since").apply();
     }
+    private void resetInternetResult(){
+        internetRevision++;
+        internetResult=InternetStatusPolicy.UNKNOWN;
+        internetLastStart=0L;internetCheckedAt=0L;
+    }
+    private void watchRouterNetwork(){
+        if(internetWatching)return;
+        try{
+            ConnectivityManager cm=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
+            NetworkRequest request=new NetworkRequest.Builder()
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET).build();
+            cm.registerNetworkCallback(request,internetCallback);
+            internetWatching=true;
+        }catch(Exception ignored){}
+    }
+    private void stopWatchingRouterNetwork(){
+        handler.removeCallbacks(internetChange);
+        if(!internetWatching)return;
+        internetWatching=false;
+        try{
+            ConnectivityManager cm=(ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE);
+            cm.unregisterNetworkCallback(internetCallback);
+        }catch(Exception ignored){}
+    }
+    private boolean routerStatusFresh(){
+        long now=System.currentTimeMillis();
+        return status!=null&&statusAt>0&&now>=statusAt&&now-statusAt<30000L&&error.isEmpty();
+    }
+    private int displayedInternet(){
+        return InternetStatusPolicy.displayed(routerStatusFresh(),
+            "ppp_connected".equals(s("ppp_status")),
+            internetResult,internetCheckedAt,SystemClock.elapsedRealtime());
+    }
+    private void updateInternetChip(){
+        TextView chip=overviewValues.get("ppp");
+        if(tab!=0||chip==null)return;
+        int state=displayedInternet();
+        String label=InternetStatusPolicy.label(state);
+        if(!label.contentEquals(chip.getText()))chip.setText(label);
+        chip.setTextColor(state==InternetStatusPolicy.ONLINE?Ui.GREEN:
+            state==InternetStatusPolicy.OFFLINE?Ui.RED:Ui.ORANGE);
+        chip.setContentDescription(InternetStatusPolicy.detail(state));
+    }
+    /** Slow, independent HTTPS probe over AX8's Wi-Fi, never over cellular fallback. */
+    private void maybeProbeInternet(boolean force){
+        if(!running||internetBusy||!routerStatusFresh()||
+                !"ppp_connected".equals(s("ppp_status")))return;
+        long now=SystemClock.elapsedRealtime();
+        if(!force && !InternetStatusPolicy.shouldProbe(internetLastStart,now,false))return;
+        internetLastStart=now;
+        internetBusy=true;
+        final long generation=internetRevision;
+        final String target=api.host();
+        internetWorker.execute(()->{
+            RouterInternetProbe.Result result=RouterInternetProbe.check(getApplicationContext(),target);
+            handler.post(()->{
+                internetBusy=false;
+                if(!running)return;
+                if(generation!=internetRevision||!target.equals(api.host())){
+                    maybeProbeInternet(true);return;
+                }
+                if(result.network!=null &&
+                        !RouterInternetProbe.networkStillPresent(getApplicationContext(),result.network)){
+                    resetInternetResult();maybeProbeInternet(true);return;
+                }
+                internetResult=result.state;
+                internetCheckedAt=SystemClock.elapsedRealtime();
+                updateInternetChip();
+            });
+        });
+    }
     private void updateConnection(){
         boolean fresh=status!=null&&statusAt>0&&System.currentTimeMillis()-statusAt<30000;
         boolean online=fresh&&error.isEmpty();
@@ -520,6 +627,7 @@ public final class MainActivity extends Activity {
         if(bandTracker.isPending())label="◌  ПРОВЕРКА "+(bandTracker.requestedBand()==0?"AUTO":"B"+bandTracker.requestedBand());
         else label=online?"●  ONLINE":(error.isEmpty()?"◌  ОБНОВЛЕНИЕ":"●  ОФЛАЙН");
         connectionLabel.setText(label);
+        connectionLabel.setContentDescription("Соединение с роутером AX8 Pro: "+label);
         connectionLabel.setTextColor(bandTracker.isPending()?Ui.ORANGE:
             (online?Ui.GREEN:(statusAt==0&&error.isEmpty()?Ui.ORANGE:Ui.RED)));
     }
@@ -620,10 +728,11 @@ public final class MainActivity extends Activity {
         LinearLayout hero=Ui.card(this);hero.setBackground(Ui.gradient(this,24,0xFF1D374D,0xFF102438,0xFF0D1A2B));
         LinearLayout top=Ui.horizontal(this);TextView badge=Ui.chip(this,band(),Ui.CYAN);overviewValues.put("band",badge);top.addView(badge);
         View spacer=new View(this);top.addView(spacer,new LinearLayout.LayoutParams(0,1,1));
-        boolean radioFresh=statusAt>0&&System.currentTimeMillis()-statusAt<30000;
-        boolean lteOnline=radioFresh&&stat("ppp_status").equals("ppp_connected");
-        TextView ppp=Ui.chip(this,!radioFresh?"◌ ОБНОВЛЕНИЕ":lteOnline?"● LTE ONLINE":"○ LTE OFFLINE",
-            !radioFresh?Ui.ORANGE:lteOnline?Ui.GREEN:Ui.RED);
+        int internetState=displayedInternet();
+        TextView ppp=Ui.chip(this,InternetStatusPolicy.label(internetState),
+            internetState==InternetStatusPolicy.ONLINE?Ui.GREEN:
+                internetState==InternetStatusPolicy.OFFLINE?Ui.RED:Ui.ORANGE);
+        ppp.setContentDescription(InternetStatusPolicy.detail(internetState));
         overviewValues.put("ppp",ppp);top.addView(ppp);hero.addView(top);
         LinearLayout center=Ui.horizontal(this);Ui.SignalGauge gauge=new Ui.SignalGauge(this);
         LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(0,d(166),1.15f);center.addView(gauge,gp);
@@ -694,9 +803,7 @@ public final class MainActivity extends Activity {
                 btn.setTextColor(selected?Ui.BG:Ui.CYAN);
             }
         }
-        boolean connected="ppp_connected".equals(s("ppp_status"));
-        setLive("ppp",connected?"● LTE ONLINE":"○ LTE OFFLINE");
-        TextView p=overviewValues.get("ppp");if(p!=null)p.setTextColor(connected?Ui.GREEN:Ui.RED);
+        updateInternetChip();
         setSignalLive("СИГНАЛ",rssi());
         setSignalLive("SINR",reading(sinr(),"dB"));
         setSignalLive("RSRQ",reading(rsrq(),"dB"));
@@ -1645,7 +1752,8 @@ public final class MainActivity extends Activity {
                 .putString("telnet_pass",telnetPass.getText().toString()).apply();
             qos.close();traffic.close();api.configure(h,username.getText().toString(),password.getText().toString());
             qos=new QosController(api,prefs);traffic=new DeviceTrafficMonitor(api,prefs);
-            error="";blocked=null;status=null;statusAt=clientsAt=smsAt=0;refresh(true);draw(true);
+            error="";blocked=null;status=null;statusAt=clientsAt=smsAt=0;
+            resetInternetResult();refresh(true);draw(true);
         });
     }
     private EditText settingField(LinearLayout parent,String title,String value,boolean secret){
