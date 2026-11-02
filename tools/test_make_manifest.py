@@ -2,6 +2,7 @@
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -56,6 +57,19 @@ class ManifestTests(unittest.TestCase):
                                      [19, 20, 21, 22])
                     self.assertEqual(data["notes"], data["history"][-1]["notes"])
                     self.assertTrue(data["notes"].startswith(("[+] ", "[=] ", "[-] ")))
+
+    def test_checked_in_android_version_has_release_notes(self):
+        """Catch a missing changelog before spending time building and signing an APK."""
+        root = SCRIPT.parents[1]
+        gradle = (root / "app" / "build.gradle").read_text(encoding="utf-8")
+        code = re.search(r"(?m)^\s*versionCode\s+(\d+)\s*$", gradle)
+        version = re.search(r"(?m)^\s*versionName\s+['\"]([^'\"]+)['\"]\s*$", gradle)
+        self.assertIsNotNone(code, "Android versionCode must be present")
+        self.assertIsNotNone(version, "Android versionName must be present")
+        history = json.loads((root / "release_notes" / "history.json").read_text(encoding="utf-8"))
+        selected = manifest.cumulative_history(version.group(1), int(code.group(1)), history)
+        self.assertEqual(selected[-1]["versionCode"], int(code.group(1)))
+        self.assertEqual(selected[-1]["versionName"], version.group(1))
 
     def test_gap_or_duplicate_changelog_rejected(self):
         entries = [
