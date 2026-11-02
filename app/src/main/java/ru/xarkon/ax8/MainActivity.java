@@ -33,7 +33,7 @@ public final class MainActivity extends Activity {
     private long internetLastStart=0L,internetCheckedAt=0L,internetRevision=0L;
     private int internetResult=InternetStatusPolicy.UNKNOWN;
     private final Runnable internetChange=()->{
-        if(!running)return;
+        if(!MainActivity.this.running)return;
         resetInternetResult();
         updateInternetChip();
         maybeProbeInternet(true);
