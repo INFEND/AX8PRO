@@ -184,6 +184,17 @@ final class QosController implements AutoCloseable {
         // Do not rewrite all tc/firewall rules from a client snapshot that
         // contains no currently eligible capped device. A transient station
         // list or missing IP must not be interpreted as a QoS reset request.
+        // IPv6-only clients may receive their address from the neighbor table,
+        // not station_list. Resolve those before deciding that no capped client
+        // is eligible; otherwise a valid IPv6 QoS rule could be silently dropped.
+        boolean needsIpv6Lookup=false;
+        for(RouterClient.Device d:devices)if(saved.containsKey(d.mac)){
+            boolean wifiType=d.type.equals("?")||d.type.toLowerCase(Locale.US).contains("wifi")||d.type.toLowerCase(Locale.US).contains("wlan");
+            if(wifiType&&(d.ip==null||!d.ip.matches("(?:\\d{1,3}\\.){3}\\d{1,3}"))&&d.ipv6.isEmpty()){
+                needsIpv6Lookup=true;break;
+            }
+        }
+        if(needsIpv6Lookup)enrichIpv6Neighbors(devices);
         List<Active> eligible=selected(devices,saved);
         if(eligible.isEmpty())return;
         ArrayList<String> ids=new ArrayList<>();
