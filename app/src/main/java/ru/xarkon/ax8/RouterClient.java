@@ -27,6 +27,9 @@ public final class RouterClient {
     private String password;
     private final CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
     private boolean authenticated = false;
+    private static final String BATTERY_FIELDS="battery_charging,battery_vol_percent,battery_pers,Battery_voltage,battery_value";
+    private long lastBatteryProbeMs=0L;
+    private JSONObject lastBatteryProbe=null;
 
     public RouterClient(String base, String user, String password) { configure(base,user,password); }
     public synchronized void configure(String host, String username, String pass) {
@@ -37,6 +40,7 @@ public final class RouterClient {
         this.user = username;
         this.password = pass;
         this.authenticated = false;
+        lastBatteryProbeMs=0L;lastBatteryProbe=null;
         cookieManager.getCookieStore().removeAll();
     }
     public synchronized String host() { return base; }
@@ -135,11 +139,47 @@ public final class RouterClient {
         if(authenticated){try{if("ok".equals(get("loginfo").optString("loginfo")))return;}catch(Exception ignored){}}
         login();
     }
+    /**
+     * Battery state on some AX8 firmwares is omitted from the large LTE multi-field response.
+     * Query the documented short battery endpoint independently every 5 seconds and overlay
+     * non-empty values. Never infer charging from battery percentage or external power.
+     */
     public synchronized JSONObject status() throws Exception {
         ensureAuth();
         JSONObject obj=get(RADIO_FIELDS);
         if(!"ok".equals(obj.optString("loginfo"))) {login();obj=get(RADIO_FIELDS);}
+        long now=System.currentTimeMillis();
+        if(lastBatteryProbeMs==0L||now-lastBatteryProbeMs>=5000L){
+            lastBatteryProbeMs=now;
+            try{lastBatteryProbe=get(BATTERY_FIELDS);}
+            catch(Exception ignored){lastBatteryProbe=null;}
+        }
+        if(lastBatteryProbe!=null && now-lastBatteryProbeMs<=7000L)
+            mergeBatteryFields(obj,lastBatteryProbe);
         return obj;
+    }
+    private static void mergeBatteryFields(JSONObject target,JSONObject source){
+        for(String key:new String[]{"battery_charging","battery_vol_percent","battery_pers","Battery_voltage","battery_value"}){
+            String value=source.optString(key,"").trim();
+            if(!value.isEmpty() && !"null".equalsIgnoreCase(value) && !"?".equals(value))
+                try{target.put(key,value);}catch(Exception ignored){}
+        }
+    }
+    /** Diagnostic-only GET queries: no settings are changed on the router. */
+    public synchronized JSONObject batteryDiagnostics() throws Exception {
+        ensureAuth();
+        JSONObject result=new JSONObject();
+        JSONObject grouped=get(BATTERY_FIELDS);
+        JSONObject individual=getSingle("battery_charging");
+        try{
+            result.put("multi_battery_charging",grouped.optString("battery_charging",""));
+            result.put("single_battery_charging",individual.optString("battery_charging",""));
+            result.put("battery_vol_percent",grouped.optString("battery_vol_percent",""));
+            result.put("Battery_voltage",grouped.optString("Battery_voltage",""));
+            result.put("battery_pers",grouped.optString("battery_pers",""));
+            result.put("battery_value",grouped.optString("battery_value",""));
+        }catch(Exception ignored){}
+        return result;
     }
     public synchronized void network(boolean enabled) throws Exception {
         ensureAuth();String command=enabled?"CONNECT_NETWORK":"DISCONNECT_NETWORK";
