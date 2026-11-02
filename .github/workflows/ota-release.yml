@@ -94,6 +94,7 @@ jobs:
             app/src/main/java/ru/xarkon/ax8/OtaHistory.java \
             app/src/main/java/ru/xarkon/ax8/JobRunGuard.java \
             app/src/main/java/ru/xarkon/ax8/BackgroundCommandPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/BackgroundTickPolicy.java \
             tools/AutoPollControllerTest.java \
             tools/RouterEndpointConfigTest.java \
             tools/RefreshSessionTest.java \
@@ -107,7 +108,8 @@ jobs:
             tools/BatteryLevelPolicyTest.java \
             tools/OtaHistoryTest.java \
             tools/JobRunGuardTest.java \
-            tools/BackgroundCommandPolicyTest.java
+            tools/BackgroundCommandPolicyTest.java \
+            tools/BackgroundTickPolicyTest.java
           java -cp /tmp/ax8-auto-test AutoPollControllerTest
           java -cp /tmp/ax8-auto-test RouterEndpointConfigTest
           java -cp /tmp/ax8-auto-test ru.xarkon.ax8.RefreshSessionTest
@@ -122,6 +124,7 @@ jobs:
           java -cp /tmp/ax8-auto-test ru.xarkon.ax8.OtaHistoryTest
           java -cp /tmp/ax8-auto-test JobRunGuardTest
           java -cp /tmp/ax8-auto-test BackgroundCommandPolicyTest
+          java -cp /tmp/ax8-auto-test BackgroundTickPolicyTest
 
       - name: Test OTA manifest compatibility and integrity
         shell: bash

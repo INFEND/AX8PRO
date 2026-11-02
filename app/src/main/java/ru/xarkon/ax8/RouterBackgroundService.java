@@ -39,7 +39,14 @@ public final class RouterBackgroundService extends Service {
         boolean visible=prefs.getBoolean("ui_visible",true);
         if(visible){
             releaseLocks();
-            if(backgroundActive && !busy){busy=true;worker.execute(()->{try{endBackgroundCycle();}finally{busy=false;}});}
+            if(backgroundActive && !busy){
+                busy=true;
+                worker.execute(()->{
+                    try{endBackgroundCycle();}
+                    finally{busy=false;scheduleNextTick();}
+                });
+                return;
+            }
         }else if(!busy){
             busy=true;worker.execute(()->{
                 long started=android.os.SystemClock.elapsedRealtime();
@@ -64,15 +71,25 @@ public final class RouterBackgroundService extends Service {
                         if(adjusted!=old)prefs.edit().putInt("auto_poll_ms",adjusted).apply();
                     }
                     busy=false;
+                    // Schedule after the in-flight request instead of waking the
+                    // main thread every 0.5 s while the worker is still busy.
+                    scheduleNextTick();
                 }
             });
+            return;
         }
-        // Use the same adaptive/manual cadence while the app is closed.
-        int interval=prefs.getBoolean("refresh_auto",true)?
-            AutoPollController.clamp(prefs.getInt("auto_poll_ms",500)):
-            AutoPollController.clamp(prefs.getInt("refresh_ms",500));
-        handler.postDelayed(this,interval);
+        if(!busy)scheduleNextTick();
+        // A busy worker is responsible for the next tick on completion.
     }};
+    private void scheduleNextTick(){
+        if(stopping)return;
+        int requested=prefs.getBoolean("refresh_auto",true)?
+            prefs.getInt("auto_poll_ms",500):prefs.getInt("refresh_ms",500);
+        int delay=BackgroundTickPolicy.nextDelay(stopping,busy,requested);
+        if(delay<0)return;
+        handler.removeCallbacks(tick);
+        handler.postDelayed(tick,delay);
+    }
 
     @Override public void onCreate(){
         super.onCreate();running=true;stopping=false;
