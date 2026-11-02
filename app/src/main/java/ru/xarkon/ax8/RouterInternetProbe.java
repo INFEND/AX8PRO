@@ -34,17 +34,28 @@ public final class RouterInternetProbe {
                 "https".equalsIgnoreCase(uri.getScheme())?443:80;
             if(host==null||host.isEmpty())return new Result(InternetStatusPolicy.UNAVAILABLE,null);
             // Never test through the default/mobile/VPN network: only AX8's Wi-Fi or wired LAN.
+            // A VPN may advertise its underlying Wi-Fi transport as well: reject it explicitly.
+            Network offlineCandidate=null;
             for(Network network:cm.getAllNetworks()){
                 NetworkCapabilities caps=cm.getNetworkCapabilities(network);
-                if(caps==null||(!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                        &&!caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)))continue;
+                if(!isRouterLink(caps))continue;
                 if(!canReachRouter(network,host,port))continue;
                 for(String endpoint:ENDPOINTS)if(reachesInternet(network,endpoint))
                     return new Result(InternetStatusPolicy.ONLINE,network);
-                return new Result(InternetStatusPolicy.OFFLINE,network);
+                // Multiple local networks can reach the same gateway address. Do not
+                // report OFFLINE until all reachable physical links have been checked.
+                if(offlineCandidate==null)offlineCandidate=network;
             }
+            if(offlineCandidate!=null)return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
         }catch(Exception ignored){}
         return new Result(InternetStatusPolicy.UNAVAILABLE,null);
+    }
+
+    private static boolean isRouterLink(NetworkCapabilities caps){
+        return caps!=null
+            && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+            && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
     }
 
     /** Confirm this exact network reaches the configured AX8, without making a router API call. */
@@ -80,8 +91,7 @@ public final class RouterInternetProbe {
             if(cm==null)return false;
             for(Network candidate:cm.getAllNetworks())if(network.equals(candidate)){
                 NetworkCapabilities cap=cm.getNetworkCapabilities(candidate);
-                return cap!=null&&(cap.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-                         ||cap.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+                return isRouterLink(cap);
             }
         }catch(Exception ignored){}
         return false;

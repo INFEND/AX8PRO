@@ -14,6 +14,17 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("TRANSPORT_ETHERNET",source)
         self.assertIn("getResponseCode()==204",source)
         self.assertNotIn("TRANSPORT_CELLULAR",source)
+    def test_excludes_vpn_even_when_it_advertises_wifi(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
+        self.assertEqual(source.count("isRouterLink("),3,
+                         "Both initial selection and revalidation must reject VPN")
+    def test_checks_all_reachable_router_links_before_declaring_offline(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        self.assertIn("Network offlineCandidate=null;",source)
+        self.assertIn("if(offlineCandidate==null)offlineCandidate=network;",source)
+        self.assertIn("if(offlineCandidate!=null)return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);",source)
+        self.assertNotIn("return new Result(InternetStatusPolicy.OFFLINE,network);",source)
     def test_badges_use_independent_policy(self):
         main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
         self.assertIn('else label=online?"●  ONLINE"',main)
