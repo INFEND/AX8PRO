@@ -57,6 +57,7 @@ public final class MainActivity extends Activity {
     private final Map<String,TextView> settingsValues=new HashMap<>();
     private String clientsSignature="",smsSignature="",networkSignature="";
     private Ui.SignalGauge overviewGauge;
+    private BatteryIndicator overviewBattery;
     private Ui.SpeedGraph overviewGraph;
     private String sectionError="";
     private List<RouterClient.Device> devices=new ArrayList<>();
@@ -607,7 +608,7 @@ public final class MainActivity extends Activity {
         double x=num(from,key);return Double.isNaN(x)?(Double.isNaN(fallback)?0d:fallback):x;
     }
     private void overview(){
-        overviewValues.clear();overviewSignalValues.clear();overviewGauge=null;overviewGraph=null;
+        overviewValues.clear();overviewSignalValues.clear();overviewGauge=null;overviewGraph=null;overviewBattery=null;
         addTitle("Центр управления","Мобильная сеть и состояние AX8 Pro в реальном времени");
         LinearLayout hero=Ui.card(this);hero.setBackground(Ui.gradient(this,24,0xFF1D374D,0xFF102438,0xFF0D1A2B));
         LinearLayout top=Ui.horizontal(this);TextView badge=Ui.chip(this,band(),Ui.CYAN);overviewValues.put("band",badge);top.addView(badge);
@@ -697,8 +698,8 @@ public final class MainActivity extends Activity {
         setLive("Оператор / PLMN",stat("network_provider"));setLive("Технология",stat("network_type"));
         setLive("EARFCN",stat("nv_arfcn"));setLive("PCI",stat("nv_pci"));
         setLive("eNodeB",stat("nv_enodbid"));setLive("CELL ID",stat("nv_globecellid"));
-        setLive("TX Power",txPower());setLive("Батарея",battery());setLive("Устройств Wi‑Fi",wifiCount());
-        TextView batteryValue=overviewValues.get("Батарея");if(batteryValue!=null)batteryValue.setTextColor(batteryCharging()?Ui.GREEN:Ui.TEXT);
+        setLive("TX Power",txPower());setLive("Устройств Wi‑Fi",wifiCount());
+        if(overviewBattery!=null)overviewBattery.setBattery(batteryIconLevel(),battery());
         if(overviewGauge!=null && newSample)overviewGauge.setLevel(quality());
         if(overviewGraph!=null && newSample)overviewGraph.push(historyDl.isEmpty()?0f:historyDl.peekLast(),historyUl.isEmpty()?0f:historyUl.peekLast());
     }
@@ -707,20 +708,28 @@ public final class MainActivity extends Activity {
         return value.equals("1")||value.equals("true")||value.equals("charging")||
             value.equals("yes")||value.equals("on");
     }
-    private String battery(){
-        double n=num(status,"battery_vol_percent");
-        if(Double.isNaN(n))n=num(status,"battery_pers");
-        if(Double.isNaN(n))return "—";
-        String raw=s("battery_vol_percent");
-        if(n>0&&n<=1&&raw.contains("."))n*=100;
-        return (batteryCharging()?"⚡ ":"")+Math.round(n)+"%";
+    /** Only the router's actual percent field is precise. battery_pers is a coarse icon step. */
+    private int batteryPercent(){
+        return BatteryLevelPolicy.percent(num(status,"battery_vol_percent"),s("battery_vol_percent"));
     }
+    private int batteryIconLevel(){
+        int percent=batteryPercent();
+        return percent>=0?percent:BatteryLevelPolicy.coarseLevel(num(status,"battery_pers"));
+    }
+    private String battery(){int level=batteryPercent();return level>=0?level+"%":"—";}
     private void addRows(LinearLayout c,String[][] rows){for(int i=0;i<rows.length;i++){
         LinearLayout line=Ui.infoRow(this,rows[i][0],rows[i][1],rows[i][1].equals("—")?Ui.MUTED:i%2==0?Ui.TEXT:Ui.CYAN);
-        if("Батарея".equals(rows[i][0])&&batteryCharging())
-            ((TextView)line.getChildAt(1)).setTextColor(Ui.GREEN);
-        if(tab==0)overviewValues.put(rows[i][0],(TextView)line.getChildAt(1));
-        if(tab==3)networkValues.put(rows[i][0],(TextView)line.getChildAt(1));
+        if(tab==0&&"Батарея".equals(rows[i][0])){
+            BatteryIndicator indicator=new BatteryIndicator(this);
+            indicator.setBattery(batteryIconLevel(),rows[i][1]);
+            line.removeViewAt(1);
+            line.addView(indicator,new LinearLayout.LayoutParams(0,-2,1.06f));
+            overviewBattery=indicator;
+        }else{
+            TextView value=(TextView)line.getChildAt(1);
+            if(tab==0)overviewValues.put(rows[i][0],value);
+            if(tab==3)networkValues.put(rows[i][0],value);
+        }
         c.addView(line);
         if(i<rows.length-1)c.addView(Ui.rule(this),Ui.lp(this,-1,1));
     }}
