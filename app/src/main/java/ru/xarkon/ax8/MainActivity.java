@@ -163,6 +163,7 @@ public final class MainActivity extends Activity {
         refreshSession.invalidate();
         running=false;handler.removeCallbacks(ticker);
         stopWatchingRouterNetwork();resetInternetResult();
+        ForegroundHandoff.begin(); // Block background QoS until queued UI cleanup finishes.
         boolean persistent=prefs.getBoolean("background_mode",false)&&RouterBackgroundService.isRunning();
         // Update foreground state NOW, not after Telnet cleanup. Otherwise the background
         // service may wait several cycles before checking SMS.
@@ -183,11 +184,18 @@ public final class MainActivity extends Activity {
                 .setAction(RouterBackgroundService.ACTION_BACKGROUND_NOW));
         }catch(Exception e){prefs.edit().putString("bg_error","Запуск фонового опроса: "+e).apply();}
         // Release UI-owned tc/iptables chains before background QoS takes ownership.
-        workers.execute(()->{
-            try{if(qos.priorityActive())qos.applyPriority(ownerMac,null,new ArrayList<>(devices),m->{});}catch(Exception ignored){}
-            try{traffic.close();}catch(Exception ignored){}
-            priority.disable();
-        });
+        try{
+            workers.execute(()->{
+                try{
+                    try{if(qos.priorityActive())qos.applyPriority(ownerMac,null,new ArrayList<>(devices),m->{});}catch(Exception ignored){}
+                    try{traffic.close();}catch(Exception ignored){}
+                    priority.disable();
+                }finally{ForegroundHandoff.end();}
+            });
+        }catch(RejectedExecutionException rejected){
+            ForegroundHandoff.end();
+            prefs.edit().putString("bg_error","Очистка экранного QoS не запущена: "+rejected).apply();
+        }
         super.onPause();
     }
     @Override protected void onNewIntent(Intent intent){

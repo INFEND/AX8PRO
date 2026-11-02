@@ -48,6 +48,7 @@ public final class RouterBackgroundService extends Service {
                 return;
             }
         }else if(!busy){
+            if(ForegroundHandoff.pending()){scheduleNextTick();return;}
             busy=true;worker.execute(()->{
                 long started=android.os.SystemClock.elapsedRealtime();
                 long startedWall=System.currentTimeMillis();
@@ -109,6 +110,12 @@ public final class RouterBackgroundService extends Service {
         router=new RouterClient(endpoint.host,endpoint.username,endpoint.password);
         qos=new QosController(router,prefs);traffic=new DeviceTrafficMonitor(router,prefs);
         priority=new OwnerPriorityController();watchdog=new QosWatchdog();
+    }
+    /** Do not start new router-side work after ownership returns to the UI. */
+    private boolean ownsBackgroundCycle(){
+        return !stopping && !ForegroundHandoff.pending()
+            && !prefs.getBoolean("ui_visible",true)
+            && endpoint.sameConnection(configuredEndpoint());
     }
     /** Invalidate data and SMS deduplication only when switching to another router. */
     static void clearCachedSnapshot(android.content.SharedPreferences preferences){
@@ -272,13 +279,13 @@ public final class RouterBackgroundService extends Service {
     }
     private void backgroundCycle(){
         // A queued worker can start after the service has been destroyed.
-        if(stopping)return;
+        if(stopping||ForegroundHandoff.pending())return;
         acquireLocks();
-        if(stopping || prefs.getBoolean("ui_visible",true)){releaseLocks();return;}
+        if(stopping || prefs.getBoolean("ui_visible",true) || ForegroundHandoff.pending()){releaseLocks();return;}
         // Credentials or router address may have changed in the visible settings.
         // Never keep polling the old router with a stale authenticated session.
         syncEndpoint();
-        if(stopping || prefs.getBoolean("ui_visible",true)){releaseLocks();return;}
+        if(!ownsBackgroundCycle()){releaseLocks();return;}
         backgroundActive=true;
         JSONObject radio=null;
         List<RouterClient.Device> devices=null;
@@ -287,8 +294,7 @@ public final class RouterBackgroundService extends Service {
         String statusIssue="",deviceIssue="",smsIssue="",qosIssue="";
         // SMS is polled first; a Telnet/QoS or Wi-Fi-client error must never suppress SMS alerts.
         try{smsList=router.sms();}catch(Exception e){smsIssue=e.getMessage()==null?e.toString():e.getMessage();}
-        if(stopping || prefs.getBoolean("ui_visible",true)
-                || !endpoint.sameConnection(configuredEndpoint())){releaseLocks();return;}
+        if(!ownsBackgroundCycle()){releaseLocks();return;}
         if(smsList!=null){
             int unread=0;
             LinkedHashSet<String> seen=new LinkedHashSet<>();
@@ -325,28 +331,32 @@ public final class RouterBackgroundService extends Service {
         if(stopping){releaseLocks();return;}
         try{blockState=router.blockState();}catch(Exception ignored){}
         // No QoS write may target an endpoint whose settings changed mid-poll.
-        if(stopping || prefs.getBoolean("ui_visible",true)
-                || !endpoint.sameConnection(configuredEndpoint())){releaseLocks();return;}
+        if(!ownsBackgroundCycle()){releaseLocks();return;}
         if(devices!=null){
+            if(!ownsBackgroundCycle()){releaseLocks();return;}
             try{qos.resyncAddresses(devices,note->{});}catch(Exception e){qosIssue="QoS: "+e.getMessage();}
+            if(!ownsBackgroundCycle()){releaseLocks();return;}
             try{
                 if(prefs.getBoolean("traffic_monitor",false)){
+                    if(!ownsBackgroundCycle()){releaseLocks();return;}
                     traffic.sample(devices);
+                    if(!ownsBackgroundCycle()){releaseLocks();return;}
                     if(!traffic.error().isEmpty())qosIssue="Монитор: "+traffic.error();
                     boolean prioritize=prefs.getBoolean("background_priority",false)&&traffic.error().isEmpty();
                     String owner=prefs.getString("owner_mac","");
                     if(prioritize&&!owner.isEmpty()){
                         if(!priority.enabled||!owner.equals(priority.owner))priority.enable(owner);
+                        if(!ownsBackgroundCycle()){releaseLocks();return;}
                         priority.update(devices,traffic,qos);
-                    }else if(priority.enabled){qos.applyPriority(owner,null,devices,msg->{});priority.disable();}
+                    }else if(priority.enabled&&ownsBackgroundCycle()){qos.applyPriority(owner,null,devices,msg->{});priority.disable();}
+                    if(!ownsBackgroundCycle()){releaseLocks();return;}
                     if(traffic.error().isEmpty()&&prefs.getBoolean("background_qos_watch",true))
                         watchdog.check(devices,traffic,qos);
-                }else if(priority.enabled){qos.applyPriority("",null,devices,msg->{});priority.disable();}
+                }else if(priority.enabled&&ownsBackgroundCycle()){qos.applyPriority("",null,devices,msg->{});priority.disable();}
             }catch(Exception e){qosIssue="QoS: "+(e.getMessage()==null?e.toString():e.getMessage());}
         }
         // Never publish a completed snapshot from a poll whose service was stopped.
-        if(stopping || prefs.getBoolean("ui_visible",true)
-                || !endpoint.sameConnection(configuredEndpoint())){releaseLocks();return;}
+        if(!ownsBackgroundCycle()){releaseLocks();return;}
         long now=System.currentTimeMillis();
         android.content.SharedPreferences.Editor editor=prefs.edit().putLong("bg_last_poll",now);
         if(radio!=null){
