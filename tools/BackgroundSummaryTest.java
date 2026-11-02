@@ -13,6 +13,9 @@ public final class BackgroundSummaryTest {
         check(!BackgroundSummary.isFresh(1200L,1100L,100L),"future cache");
         check(!BackgroundSummary.isFresh(0L,1100L,100L),"missing cache");
         check(!BackgroundSummary.isFresh(1000L,1100L,0L),"invalid window");
-        System.out.println("Background summary: 8 cases PASSED");
+        check(BackgroundSummary.isFresh(100000L,115000L,15000L),"startup cache boundary");
+        check(!BackgroundSummary.isFresh(100000L,115001L,15000L),"startup cache expires");
+        check(!BackgroundSummary.isFresh(116000L,115000L,15000L),"future-dated startup cache must be rejected");
+        System.out.println("Background summary: 11 cases PASSED");
     }
 }

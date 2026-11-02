@@ -249,7 +249,9 @@ public final class MainActivity extends Activity {
     }
     private void restoreRecentRouterSnapshot(){
         long ts=prefs.getLong("last_router_status_at",0L);
-        if(ts<=0||System.currentTimeMillis()-ts>300000L)return;
+        // A previous session's LTE data is only a short-lived preview, not a live reading.
+        // Reject future timestamps too (the system clock may have been corrected).
+        if(!BackgroundSummary.isFresh(ts,System.currentTimeMillis(),15000L))return;
         String saved=prefs.getString("last_router_status","");
         if(saved.isEmpty())return;
         try{status=new JSONObject(saved);statusAt=ts;}catch(Exception ignored){}
@@ -258,13 +260,13 @@ public final class MainActivity extends Activity {
         long now=System.currentTimeMillis();
         long ts=prefs.getLong("bg_snapshot_at",0L);
         long limit=Math.max(15000L,refreshInterval()*3L);
-        if(ts<=0||ts<lastCompleteAt||now-ts>limit){
+        if(!BackgroundSummary.isFresh(ts,now,limit)||ts<lastCompleteAt){
             long smsTime=prefs.getLong("bg_sms_at",0L);
             if(smsTime>smsAt && now-smsTime<=limit){
                 try{messages=parseSms(new JSONArray(prefs.getString("bg_sms_json","[]")));smsAt=smsTime;}catch(Exception ignored){}
             }
             // Never label a cached router status as ONLINE if the sample is stale.
-            if(statusAt<=0){status=null;statusAt=0;}error="";
+            if(!BackgroundSummary.isFresh(statusAt,now,limit)){status=null;statusAt=0;}error="";
             updateConnection();draw(true);return;
         }
         try{

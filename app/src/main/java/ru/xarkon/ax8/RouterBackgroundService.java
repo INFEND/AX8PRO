@@ -176,7 +176,9 @@ public final class RouterBackgroundService extends Service {
         return o;
     }
     private void acquireLocks(){
-        if(!prefs.getBoolean("background_keep_awake",true))return;
+        // The setting can be disabled while the service is alive. Drop any
+        // previously acquired CPU/Wi-Fi locks instead of keeping them indefinitely.
+        if(!prefs.getBoolean("background_keep_awake",true)){releaseLocks();return;}
         try{
             if(cpu==null){PowerManager pm=(PowerManager)getSystemService(POWER_SERVICE);
                 cpu=pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"ax8:background_poll");cpu.setReferenceCounted(false);}
