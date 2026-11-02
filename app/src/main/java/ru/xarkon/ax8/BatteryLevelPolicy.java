@@ -10,7 +10,15 @@ final class BatteryLevelPolicy {
         if(Double.isNaN(value)||Double.isInfinite(value)||value<0)return -1;
         // Some firmware returns a 0..1 fraction as a decimal string.
         if(value>0&&value<=1&&source!=null&&(source.contains(".")||source.contains(",")))value*=100;
-        return (int)Math.max(0,Math.min(100,Math.round(value)));
+        // Reject broken readings instead of turning them into a false 100%.
+        if(value>100)return -1;
+        return (int)Math.round(value);
+    }
+
+    /** Prefer the confirmed AX8 percent field, then a legacy WebUI percent. */
+    static int firstValid(double preferred,String preferredRaw,double fallback,String fallbackRaw){
+        int result=percent(preferred,preferredRaw);
+        return result>=0?result:percent(fallback,fallbackRaw);
     }
 
     /** 0..4/5 represents a pictogram step on some AX8 firmwares, NOT a precise percent. */

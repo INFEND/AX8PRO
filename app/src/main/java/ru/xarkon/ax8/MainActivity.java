@@ -710,7 +710,10 @@ public final class MainActivity extends Activity {
     }
     /** Only the router's actual percent field is precise. battery_pers is a coarse icon step. */
     private int batteryPercent(){
-        return BatteryLevelPolicy.percent(num(status,"battery_vol_percent"),s("battery_vol_percent"));
+        // AX8 WebUI's Battery_voltage is a confirmed percentage on supported firmware.
+        // Fall back to the legacy numeric percent, never the coarse icon-step field.
+        return BatteryLevelPolicy.firstValid(num(status,"Battery_voltage"),s("Battery_voltage"),
+            num(status,"battery_vol_percent"),s("battery_vol_percent"));
     }
     private int batteryIconLevel(){
         int percent=batteryPercent();

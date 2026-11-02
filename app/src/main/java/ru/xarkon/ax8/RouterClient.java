@@ -14,7 +14,7 @@ public final class RouterClient {
     public static final int[] SUPPORTED_BANDS = {1,3,7,8,20,28,38,40,41};
     private static final int[] ALL_BANDS = {1,2,3,4,5,7,8,17,20,28,34,38,39,40,41,66};
     public static final String RADIO_FIELDS = "loginfo,ppp_status,network_provider,network_type,sub_network_type,"+
-        "battery_pers,battery_vol_percent,battery_charging,nv_band,nv_bandwidth,nv_arfcn,nv_globecellid,nv_enodbid,nv_cellid,nv_pci,"+
+        "Battery_voltage,battery_pers,battery_vol_percent,battery_charging,nv_band,nv_bandwidth,nv_arfcn,nv_globecellid,nv_enodbid,nv_cellid,nv_pci,"+
         "nv_rsrp,nv_rsrq,nv_sinr,nv_rssi,lte_rssi,rssi,wan_csq,bandwidth,lte_bandwidth,lte_bw,current_bandwidth,CurrentBandwidth,"+
         "dl_bandwidth,lte_dl_bandwidth,nv_dl_bandwidth,nv_rank,nv_rank_index,rank,rank_index,ri,lte_ri,lte_rank,"+
         "nv_txpower,nv_tx_power,txpower,tx_power,lte_txpower,lte_tx_power,nv_cqi,nv_cqi0,nv_cqi1,cqi,cqi0,cqi1,tb0_cqi,tb1_cqi,"+

@@ -16,7 +16,7 @@ public final class BatteryLevelPolicyTest {
         eq(85,BatteryLevelPolicy.percent(.85,"0.85"),"firmware decimal fraction");
         eq(100,BatteryLevelPolicy.percent(1,"1.0"),"one as fraction");
         eq(1,BatteryLevelPolicy.percent(1,"1"),"integer one is not fraction");
-        eq(100,BatteryLevelPolicy.percent(130,"130"),"clamp high");
+        eq(-1,BatteryLevelPolicy.percent(130,"130"),"reject out-of-range reading");
         eq(-1,BatteryLevelPolicy.percent(-1,"-1"),"reject negative");
         eq(-1,BatteryLevelPolicy.percent(Double.NaN,"NaN"),"reject NaN");
         eq(-1,BatteryLevelPolicy.percent(Double.POSITIVE_INFINITY,"inf"),"reject infinity");
@@ -32,6 +32,12 @@ public final class BatteryLevelPolicyTest {
         ok(BatteryLevelPolicy.color(100,true)!=BatteryLevelPolicy.color(100,false),"light contrast");
         eq(0xFF617180,BatteryLevelPolicy.color(-1,true),"unknown light");
         eq(0xFF9BA9B8,BatteryLevelPolicy.color(-1,false),"unknown dark");
+        eq(50,BatteryLevelPolicy.firstValid(50,"50",99,"99"),"prefer confirmed percent");
+        eq(75,BatteryLevelPolicy.firstValid(Double.NaN,"—",75,"75"),"legacy fallback");
+        eq(85,BatteryLevelPolicy.firstValid(130,"130",85,"85"),"invalid primary fallback");
+        eq(-1,BatteryLevelPolicy.firstValid(130,"130",-1,"-1"),"no false full battery");
+        eq(90,BatteryLevelPolicy.firstValid(.9,"0.9",85,"85"),"preferred fractional");
+        eq(0,BatteryLevelPolicy.firstValid(0,"0",99,"99"),"valid empty battery");
         System.out.println("Battery level policy: "+assertions+" assertions passed.");
     }
 }
