@@ -13,7 +13,7 @@ class RefreshResumeTest(unittest.TestCase):
         self.assertIn("if(actionBusy||!running)return;",gate)
 
     def test_stale_result_restarts_queued_foreground_refresh(self):
-        callback=MAIN.split("refreshBusy=false;",1)[1].split("observePoll(",1)[0]
+        callback=MAIN.split("handler.post(()->{\n                refreshBusy=false;",1)[1].split("observePoll(",1)[0]
         self.assertIn("!refreshSession.accepts(cycleGeneration,running)",callback)
         self.assertIn("refreshSession.takeDeferredForced(running)",callback)
         self.assertIn("refresh(true);",callback)
