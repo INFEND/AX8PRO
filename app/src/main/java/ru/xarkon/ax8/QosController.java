@@ -181,10 +181,15 @@ final class QosController implements AutoCloseable {
     synchronized void resyncAddresses(List<RouterClient.Device> devices,RouterClient.Progress progress)throws Exception{
         Map<String,Integer> saved=merge(limits());
         if(saved.isEmpty())return;
+        // Do not rewrite all tc/firewall rules from a client snapshot that
+        // contains no currently eligible capped device. A transient station
+        // list or missing IP must not be interpreted as a QoS reset request.
+        List<Active> eligible=selected(devices,saved);
+        if(eligible.isEmpty())return;
         ArrayList<String> ids=new ArrayList<>();
-        for(RouterClient.Device d:devices)if(saved.containsKey(d.mac)){
-            ArrayList<String> ipv6=new ArrayList<>(d.ipv6);Collections.sort(ipv6);
-            ids.add(d.mac+"="+d.ip+"/"+String.join(",",ipv6)+"/"+saved.get(d.mac));
+        for(Active a:eligible){
+            ArrayList<String> ipv6=new ArrayList<>(a.v6);Collections.sort(ipv6);
+            ids.add(a.mac+"="+a.ip+"/"+String.join(",",ipv6)+"/"+a.kb);
         }
         Collections.sort(ids);String signature=String.join(";",ids);
         long nowNs=System.nanoTime();
