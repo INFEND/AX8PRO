@@ -429,6 +429,7 @@ public final class MainActivity extends Activity {
                     final JSONObject early=next;
                     handler.post(()->{
                         if(!refreshSession.accepts(cycleGeneration,running)||bandTracker.isPending())return;
+                        invalidateInternetOnPppChange(early);
                         status=early;statusAt=System.currentTimeMillis();error="";
                         updateConnection();
                         maybeProbeInternet(true);
@@ -469,6 +470,7 @@ public final class MainActivity extends Activity {
                     long sampleTime=System.currentTimeMillis();double sec=(sampleTime-lastBytesAt)/1000.0;
                     if(lastBytesAt>0&&sec>.3&&rx>=lastRx&&tx>=lastTx){fallbackDl=(rx-lastRx)/sec;fallbackUl=(tx-lastTx)/sec;}
                     lastRx=rx;lastTx=tx;lastBytesAt=sampleTime;
+                    invalidateInternetOnPppChange(status2);
                     status=status2;statusAt=sampleTime;
                     prefs.edit().putString("last_router_status",status2.toString())
                         .putLong("last_router_status_at",sampleTime).apply();
@@ -546,6 +548,12 @@ public final class MainActivity extends Activity {
     private void clearPendingBand(){
         bandTracker.clear();
         prefs.edit().remove("pending_band").remove("pending_band_since").apply();
+    }
+    /** An LTE disconnect/reconnect must never inherit the previous WAN probe. */
+    private void invalidateInternetOnPppChange(JSONObject next){
+        if(status!=null && next!=null &&
+                InternetStatusPolicy.pppChanged(status.optString("ppp_status",""),
+                    next.optString("ppp_status","")))resetInternetResult();
     }
     private void resetInternetResult(){
         internetRevision++;

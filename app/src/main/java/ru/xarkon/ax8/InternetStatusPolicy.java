@@ -7,6 +7,10 @@ public final class InternetStatusPolicy {
     public static final long FRESH_MS=30000L;
     private InternetStatusPolicy(){}
 
+    /** A new LTE/PPP session invalidates an earlier external internet result. */
+    public static boolean pppChanged(String previous,String current){
+        return previous!=null && current!=null && !previous.equals(current);
+    }
     public static boolean isFresh(long checkedAt,long now){
         return checkedAt>0&&now>=checkedAt&&now-checkedAt<=FRESH_MS;
     }

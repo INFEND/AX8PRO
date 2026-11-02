@@ -27,6 +27,11 @@ public final class InternetStatusPolicyTest {
             InternetStatusPolicy.displayed(true,true,InternetStatusPolicy.ONLINE,T,T-1),"monotonic rollback");
         state(InternetStatusPolicy.UNKNOWN,
             InternetStatusPolicy.displayed(true,true,InternetStatusPolicy.ONLINE,0,T),"never tested unknown");
+        check(InternetStatusPolicy.pppChanged("ppp_connected","ppp_disconnected"),"disconnect invalidates WAN result");
+        check(InternetStatusPolicy.pppChanged("ppp_disconnected","ppp_connected"),"reconnect invalidates WAN result");
+        check(!InternetStatusPolicy.pppChanged("ppp_connected","ppp_connected"),"stable LTE retains fresh probe");
+        check(!InternetStatusPolicy.pppChanged(null,"ppp_connected"),"no previous sample is not a transition");
+        check(!InternetStatusPolicy.pppChanged("ppp_connected",null),"missing new sample is not a transition");
         check(InternetStatusPolicy.shouldProbe(0,T,false),"immediate first check");
         check(!InternetStatusPolicy.shouldProbe(T,T+100,false),"no rapid repeated check");
         check(InternetStatusPolicy.shouldProbe(T,T+15000,false),"fixed interval boundary");

@@ -25,6 +25,16 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("if(offlineCandidate==null)offlineCandidate=network;",source)
         self.assertIn("if(offlineCandidate!=null)return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);",source)
         self.assertNotIn("return new Result(InternetStatusPolicy.OFFLINE,network);",source)
+    def test_ppp_transitions_invalidate_external_probe(self):
+        main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
+        policy=(SRC/"InternetStatusPolicy.java").read_text(encoding="utf-8")
+        self.assertIn("InternetStatusPolicy.pppChanged(",main)
+        self.assertIn("invalidateInternetOnPppChange(early);",main)
+        self.assertIn("invalidateInternetOnPppChange(status2);",main)
+        self.assertLess(main.index("invalidateInternetOnPppChange(early);"),main.index("status=early;"))
+        self.assertLess(main.index("invalidateInternetOnPppChange(status2);"),main.index("status=status2;"))
+        self.assertIn("if(status!=null && next!=null",main)
+        self.assertIn("!previous.equals(current)",policy)
     def test_badges_use_independent_policy(self):
         main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
         self.assertIn('else label=online?"●  ONLINE"',main)
