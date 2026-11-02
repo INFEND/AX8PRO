@@ -290,7 +290,6 @@ public final class RouterClient {
         for(String cmd:new String[]{"station_list","lan_station_list","lan_station_list_all"}){
             JSONObject reply;
             try {reply=getSingle(cmd);}catch(Exception ignored){continue;}
-            if(reply.has(cmd))supported=true;
             Object obj=reply.opt(cmd);
             if(obj instanceof String){try{obj=new JSONArray((String)obj);}catch(Exception ignored){try{obj=new JSONObject((String)obj);}catch(Exception ignored2){}}}
             if(obj instanceof JSONObject) {
@@ -300,7 +299,21 @@ public final class RouterClient {
                 }
             }
             if(!(obj instanceof JSONArray))continue;
-            supported=true;JSONArray rows=(JSONArray)obj;
+            JSONArray rows=(JSONArray)obj;
+            // Never interpret a malformed or partially decoded client list as
+            // an empty list: that could overwrite the UI snapshot and trigger
+            // QoS reconciliation against devices that are still connected.
+            int validRows=0;
+            for(int i=0;i<rows.length();i++){
+                JSONObject row=rows.optJSONObject(i);
+                if(row==null)continue;
+                String state=first(row,"connected","is_connected","online","is_online","status").toLowerCase(Locale.US);
+                boolean offline=state.equals("0")||state.equals("false")||state.equals("offline")||state.equals("disconnected");
+                if(offline || !normalizeMac(first(row,"mac_addr","mac","MAC","macAddress","MacAddress","station_mac","client_mac_address")).isEmpty())
+                    validRows++;
+            }
+            if(!ClientSnapshotPolicy.accept(rows.length(),validRows))continue;
+            supported=true;
             for(int i=0;i<rows.length();i++){
                 JSONObject row=rows.optJSONObject(i);if(row==null)continue;
                 String online=first(row,"connected","is_connected","online","is_online","status").toLowerCase(Locale.US);
