@@ -163,7 +163,7 @@ public final class MainActivity extends Activity {
     private int refreshInterval(){
         if(automaticPolling())return autoPollMs;
         int ms=prefs.getInt("refresh_ms",500);
-        return AutoPollController.clamp(((ms+50)/100)*100);
+        return AutoPollController.clamp(ms);
     }
     private void observePoll(long elapsedMs,boolean success){
         if(!automaticPolling())return;
