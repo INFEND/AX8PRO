@@ -38,6 +38,17 @@ public final class BatteryLevelPolicyTest {
         eq(-1,BatteryLevelPolicy.firstValid(130,"130",-1,"-1"),"no false full battery");
         eq(90,BatteryLevelPolicy.firstValid(.9,"0.9",85,"85"),"preferred fractional");
         eq(0,BatteryLevelPolicy.firstValid(0,"0",99,"99"),"valid empty battery");
+        ok(BatteryLevelPolicy.isCharging("1"),"router charging=1 shows lightning");
+        ok(BatteryLevelPolicy.isCharging("true"),"boolean charging true");
+        ok(BatteryLevelPolicy.isCharging(" CHARGING "),"charging string case-insensitive");
+        ok(BatteryLevelPolicy.isCharging("yes"),"charging yes");
+        ok(BatteryLevelPolicy.isCharging("on"),"charging on");
+        ok(!BatteryLevelPolicy.isCharging("0"),"not charging hides lightning");
+        ok(!BatteryLevelPolicy.isCharging("false"),"explicit false hides lightning");
+        ok(!BatteryLevelPolicy.isCharging("full"),"100 percent/full is not charging evidence");
+        ok(!BatteryLevelPolicy.isCharging("100"),"100% is never interpreted as charging");
+        ok(!BatteryLevelPolicy.isCharging("—"),"unknown charger state hides lightning");
+        ok(!BatteryLevelPolicy.isCharging(null),"missing charger state hides lightning");
         System.out.println("Battery level policy: "+assertions+" assertions passed.");
     }
 }
