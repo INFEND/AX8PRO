@@ -33,7 +33,7 @@ class SnapshotFreshnessTest(unittest.TestCase):
         self.assertIn("BackgroundSummary.isFresh(smsTime,now,limit)",MAIN)
     def test_qos_never_falls_back_to_previous_clients(self):
         worker=MAIN.split("String qosIssue=\"\";",1)[1].split("final String limitedError=partialFailure;",1)[0]
-        self.assertIn("if(monitorOn&&d!=null)",worker)
+        self.assertIn("if(monitorOn&&d!=null&&foregroundCycleActive(cycleGeneration))",worker)
         self.assertIn("traffic.sample(d)",worker)
         self.assertIn("priority.update(d,traffic,qos)",worker)
         self.assertIn("uiQosWatch.check(d,traffic,qos)",worker)
