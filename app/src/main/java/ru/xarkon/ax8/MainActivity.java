@@ -422,7 +422,13 @@ public final class MainActivity extends Activity {
     }
     private interface Work{void run(RouterClient.Progress p)throws Exception;}
     private void refresh(boolean forced){
-        if(refreshBusy||actionBusy||!running)return;
+        if(refreshBusy){
+            // A forced foreground refresh must not disappear behind a poll
+            // started before pause/resume. The worker remains single-flight.
+            if(forced&&running)refreshSession.deferForced();
+            return;
+        }
+        if(actionBusy||!running)return;
         long now=System.currentTimeMillis();
         // One global interval for all WebUI parameters. Never overlap cycles.
         boolean wantStatus=forced||now-statusAt>=refreshInterval();
@@ -474,8 +480,13 @@ public final class MainActivity extends Activity {
             final RouterClient.BlockState blacklist=b;final String fail=failure;
             handler.post(()->{
                 refreshBusy=false;
-                // Do not publish data obtained before a pause/resume transition.
-                if(!refreshSession.accepts(cycleGeneration,running)||isFinishing()||isDestroyed())return;
+                // Discard stale results, then immediately honour a forced refresh
+                // requested on resume while this old worker was still occupied.
+                if(!refreshSession.accepts(cycleGeneration,running)||isFinishing()||isDestroyed()){
+                    if(!isFinishing()&&!isDestroyed()&&refreshSession.takeDeferredForced(running))
+                        refresh(true);
+                    return;
+                }
                 observePoll(android.os.SystemClock.elapsedRealtime()-cycleStart,
                     status2!=null && sms2!=null && devices2!=null);
                 if(status2!=null){
@@ -555,6 +566,9 @@ public final class MainActivity extends Activity {
                     else if(tab==4)updateSettingsLive();
                     else draw(true);
                 }
+                // Also honour a forced refresh requested during an otherwise valid
+                // cycle (for example, switching to the SMS tab mid-request).
+                if(refreshSession.takeDeferredForced(running))refresh(true);
             });
         });
     }
