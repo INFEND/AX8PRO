@@ -104,10 +104,12 @@ public final class MainActivity extends Activity {
     private final RefreshSession refreshSession=new RefreshSession();
     private int tab=0,lastNavTab=-1,lastNavUnread=-1;
     private String error="",notice="";
-    private long statusAt=0,clientsAt=0,smsAt=0,lastBytesAt=0;
+    private long statusAt=0,clientsAt=0,smsAt=0,blockedAt=0,lastBytesAt=0;
     private double lastRx=Double.NaN,lastTx=Double.NaN,fallbackDl=Double.NaN,fallbackUl=Double.NaN;
     private final Runnable ticker=new Runnable(){@Override public void run(){
         if(!running)return;
+        // Do not present expired client, SMS or ACL snapshots as live readings.
+        if(expireStaleSections(System.currentTimeMillis())){rebuildNav();draw(true);}
         refresh(false);
         maybeProbeInternet(false);
         updateInternetChip();
@@ -270,11 +272,15 @@ public final class MainActivity extends Activity {
         }
     }
     private int unreadBadgeCount(){
-        if(smsAt>0){
+        long now=System.currentTimeMillis();
+        long limit=Math.max(15000L,refreshInterval()*3L);
+        if(BackgroundSummary.isFresh(smsAt,now,limit)){
             int local=0;for(RouterClient.Sms sms:messages)if(sms.unread())local++;
             return local;
         }
-        return Math.max(0,prefs.getInt("bg_sms_unread",0));
+        if(BackgroundSummary.isFresh(prefs.getLong("bg_sms_at",0L),now,limit))
+            return Math.max(0,prefs.getInt("bg_sms_unread",0));
+        return 0;
     }
     private void showTab(int index){
         if(index==tab)return;
@@ -306,13 +312,29 @@ public final class MainActivity extends Activity {
         if(saved.isEmpty())return;
         try{status=new JSONObject(saved);statusAt=ts;}catch(Exception ignored){}
     }
+    /** Clear expired UI snapshots without changing SMS notification deduplication history. */
+    private boolean expireStaleSections(long now){
+        long limit=Math.max(15000L,refreshInterval()*3L);
+        boolean changed=false;
+        if(clientsAt>0&&!BackgroundSummary.isFresh(clientsAt,now,limit)){
+            devices=new ArrayList<>();clientsAt=0;changed=true;
+        }
+        if(smsAt>0&&!BackgroundSummary.isFresh(smsAt,now,limit)){
+            messages=new ArrayList<>();smsAt=0;changed=true;
+        }
+        if(blocked!=null&&!BackgroundSummary.isFresh(blockedAt,now,limit)){
+            blocked=null;blockedAt=0;changed=true;
+        }
+        return changed;
+    }
     private void loadBackgroundSnapshot(){
         long now=System.currentTimeMillis();
         long ts=prefs.getLong("bg_snapshot_at",0L);
         long limit=Math.max(15000L,refreshInterval()*3L);
+        expireStaleSections(now);
         if(!BackgroundSummary.isFresh(ts,now,limit)||ts<lastCompleteAt){
             long smsTime=prefs.getLong("bg_sms_at",0L);
-            if(smsTime>smsAt && now-smsTime<=limit){
+            if(smsTime>smsAt && BackgroundSummary.isFresh(smsTime,now,limit)){
                 try{messages=parseSms(new JSONArray(prefs.getString("bg_sms_json","[]")));smsAt=smsTime;}catch(Exception ignored){}
             }
             // Never label a cached router status as ONLINE if the sample is stale.
@@ -343,7 +365,8 @@ public final class MainActivity extends Activity {
                 String rawBlocked=prefs.getString("bg_blocked_json","");
                 blocked=rawBlocked==null||rawBlocked.trim().isEmpty()
                     ?null:parseBlocked(new JSONObject(rawBlocked));
-            }else blocked=null;
+                this.blockedAt=blocked==null?0:blockedAt;
+            }else{blocked=null;this.blockedAt=0;}
             fallbackDl=Double.longBitsToDouble(prefs.getLong("bg_fallback_dl_bits",Double.doubleToRawLongBits(fallbackDl)));
             fallbackUl=Double.longBitsToDouble(prefs.getLong("bg_fallback_ul_bits",Double.doubleToRawLongBits(fallbackUl)));
             String rawDl=prefs.getString("bg_history_dl","");if(rawDl!=null&&!rawDl.isEmpty())restoreHistory(rawDl,historyDl);
@@ -467,14 +490,16 @@ public final class MainActivity extends Activity {
             // refresh interval, with skipped ticks if AX8 has not yet answered.
             String qosIssue="";
             if(d!=null){try{qos.resyncAddresses(d,message->{});}catch(Exception e){qosIssue="QoS: "+e.getMessage();}}
-            if(monitorOn){
-                try{traffic.sample(d!=null?d:new ArrayList<>(devices));trafficError=qosIssue;
+            if(monitorOn&&d!=null){
+                // Never run traffic/QoS writes against the previous client list
+                // when the current AX8 client request has failed.
+                try{traffic.sample(d);trafficError=qosIssue;
                     if(traffic.error().isEmpty()){
-                        if(priority.enabled)priority.update(d!=null?d:new ArrayList<>(devices),traffic,qos);
-                        if(prefs.getBoolean("background_qos_watch",true))uiQosWatch.check(d!=null?d:new ArrayList<>(devices),traffic,qos);
+                        if(priority.enabled)priority.update(d,traffic,qos);
+                        if(prefs.getBoolean("background_qos_watch",true))uiQosWatch.check(d,traffic,qos);
                     }
                 }catch(Exception e){trafficError=e.getMessage()==null?e.toString():e.getMessage();}
-            }
+            }else if(monitorOn)trafficError="Список клиентов временно недоступен";
             final String limitedError=partialFailure;
             final JSONObject status2=next;final List<RouterClient.Device> devices2=d;final List<RouterClient.Sms> sms2=m;
             final RouterClient.BlockState blacklist=b;final String fail=failure;
@@ -489,6 +514,7 @@ public final class MainActivity extends Activity {
                 }
                 observePoll(android.os.SystemClock.elapsedRealtime()-cycleStart,
                     status2!=null && sms2!=null && devices2!=null);
+                expireStaleSections(System.currentTimeMillis());
                 if(status2!=null){
                     double rx=num(status2,"realtime_rx_bytes"),tx=num(status2,"realtime_tx_bytes");
                     long sampleTime=System.currentTimeMillis();double sec=(sampleTime-lastBytesAt)/1000.0;
@@ -517,7 +543,7 @@ public final class MainActivity extends Activity {
                     if(cache!=null)cache.apply();
                 }
                 if(sms2!=null){messages=sms2;smsAt=System.currentTimeMillis();}
-                if(blacklist!=null)blocked=blacklist;
+                if(blacklist!=null){blocked=blacklist;blockedAt=System.currentTimeMillis();}
                 autoSelectOwner(false);
                 lastCompleteAt=System.currentTimeMillis();
                 rebuildNav();
@@ -980,7 +1006,7 @@ public final class MainActivity extends Activity {
         clientsSignature=clientSkeletonSignature();
         addTitle("Подключённые устройства","Wi-Fi-клиенты, блокировки и контроль скорости");
         LinearLayout summary=Ui.card(this);LinearLayout row=Ui.horizontal(this);
-        LinearLayout stats=Ui.vertical(this);stats.addView(Ui.text(this,String.valueOf(devices.size()),32,Ui.CYAN,true));
+        LinearLayout stats=Ui.vertical(this);stats.addView(Ui.text(this,clientsAt>0?String.valueOf(devices.size()):"—",32,Ui.CYAN,true));
         stats.addView(Ui.text(this,"АКТИВНЫХ УСТРОЙСТВ",11,Ui.MUTED,true));row.addView(stats,new LinearLayout.LayoutParams(0,-2,1));
         row.addView(Ui.button(this,"↻  Обновить",Ui.CARD2,Ui.TEXT,()->refresh(true)));summary.addView(row);
         Ui.addSpace(summary,this,12);
@@ -996,7 +1022,8 @@ public final class MainActivity extends Activity {
             summary.addView(qosStatusLive);
         }
         addCard(summary);
-        if(devices.isEmpty())rowCard("Устройства не обнаружены","Подключитесь к AX8 и обновите список",null,Ui.MUTED,null);
+        if(devices.isEmpty())rowCard(clientsAt>0?"Устройства не обнаружены":"Список клиентов ещё не загружен",
+            clientsAt>0?"Подключитесь к AX8 и обновите список":"Ожидание ответа AX8. При необходимости повторите обновление",null,Ui.MUTED,null);
         for(RouterClient.Device dev:devices){
             boolean deny=blocked!=null&&blocked.black.contains(dev.mac);
             Integer limit=qos.effectiveLimit(dev.mac);
@@ -1268,18 +1295,20 @@ public final class MainActivity extends Activity {
         addTitle("Сообщения SIM","SMS из памяти маршрутизатора, без веб-браузера");
         long unread=messages.stream().filter(RouterClient.Sms::unread).count();
         LinearLayout counter=Ui.card(this);LinearLayout row=Ui.horizontal(this);
-        LinearLayout a=Ui.vertical(this);a.addView(Ui.text(this,""+messages.size(),29,Ui.CYAN,true));
+        LinearLayout a=Ui.vertical(this);a.addView(Ui.text(this,smsAt>0?String.valueOf(messages.size()):"—",29,Ui.CYAN,true));
         a.addView(Ui.text(this,"СООБЩЕНИЙ",11,Ui.MUTED,true));row.addView(a,new LinearLayout.LayoutParams(0,-2,1));
-        LinearLayout b=Ui.vertical(this);b.addView(Ui.text(this,""+unread,29,unread>0?Ui.ORANGE:Ui.GREEN,true));
+        LinearLayout b=Ui.vertical(this);b.addView(Ui.text(this,smsAt>0?String.valueOf(unread):"—",29,unread>0?Ui.ORANGE:Ui.GREEN,true));
         b.addView(Ui.text(this,"НЕПРОЧИТАННЫХ",11,Ui.MUTED,true));row.addView(b,new LinearLayout.LayoutParams(0,-2,1));counter.addView(row);
         Ui.addSpace(counter,this,14);
         LinearLayout buttons=Ui.horizontal(this);
         TextView send=Ui.button(this,"✉  Отправить",Ui.CARD2,Ui.CYAN,()->composeSms());
         TextView clear=Ui.button(this,"⌫  Удалить все",Ui.CARD2,Ui.RED,()->clearSms());
+        if(smsAt==0)clear.setAlpha(.45f);
         buttons.addView(send,new LinearLayout.LayoutParams(0,d(48),1));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,d(48),1);lp.leftMargin=d(8);buttons.addView(clear,lp);
         counter.addView(buttons);addCard(counter);
-        if(messages.isEmpty())rowCard("Сообщений нет","Новые сообщения появятся автоматически после опроса AX8",null,Ui.MUTED,null);
+        if(messages.isEmpty())rowCard(smsAt>0?"Сообщений нет":"Список SMS ещё не загружен",
+            smsAt>0?"Новые сообщения появятся автоматически после опроса AX8":"Ожидание ответа AX8. При необходимости повторите обновление",null,Ui.MUTED,null);
         for(RouterClient.Sms msg:messages){
             LinearLayout card=Ui.card(this);
             LinearLayout head=Ui.horizontal(this);
@@ -1464,7 +1493,7 @@ public final class MainActivity extends Activity {
             ()->action("Band Lock "+label,p->api.setBand(b,p),b));
     }
     private String clientSkeletonSignature(){
-        StringBuilder b=new StringBuilder(sectionError).append(';');
+        StringBuilder b=new StringBuilder(sectionError).append(";CLIENTS_READY:").append(clientsAt>0).append(';');
         // Include the entire blacklist, not only blocked currently-online clients.
         if(blocked==null)b.append("ACL_PENDING;");
         else{
@@ -1497,7 +1526,7 @@ public final class MainActivity extends Activity {
         }
     }
     private String smsFingerprint(){
-        StringBuilder b=new StringBuilder(sectionError).append(';');
+        StringBuilder b=new StringBuilder(sectionError).append(";SMS_READY:").append(smsAt>0).append(';');
         for(RouterClient.Sms sms:messages)b.append(sms.id).append('|').append(sms.tag)
             .append('|').append(sms.content.hashCode()).append(';');
         return b.toString();
