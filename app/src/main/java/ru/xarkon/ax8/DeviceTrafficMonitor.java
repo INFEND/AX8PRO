@@ -37,7 +37,8 @@ final class DeviceTrafficMonitor implements AutoCloseable {
     private String ips4="",ips6="",error="",note="Ожидание первого опроса";
     private Backend active4,active6;
     private boolean started=false;
-    private long lastAt=0,retryAfterMs=0;
+    private long lastAt=0;
+    private final RetryBackoff retry=new RetryBackoff(15_000);
 
     DeviceTrafficMonitor(RouterClient router,android.content.SharedPreferences prefs){
         shell=new TelnetShell(router,prefs.getString("telnet_user","admin"),prefs.getString("telnet_pass","admin"));
@@ -47,7 +48,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
     Rate get(String mac){return rates.get(mac);}
 
     synchronized void sample(List<RouterClient.Device> devices)throws Exception {
-        if(!started && System.currentTimeMillis()<retryAfterMs){rates.clear();return;}
+        if(!started && !retry.isReady(System.nanoTime())){rates.clear();return;}
         TreeSet<String> a4=new TreeSet<>(),a6=new TreeSet<>();
         for(RouterClient.Device d:devices){
             if(validIp4(d.ip))a4.add(d.ip);
@@ -69,7 +70,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                     try{active6=choose(true,a6);}catch(Exception ignored){active6=null;}
                 }
                 if(active4==null && active6==null)throw new IOException("Нет поддерживаемого механизма учёта IPv4/IPv6");
-                ips4=next4;ips6=next6;started=true;retryAfterMs=0;prior.clear();rates.clear();lastAt=0;
+                ips4=next4;ips6=next6;started=true;retry.reset();prior.clear();rates.clear();lastAt=0;
                 note="IPv4: "+(a4.isEmpty()?"нет адресов":active4==null?"недоступен":active4.label())+
                     " · IPv6: "+(a6.isEmpty()?"нет адресов":active6==null?"недоступен":active6.label());
             }
@@ -90,7 +91,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
             lastAt=now;error="";
         }catch(Exception e){
             error=shortText(e.getMessage());note="Монитор недоступен: "+error;
-            started=false;lastAt=0;retryAfterMs=System.currentTimeMillis()+15000;
+            started=false;lastAt=0;retry.onFailure(System.nanoTime());
             prior.clear();rates.clear();throw e;
         }
     }
@@ -176,7 +177,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
     }
     synchronized void stop(){
         remove(active4);remove(active6);
-        active4=null;active6=null;started=false;lastAt=0;retryAfterMs=0;prior.clear();rates.clear();ips4=ips6="";
+        active4=null;active6=null;started=false;lastAt=0;retry.reset();prior.clear();rates.clear();ips4=ips6="";
         note="Монитор остановлен";error="";
     }
     @Override public synchronized void close(){stop();shell.close();}
