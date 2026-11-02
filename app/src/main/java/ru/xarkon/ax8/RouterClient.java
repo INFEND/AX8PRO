@@ -153,14 +153,14 @@ public final class RouterClient {
             lastBatteryProbeMs=now;
             try{
                 lastBatteryProbe=get(BATTERY_FIELDS);
-                // Older variants may return the field only in single-value mode.
-                if(BatteryLevelPolicy.chargingState(lastBatteryProbe.optString("battery_charging",""))<0){
-                    try{
-                        JSONObject single=getSingle("battery_charging");
-                        String raw=single.optString("battery_charging","").trim();
-                        if(!raw.isEmpty())lastBatteryProbe.put("battery_charging",raw);
-                    }catch(Exception ignored){}
-                }
+                // Single-value mode may return an independent, fresher charging state.
+                // Query it periodically rather than relying on a large LTE response.
+                try{
+                    JSONObject single=getSingle("battery_charging");
+                    String raw=single.optString("battery_charging","").trim();
+                    if(BatteryLevelPolicy.chargingState(raw)>=0)
+                        lastBatteryProbe.put("battery_charging",raw);
+                }catch(Exception ignored){}
             }catch(Exception ignored){lastBatteryProbe=null;}
         }
         if(lastBatteryProbe!=null && now-lastBatteryProbeMs<=7000L)
