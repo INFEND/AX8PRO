@@ -52,6 +52,31 @@ class ManifestTests(unittest.TestCase):
                         "https://github.com/ANTIFERMENT/AX8PRO/releases/download/v1.5.4/AX8PRO.apk",
                     )
                     self.assertIn("tag=v1.5.4", outputs)
+                    self.assertEqual([v["versionCode"] for v in data["history"]],
+                                     [19, 20, 21, 22])
+                    self.assertEqual(data["notes"], data["history"][-1]["notes"])
+                    self.assertTrue(data["notes"].startswith(("[+] ", "[=] ", "[-] ")))
+
+    def test_gap_or_duplicate_changelog_rejected(self):
+        entries = [
+            {"versionCode": 19, "versionName": "1.5.1", "notes": "[+] First."},
+            {"versionCode": 21, "versionName": "1.5.3", "notes": "[=] Third."},
+        ]
+        with self.assertRaisesRegex(ValueError, "Missing, duplicated"):
+            manifest.cumulative_history("1.5.3", 21, entries)
+
+    def test_missing_current_changelog_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Missing notes"):
+            manifest.cumulative_history("1.5.23", 41, [
+                {"versionCode": 19, "versionName": "1.5.1", "notes": "[+] First."}
+            ])
+
+    def test_invalid_notes_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Invalid release note"):
+            manifest.cumulative_history("1.5.1", 19, [
+                {"versionCode": 19, "versionName": "1.5.1",
+                 "notes": "Unformatted notes are forbidden"}
+            ])
 
     def test_untrusted_repository_rejected(self):
         with tempfile.TemporaryDirectory() as folder:

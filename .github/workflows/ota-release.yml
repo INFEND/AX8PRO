@@ -11,6 +11,7 @@ on:
       - 'scripts/import_source_zip.py'
       - 'scripts/sign_release.py'
       - 'scripts/make_manifest.py'
+      - 'release_notes/**'
       - 'app/**'
       - 'gradle/**'
       - 'gradlew'
@@ -87,6 +88,8 @@ jobs:
             app/src/main/java/ru/xarkon/ax8/QosRecoveryPolicy.java \
             app/src/main/java/ru/xarkon/ax8/QosResyncPolicy.java \
             app/src/main/java/ru/xarkon/ax8/BatteryLevelPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/ReleaseNotes.java \
+            app/src/main/java/ru/xarkon/ax8/OtaHistory.java \
             tools/AutoPollControllerTest.java \
             tools/ClientSnapshotPolicyTest.java \
             tools/BackgroundSummaryTest.java \
@@ -95,7 +98,8 @@ jobs:
             tools/RetryBackoffTest.java \
             tools/QosRecoveryPolicyTest.java \
             tools/QosResyncPolicyTest.java \
-            tools/BatteryLevelPolicyTest.java
+            tools/BatteryLevelPolicyTest.java \
+            tools/OtaHistoryTest.java
           java -cp /tmp/ax8-auto-test AutoPollControllerTest
           java -cp /tmp/ax8-auto-test ClientSnapshotPolicyTest
           java -cp /tmp/ax8-auto-test BackgroundSummaryTest
@@ -105,6 +109,7 @@ jobs:
           java -cp /tmp/ax8-auto-test ru.xarkon.ax8.QosRecoveryPolicyTest
           java -cp /tmp/ax8-auto-test ru.xarkon.ax8.QosResyncPolicyTest
           java -cp /tmp/ax8-auto-test ru.xarkon.ax8.BatteryLevelPolicyTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.OtaHistoryTest
 
       - name: Test OTA manifest compatibility and integrity
         shell: bash

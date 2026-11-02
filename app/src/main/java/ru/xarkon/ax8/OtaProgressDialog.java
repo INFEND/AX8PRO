@@ -30,6 +30,8 @@ public final class OtaProgressDialog {
     private final TextView heading, label, details, bytes, percent, primary, secondary;
     private final CenteredRing mark;
     private final ProgressBar bar;
+    private final android.widget.ScrollView notesScroll;
+    private final TextView notesText;
     private final int accent, foreground, muted, panel;
     private final boolean animate;
     private ValueAnimator numberAnim, spin, sweepAnim;
@@ -110,6 +112,17 @@ public final class OtaProgressDialog {
         LinearLayout.LayoutParams sl=new LinearLayout.LayoutParams(-1,-2);sl.topMargin=dp(25);root.addView(label,sl);
         details=text("Подключение к серверу...",12,muted,false);
         LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(-1,-2);dl.topMargin=dp(7);root.addView(details,dl);
+        notesScroll=new android.widget.ScrollView(a);
+        notesScroll.setFillViewport(false);
+        notesScroll.setVerticalScrollBarEnabled(false);
+        notesScroll.setBackground(shape(light?0xfff3f6f9:0xff0c0f12,stroke,15));
+        notesText=text("",13,foreground,false);
+        notesText.setPadding(dp(13),dp(12),dp(13),dp(13));
+        notesText.setLineSpacing(dp(4),1f);
+        notesScroll.addView(notesText);
+        LinearLayout.LayoutParams notesLp=new LinearLayout.LayoutParams(-1,dp(172));
+        notesLp.topMargin=dp(15);root.addView(notesScroll,notesLp);
+        notesScroll.setVisibility(View.GONE);
         LinearLayout numbers=new LinearLayout(a);numbers.setOrientation(LinearLayout.HORIZONTAL);
         numbers.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams nl=new LinearLayout.LayoutParams(-1,-2);nl.topMargin=dp(22);root.addView(numbers,nl);
@@ -234,7 +247,53 @@ public final class OtaProgressDialog {
         primary.setVisibility(retry==null?View.GONE:View.VISIBLE);
         primary.setOnClickListener(v->{if(retry!=null)retry.run();});
     }
+    private void showNotes(String source){
+        // Only real, user-facing [+]/[-]/[=] changes. Ignore legacy QA footnotes.
+        String notes=ReleaseNotes.visible(source);
+        if(notes.isEmpty()){notesScroll.setVisibility(View.GONE);return;}
+        android.text.SpannableStringBuilder styled=new android.text.SpannableStringBuilder();
+        for(String line:notes.split("\\n")){
+            if(styled.length()>0)styled.append("\n");
+            // **Important phrases** are bold in the UI, not literal Markdown.
+            StringBuilder visible=new StringBuilder();
+            java.util.ArrayList<int[]> strong=new java.util.ArrayList<>();
+            int startStrong=-1;
+            for(int i=0;i<line.length();){
+                if(i+1<line.length()&&line.charAt(i)=='*'&&line.charAt(i+1)=='*'){
+                    if(startStrong<0)startStrong=visible.length();
+                    else{
+                        if(visible.length()>startStrong)
+                            strong.add(new int[]{startStrong,visible.length()});
+                        startStrong=-1;
+                    }
+                    i+=2;
+                }else{visible.append(line.charAt(i));i++;}
+            }
+            String display=visible.toString().replace("[-]","[–]");
+            int begin=styled.length();
+            styled.append(display);
+            int tint=display.startsWith("[+]")?0xff4dd69c:
+                display.startsWith("[–]")?0xfff07878:0xffffaa4d;
+            styled.setSpan(new android.text.style.ForegroundColorSpan(tint),
+                begin,begin+3,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            styled.setSpan(new android.text.style.StyleSpan(Typeface.BOLD),
+                begin,begin+3,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            // Highlight the leading action word, plus explicitly marked key phrases.
+            int actionStart=4,actionEnd=actionStart;
+            while(actionEnd<display.length()&&!Character.isWhitespace(display.charAt(actionEnd))
+                  &&actionEnd-actionStart<40)actionEnd++;
+            if(actionEnd>actionStart)styled.setSpan(new android.text.style.StyleSpan(Typeface.BOLD),
+                begin+actionStart,begin+actionEnd,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            for(int[] span:strong)if(span[1]<=display.length())
+                styled.setSpan(new android.text.style.StyleSpan(Typeface.BOLD),
+                    begin+span[0],begin+span[1],android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        notesText.setText(styled);
+        notesScroll.scrollTo(0,0);
+        notesScroll.setVisibility(View.VISIBLE);
+    }
     public void current(String version){
+        notesScroll.setVisibility(View.GONE);
         if(numberAnim!=null)numberAnim.cancel();rotating(false);
         heading.setText("AX8 PRO CONTROL обновлён");
         label.setText("Установлена актуальная версия");
@@ -243,7 +302,9 @@ public final class OtaProgressDialog {
         bar.setIndeterminate(false);bar.setProgress(1000);
         primary.setVisibility(View.GONE);secondary.setText("ЗАКРЫТЬ");
     }
-    public void offer(String version,Runnable install){
+    public void offer(String version,Runnable install){offer(version,"",install);}
+    public void offer(String version,String notes,Runnable install){
+        showNotes(notes);
         rotating(false);bar.setIndeterminate(false);bar.setProgress(0);
         heading.setText("Доступно обновление");
         label.setText("AX8 PRO CONTROL "+version);

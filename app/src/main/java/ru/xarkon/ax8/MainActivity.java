@@ -1506,6 +1506,10 @@ public final class MainActivity extends Activity {
         catch(Exception ignored){return "1.5.3";}
     }
     private boolean startupOtaChecked=false,otaCheckBusy=false;
+    private long installedOtaCode(){
+        try{return UpdateManager.currentCode(this);}
+        catch(Exception ignored){return 0L;}
+    }
     private void checkOta(boolean silent){
         if(isFinishing()||isDestroyed()||otaCheckBusy)return;
         otaCheckBusy=true;
@@ -1521,7 +1525,8 @@ public final class MainActivity extends Activity {
                 if(!newer){if(ui!=null)ui.current("Версия "+BuildConfigVersion());return;}
                 OtaProgressDialog dialog=ui!=null?ui:new OtaProgressDialog(MainActivity.this);
                 if(ui==null)dialog.show();
-                dialog.offer(release.versionName,()->downloadOta(release,dialog));
+                dialog.offer(release.versionName,release.notesFor(installedOtaCode()),
+                    ()->downloadOta(release,dialog));
             }
             @Override public void downloaded(java.io.File apk){}
             @Override public void error(String message){

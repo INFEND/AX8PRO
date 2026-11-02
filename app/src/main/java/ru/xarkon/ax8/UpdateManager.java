@@ -7,6 +7,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import org.json.JSONObject;
+import org.json.JSONArray;
+import java.util.ArrayList;
+import java.util.List;
 import javax.net.ssl.HttpsURLConnection;
 import java.io.*;
 import java.net.*;
@@ -33,12 +36,28 @@ public final class UpdateManager {
     public static final class Release {
         public final String versionName,apkUrl,sha256,notes;
         public final long versionCode,sizeBytes;
+        private final List<OtaHistory.Entry> history;
+        public String notesFor(long installedCode){
+            return OtaHistory.merge(history,installedCode,versionCode,notes);
+        }
         Release(JSONObject j)throws Exception{
             if(j.optInt("schema",1)!=1)throw new IOException("Неизвестный формат OTA");
             if(!PACKAGE.equals(j.getString("packageName")))throw new IOException("Неверный идентификатор приложения");
             versionCode=j.getLong("versionCode");versionName=j.getString("versionName");
             apkUrl=j.getString("apkUrl");sha256=j.getString("sha256").toUpperCase(Locale.US);
             sizeBytes=j.optLong("sizeBytes",-1);notes=j.optString("notes","");
+            if(notes.length()>100_000)throw new IOException("Слишком длинный журнал обновления");
+            List<OtaHistory.Entry> entries=new ArrayList<>();
+            JSONArray versions=j.optJSONArray("history");
+            if(versions!=null&&versions.length()<=500){
+                for(int i=0;i<versions.length();i++){
+                    JSONObject item=versions.optJSONObject(i);
+                    if(item==null){entries.clear();break;}
+                    entries.add(new OtaHistory.Entry(item.optLong("versionCode",0),
+                        item.optString("versionName",""),item.optString("notes","")));
+                }
+            }
+            history=entries;
             URL url=new URL(apkUrl);
             if(!"https".equals(url.getProtocol())||!"github.com".equalsIgnoreCase(url.getHost())||
                 (!url.getPath().startsWith(RELEASE_PREFIX)&&!url.getPath().startsWith(RELEASE_PREFIX_NEW))||!url.getPath().endsWith("/AX8PRO.apk")||
@@ -58,7 +77,7 @@ public final class UpdateManager {
             if(c.getResponseCode()!=200)throw new IOException("Manifest HTTP "+c.getResponseCode());
             try(InputStream in=c.getInputStream();ByteArrayOutputStream out=new ByteArrayOutputStream()){
                 byte[] buf=new byte[4096];int n;
-                while((n=in.read(buf))!=-1){out.write(buf,0,n);if(out.size()>65536)throw new IOException("Manifest слишком большой");}
+                while((n=in.read(buf))!=-1){out.write(buf,0,n);if(out.size()>512*1024)throw new IOException("Manifest слишком большой");}
                 return out.toString("UTF-8");
             }
         }finally{c.disconnect();}
@@ -140,42 +159,14 @@ public final class UpdateManager {
                 android.widget.Toast.makeText(a,"Разрешите установку и повторно нажмите обновление",android.widget.Toast.LENGTH_LONG).show();return;
             }
             Uri uri=Uri.parse("content://ru.xarkon.ax8pro.ota/apk");
-            Intent intent=new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            // Match QR LINK's reliable installer task isolation: this process is
+            // killed during self-update, so the installer must not belong to its task.
+            Intent intent=new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(uri,"application/vnd.android.package-archive");
             intent.setClipData(ClipData.newRawUri("AX8 PRO CONTROL",uri));
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            a.startActivity(intent);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_ACTIVITY_NEW_TASK);
+            a.getApplicationContext().startActivity(intent);
         }catch(Exception e){new android.app.AlertDialog.Builder(a).setTitle("Обновление OTA")
             .setMessage(friendly(e)).setPositiveButton("Понятно",null).show();}
-    }
-    /** Shows a reliable Open action after an app update; Android may restrict automatic starts. */
-    public static final class InstalledReceiver extends android.content.BroadcastReceiver {
-        @Override public void onReceive(Context context,Intent intent){
-            if(intent==null || !Intent.ACTION_MY_PACKAGE_REPLACED.equals(intent.getAction()))return;
-            try{
-                context.getSharedPreferences("ax8_control",Context.MODE_PRIVATE).edit()
-                    .putLong("ota_last_installed_at",System.currentTimeMillis()).apply();
-                if(Build.VERSION.SDK_INT>=33 &&
-                    context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return;
-                Intent launch=context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-                if(launch==null)launch=new Intent(context,MainActivity.class);
-                launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                android.app.PendingIntent pending=android.app.PendingIntent.getActivity(context,260,launch,
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT|android.app.PendingIntent.FLAG_IMMUTABLE);
-                android.app.NotificationManager manager=(android.app.NotificationManager)
-                    context.getSystemService(Context.NOTIFICATION_SERVICE);
-                if(manager==null)return;
-                String channel="ax8pro_update_complete";
-                if(Build.VERSION.SDK_INT>=26)manager.createNotificationChannel(
-                    new android.app.NotificationChannel(channel,"AX8 PRO CONTROL · Обновления",
-                        android.app.NotificationManager.IMPORTANCE_DEFAULT));
-                android.app.Notification.Builder builder=Build.VERSION.SDK_INT>=26?
-                    new android.app.Notification.Builder(context,channel):new android.app.Notification.Builder(context);
-                builder.setSmallIcon(R.drawable.ic_app).setContentTitle("AX8 PRO CONTROL обновлён")
-                    .setContentText("Нажмите, чтобы открыть приложение")
-                    .setAutoCancel(true).setContentIntent(pending);
-                manager.notify(260,builder.build());
-            }catch(Exception ignored){}
-        }
     }
 }

@@ -9,6 +9,37 @@ import re
 import subprocess
 from urllib.parse import quote
 
+
+def cumulative_history(version, code, entries):
+    """Require a gap-free, complete, user-facing changelog through the release being built."""
+    if not isinstance(entries, list) or not entries or len(entries) > 500:
+        raise ValueError("Missing or oversized release history")
+    selected = []
+    prev = 18  # Baseline v1.5.0 (18): history starts with v1.5.1 (19).
+    for item in entries:
+        if not isinstance(item, dict):
+            raise ValueError("Malformed history entry")
+        n = item.get("versionCode")
+        name = item.get("versionName")
+        notes = item.get("notes")
+        if type(n) is not int or n != prev + 1 or name != "1.5." + str(n - 18):
+            raise ValueError("Missing, duplicated or mismatched release history")
+        if not isinstance(notes, str) or not (5 <= len(notes) <= 100_000):
+            raise ValueError("Missing or oversized user-facing notes")
+        lines = notes.splitlines()
+        if any(len(line) > 260 or not line.startswith(("[+] ", "[-] ", "[–] ", "[=] "))
+               for line in lines):
+            raise ValueError("Invalid release note markup")
+        if n <= code:
+            selected.append(item)
+        prev = n
+    if not selected or selected[-1]["versionCode"] != code or selected[-1]["versionName"] != version:
+        raise ValueError("Missing notes for selected APK version")
+    if sum(len(item["notes"]) for item in selected) > 350_000:
+        raise ValueError("Release history too large")
+    return selected
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apk", required=True)
@@ -34,6 +65,9 @@ def main():
         raise SystemExit("Unexpected APK package or versionCode: " + package_name + " " + code)
     tag = "v" + version
     sha = hashlib.sha256(apk.read_bytes()).hexdigest()
+    history_file = Path(__file__).resolve().parents[1] / "release_notes" / "history.json"
+    history = cumulative_history(version, int(code),
+        json.loads(history_file.read_text(encoding="utf-8")))
     data = {
         "schema": 1,
         "packageName": package_name,
@@ -45,7 +79,8 @@ def main():
         "sha256": sha,
         "sizeBytes": apk.stat().st_size,
         "publishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "notes": f"AX8 PRO CONTROL {version}. Исправления интерфейса, мониторинга и обновлений."
+        "notes": history[-1]["notes"],
+        "history": history
     }
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
