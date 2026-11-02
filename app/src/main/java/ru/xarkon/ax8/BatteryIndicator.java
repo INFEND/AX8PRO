@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.PowerManager;
@@ -18,6 +19,7 @@ import android.widget.TextView;
 /** Compact, read-only router battery charge indicator: dynamic fill + animated percent gradient. */
 final class BatteryIndicator extends LinearLayout {
     private final BatteryGlyph glyph;
+    private final ChargingGlyph charging;
     private final BatteryText value;
 
     BatteryIndicator(Context context){
@@ -27,19 +29,55 @@ final class BatteryIndicator extends LinearLayout {
         glyph=new BatteryGlyph(context);
         glyph.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         addView(glyph,new LayoutParams(Ui.dp(context,25),Ui.dp(context,17)));
+        charging=new ChargingGlyph(context);
+        charging.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        LayoutParams chargingLayout=new LayoutParams(Ui.dp(context,15),Ui.dp(context,19));
+        chargingLayout.leftMargin=Ui.dp(context,5);
+        addView(charging,chargingLayout);
+        charging.setVisibility(GONE);
         value=new BatteryText(context);
         LayoutParams textLayout=new LayoutParams(LayoutParams.WRAP_CONTENT,LayoutParams.WRAP_CONTENT);
         textLayout.leftMargin=Ui.dp(context,7);
         addView(value,textLayout);
-        setBattery(-1,"—");
+        setBattery(-1,"—",true,false);
     }
 
-    void setBattery(int level,String displayed){
+    void setBattery(int level,String displayed,boolean showLevelIcon,boolean isCharging){
         String text=displayed==null?"—":displayed;
         glyph.setLevel(level);
+        glyph.setVisibility(showLevelIcon?VISIBLE:GONE);
+        charging.setVisibility(isCharging?VISIBLE:GONE);
+        // Removing the decorative battery never hides the actual charging indicator.
+        LayoutParams labelLayout=(LayoutParams)value.getLayoutParams();
+        int margin=(showLevelIcon||isCharging)?Ui.dp(getContext(),7):0;
+        if(labelLayout.leftMargin!=margin){labelLayout.leftMargin=margin;value.setLayoutParams(labelLayout);}
         value.setLevel(level);
         if(!text.contentEquals(value.getText()))value.setText(text);
-        setContentDescription("Заряд батареи роутера: "+(text.equals("—")?"нет данных":text));
+        setContentDescription("Заряд батареи роутера: "+(text.equals("—")?"нет данных":text)
+            +(isCharging?", идёт зарядка":""));
+    }
+
+    /** Independent charging lightning, rendered only for an explicit router charging signal. */
+    private static final class ChargingGlyph extends View {
+        private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path bolt=new Path();
+        ChargingGlyph(Context context){
+            super(context);
+            bolt.moveTo(9f,0.5f);bolt.lineTo(2.5f,10f);
+            bolt.lineTo(7.8f,10f);bolt.lineTo(5.8f,19.5f);
+            bolt.lineTo(14.5f,7.7f);bolt.lineTo(9f,7.7f);
+            bolt.close();
+        }
+        @Override protected void onDraw(Canvas canvas){
+            super.onDraw(canvas);
+            int saved=canvas.save();
+            canvas.scale(getWidth()/17f,getHeight()/20f);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setShader(null);
+            paint.setColor(Ui.GREEN);
+            canvas.drawPath(bolt,paint);
+            canvas.restoreToCount(saved);
+        }
     }
 
     private static final class BatteryGlyph extends View {
