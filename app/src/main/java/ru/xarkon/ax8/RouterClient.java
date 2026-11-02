@@ -47,7 +47,11 @@ public final class RouterClient {
     public synchronized String hostname() {
         try { return URI.create(base).getHost(); } catch(Exception e) {return "192.168.150.1";}
     }
-    public synchronized void invalidate() { authenticated=false;cookieManager.getCookieStore().removeAll(); }
+    public synchronized void invalidate() {
+        authenticated=false;
+        lastBatteryProbe=null;lastBatteryProbeMs=0L;
+        cookieManager.getCookieStore().removeAll();
+    }
 
     private String encode(Map<String,String> params) throws Exception {
         StringBuilder out=new StringBuilder();
