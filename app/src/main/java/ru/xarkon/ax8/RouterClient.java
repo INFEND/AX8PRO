@@ -151,8 +151,17 @@ public final class RouterClient {
         long now=System.currentTimeMillis();
         if(lastBatteryProbeMs==0L||now-lastBatteryProbeMs>=5000L){
             lastBatteryProbeMs=now;
-            try{lastBatteryProbe=get(BATTERY_FIELDS);}
-            catch(Exception ignored){lastBatteryProbe=null;}
+            try{
+                lastBatteryProbe=get(BATTERY_FIELDS);
+                // Older variants may return the field only in single-value mode.
+                if(BatteryLevelPolicy.chargingState(lastBatteryProbe.optString("battery_charging",""))<0){
+                    try{
+                        JSONObject single=getSingle("battery_charging");
+                        String raw=single.optString("battery_charging","").trim();
+                        if(!raw.isEmpty())lastBatteryProbe.put("battery_charging",raw);
+                    }catch(Exception ignored){}
+                }
+            }catch(Exception ignored){lastBatteryProbe=null;}
         }
         if(lastBatteryProbe!=null && now-lastBatteryProbeMs<=7000L)
             mergeBatteryFields(obj,lastBatteryProbe);
