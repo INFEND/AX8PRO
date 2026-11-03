@@ -21,7 +21,7 @@ final class OwnerPriorityController {
     }
     void update(List<RouterClient.Device> devices,DeviceTrafficMonitor traffic,QosController qos)throws Exception{
         if(!enabled)return;
-        long now=System.currentTimeMillis();if(now-lastEval<2500)return;lastEval=now;
+        long now=System.nanoTime()/1_000_000L;if(lastEval!=0&&now-lastEval>=0&&now-lastEval<2500)return;lastEval=now;
         // Keep the current cap on newly arrived clients without rewriting manual rules.
         if(cap!=null)qos.applyPriority(owner,cap,devices,message->{});
         boolean present=false;double oDl=0,oUl=0;for(RouterClient.Device d:devices)if(d.mac.equals(owner)){
