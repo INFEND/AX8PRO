@@ -173,9 +173,14 @@ public class OwnerPriorityHarness {
               "unconfirmed update must retain last confirmed cap");
         check(qos.applied == null,
               "fixture must record cap removal before transport failure");
+        check(lastEval.getLong(controller) == 0L,
+              "post-mutation transport failure must reset the retry throttle");
         qos.failAfterApply = false;
-        lastEval.setLong(controller, 0L);
+        int callsBeforePostMutationRetry = qos.calls;
+        // Retry without modifying the internal timer: production must recover itself.
         controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
+        check(qos.calls == callsBeforePostMutationRetry + 1,
+              "post-mutation disconnect must trigger an immediate cleanup retry");
         check(controller.cap == null && qos.applied == null,
               "owner departure retry must reconcile the temporary cap");
         controller.disable();
