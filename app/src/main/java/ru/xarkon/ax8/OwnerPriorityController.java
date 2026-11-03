@@ -22,6 +22,7 @@ final class OwnerPriorityController {
     void update(List<RouterClient.Device> devices,DeviceTrafficMonitor traffic,QosController qos)throws Exception{
         if(!enabled)return;
         long now=System.nanoTime()/1_000_000L;if(lastEval!=0&&now-lastEval>=0&&now-lastEval<2500)return;lastEval=now;
+        try {
         boolean present=false;double oDl=0,oUl=0;for(RouterClient.Device d:devices)if(d.mac.equals(owner)){
             present=true;DeviceTrafficMonitor.Rate rate=traffic.get(d.mac);if(rate!=null){oDl=rate.dl;oUl=rate.ul;}break;
         }
@@ -44,6 +45,11 @@ final class OwnerPriorityController {
         if(share<.60){mode="ЗАЩИТА";good=0;apply(cap==null?initial(max):next(cap,true),devices,qos);}
         else if(share>.82){mode="ОСЛАБЛЕНИЕ";if(cap!=null&&++good>=2){good=0;apply(next(cap,false),devices,qos);}}
         else{mode="БАЛАНС";good=0;}
+        } catch (Exception error) {
+            // A failed Telnet operation must not suppress the next recovery attempt.
+            lastEval=0;
+            throw error;
+        }
     }
     private void apply(Integer wanted,List<RouterClient.Device> devices,QosController qos)throws Exception{
         if(Objects.equals(cap,wanted))return;
