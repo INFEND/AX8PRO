@@ -23,6 +23,7 @@ class DeviceTrafficMonitor {
 }
 class QosController {
     boolean fail;
+    boolean failAfterApply;
     int calls;
     Integer applied;
     interface Progress { void accept(String message); }
@@ -31,6 +32,7 @@ class QosController {
         calls++;
         if (fail) throw new Exception("simulated Telnet failure");
         applied = wanted;
+        if (failAfterApply) throw new Exception("simulated disconnect after router mutation");
     }
 }
 """
@@ -131,7 +133,23 @@ public class OwnerPriorityHarness {
         controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
         check(controller.cap == null && qos.applied == null,
               "recovered owner-departure cleanup must remove temporary cap");
-        controller.disable();
+        // A transport failure can occur after the router has already accepted a command.
+        // The controller must keep the last confirmed cap, then reconcile on retry.
+        apply(controller, 500, qos);
+        qos.failAfterApply = true;
+        threw = false;
+        try { apply(controller, null, qos); }
+        catch (Exception expected) { threw = true; }
+        check(threw, "post-apply disconnect must propagate");
+        check(Integer.valueOf(500).equals(controller.cap),
+              "unconfirmed router mutation must not commit controller state");
+        check(qos.applied == null,
+              "failure fixture must simulate router mutation before disconnect");
+        qos.failAfterApply = false;
+        apply(controller, null, qos);
+        check(controller.cap == null && qos.applied == null,
+              "retry must reconcile a partially completed router operation");
+                controller.disable();
         check(!controller.enabled && controller.cap == null, "disable clears state");
         System.out.println("OwnerPriorityController JVM regression: PASS");
     }
