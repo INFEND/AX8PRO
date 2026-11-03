@@ -16,7 +16,7 @@ class RouterOperationGateSourceTest(unittest.TestCase):
         text=(SRC/"DeviceTrafficMonitor.java").read_text(encoding="utf-8")
         sample=text.split("synchronized void sample(",1)[1].split("private static boolean validIp4(",1)[0]
         stop=text.split("synchronized void stop(){",1)[1].split("@Override public synchronized void close()",1)[0]
-        self.assertIn("try(RouterOperationGate.Lease ignored=RouterOperationGate.enter())",sample)
+        self.assertIn("try(RouterOperationGate.Lease gateLease=RouterOperationGate.enter())",sample)
         self.assertIn("try(RouterOperationGate.Lease ignored=RouterOperationGate.enter())",stop)
 
 if __name__=="__main__":unittest.main()

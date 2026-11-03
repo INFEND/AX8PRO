@@ -49,7 +49,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
 
     synchronized void sample(List<RouterClient.Device> devices)throws Exception {
         // Counter-chain installation/removal must not interleave with QoS rewrites.
-        try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){
+        try(RouterOperationGate.Lease gateLease=RouterOperationGate.enter()){
         if(!started && !retry.isReady(System.nanoTime())){rates.clear();return;}
         TreeSet<String> a4=new TreeSet<>(),a6=new TreeSet<>();
         for(RouterClient.Device d:devices){
