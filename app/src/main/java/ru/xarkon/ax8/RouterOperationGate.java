@@ -11,14 +11,20 @@ final class RouterOperationGate {
     private RouterOperationGate(){}
     static Lease enter(){
         LOCK.lock();
-        return new Lease();
+        return new Lease(Thread.currentThread());
     }
     static final class Lease implements AutoCloseable {
+        private final Thread owner;
         private boolean closed;
+        private Lease(Thread owner){this.owner=owner;}
         @Override public void close(){
+            // Never mark a lease closed before validating ownership. Otherwise a
+            // mistaken cross-thread close permanently strands the lock.
+            if(Thread.currentThread()!=owner)
+                throw new IllegalMonitorStateException("Router operation lease belongs to another thread");
             if(closed)return;
-            closed=true;
             LOCK.unlock();
+            closed=true;
         }
     }
 }

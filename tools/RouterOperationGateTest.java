@@ -24,6 +24,16 @@ public final class RouterOperationGateTest {
                 check(waiting.await(2,TimeUnit.SECONDS),"contender did not start");
                 check(!completed.await(150,TimeUnit.MILLISECONDS),"other thread entered during active lease");
                 check(!entered.get(),"lock leaked across threads");
+                AtomicBoolean rejected=new AtomicBoolean(false);
+                Thread invalidCloser=new Thread(()->{
+                    try{nested.close();}
+                    catch(IllegalMonitorStateException expected){rejected.set(true);}
+                });
+                invalidCloser.start();
+                invalidCloser.join(2000);
+                check(!invalidCloser.isAlive(),"cross-thread close hung");
+                check(rejected.get(),"cross-thread close must be rejected");
+                check(!completed.await(150,TimeUnit.MILLISECONDS),"cross-thread close released lock");
             }
             check(!completed.await(150,TimeUnit.MILLISECONDS),"nested release unlocked outer lease");
         }
@@ -36,7 +46,8 @@ public final class RouterOperationGateTest {
             }
         }catch(IllegalStateException expected){}
         try(RouterOperationGate.Lease lease=RouterOperationGate.enter()){
-            check(true,"gate must be reusable after exception");
+            lease.close();
+            lease.close();
         }
         System.out.println("RouterOperationGateTest OK");
     }
