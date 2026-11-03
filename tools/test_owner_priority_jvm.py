@@ -99,6 +99,8 @@ public class OwnerPriorityHarness {
                               new DeviceTrafficMonitor(), qos);
         } catch (Exception expected) { threw = true; }
         check(threw, "update must propagate failed cap refresh");
+        check(lastEval.getLong(controller) == 0L,
+              "failed update must allow immediate retry without a stale throttle");
         check(Integer.valueOf(500).equals(controller.cap),
               "failed update must preserve committed cap");
         qos.fail = false;
