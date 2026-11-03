@@ -24,7 +24,7 @@ final class QosController implements AutoCloseable {
     synchronized Integer effectiveLimit(String mac){return merge(limits()).get(mac);}
     void persist(Map<String,Integer> limits) {prefs.edit().putString("limits",new JSONObject(limits).toString()).apply();}
     String diagnostics(){return diagnostics;}
-    private TelnetShell.Result exec(String cmd)throws Exception{return shell.exec(cmd);}
+    private TelnetShell.Result exec(String cmd)throws Exception{try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){return shell.exec(cmd);}}
     private void checked(String cmd)throws Exception {TelnetShell.Result r=exec(cmd);if(r.code!=0)throw new IOException("Команда tc/iptables отклонена: "+r.output+" / "+cmd);}
     private ArrayList<String> interfaces()throws Exception{
         ArrayList<String> result=new ArrayList<>();
@@ -117,6 +117,8 @@ final class QosController implements AutoCloseable {
         }
     }
     synchronized void apply(List<RouterClient.Device> devices,Map<String,Integer> requested,RouterClient.Progress progress)throws Exception{
+        // Hold one process-wide lease for the complete tc/iptables transaction.
+        try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){
         progress.note("Подключение к служебной оболочке AX8...");
         enrichIpv6Neighbors(devices);
         List<Active> active=selected(devices,requested);
@@ -174,6 +176,7 @@ final class QosController implements AutoCloseable {
         }catch(Exception e){resetStock(interfaces);throw e;}
         diagnostics="QoS: "+active.size()+" конфигураций tc; интерфейсы: "+interfaces+"; трафик не подтверждён";
         progress.note("tc настроен. Проверьте фильтры и реальную скорость через диагностику QoS");
+        }
     }
     /** Reapply saved MAC-based rules when a client gets another IP or after a new session.
      *  This prevents an old tc u32 filter remaining tied to the previous DHCP address.

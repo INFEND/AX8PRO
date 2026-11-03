@@ -48,6 +48,8 @@ final class DeviceTrafficMonitor implements AutoCloseable {
     Rate get(String mac){return rates.get(mac);}
 
     synchronized void sample(List<RouterClient.Device> devices)throws Exception {
+        // Counter-chain installation/removal must not interleave with QoS rewrites.
+        try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){
         if(!started && !retry.isReady(System.nanoTime())){rates.clear();return;}
         TreeSet<String> a4=new TreeSet<>(),a6=new TreeSet<>();
         for(RouterClient.Device d:devices){
@@ -94,6 +96,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
             started=false;lastAt=0;retry.onFailure(System.nanoTime());
             prior.clear();rates.clear();throw e;
         }
+        }
     }
     private static boolean validIp4(String s){return s!=null&&s.matches("(?:\\d{1,3}\\.){3}\\d{1,3}");}
     private static boolean validIp6(String s){return s!=null&&s.matches("[0-9a-fA-F:]+");}
@@ -102,7 +105,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         s=s.replace('\r',' ').replace('\n',' ').trim();return s.length()>250?s.substring(0,250)+"…":s;
     }
     private static String reason(TelnetShell.Result r){return "rc="+r.code+" "+shortText(r.output);}
-    private TelnetShell.Result call(Backend b,String args)throws Exception{return shell.exec(b.cmd(args));}
+    private TelnetShell.Result call(Backend b,String args)throws Exception{try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){return shell.exec(b.cmd(args));}}
     private void required(Backend b,String args)throws Exception{
         TelnetShell.Result result=call(b,args);
         if(result.code!=0)throw new IOException(b.label()+" "+args+" → "+reason(result));
@@ -176,9 +179,11 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         return out.toString();
     }
     synchronized void stop(){
+        try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){
         remove(active4);remove(active6);
         active4=null;active6=null;started=false;lastAt=0;retry.reset();prior.clear();rates.clear();ips4=ips6="";
         note="Монитор остановлен";error="";
+        }
     }
     @Override public synchronized void close(){stop();shell.close();}
 }

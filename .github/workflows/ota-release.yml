@@ -84,6 +84,7 @@ jobs:
             app/src/main/java/ru/xarkon/ax8/RouterEndpointConfig.java \
             app/src/main/java/ru/xarkon/ax8/RefreshSession.java \
             app/src/main/java/ru/xarkon/ax8/ForegroundHandoff.java \
+            app/src/main/java/ru/xarkon/ax8/RouterOperationGate.java \
             app/src/main/java/ru/xarkon/ax8/ClientSnapshotPolicy.java \
             app/src/main/java/ru/xarkon/ax8/BackgroundSummary.java \
             app/src/main/java/ru/xarkon/ax8/SmsAlertPlanner.java \
@@ -102,6 +103,7 @@ jobs:
             tools/RouterEndpointConfigTest.java \
             tools/RefreshSessionTest.java \
             tools/ForegroundHandoffTest.java \
+            tools/RouterOperationGateTest.java \
             tools/ClientSnapshotPolicyTest.java \
             tools/BackgroundSummaryTest.java \
             tools/SmsAlertPlannerTest.java \
@@ -119,6 +121,7 @@ jobs:
           java -cp /tmp/ax8-auto-test RouterEndpointConfigTest
           java -cp /tmp/ax8-auto-test ru.xarkon.ax8.RefreshSessionTest
           java -cp /tmp/ax8-auto-test ru.xarkon.ax8.ForegroundHandoffTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.RouterOperationGateTest
           java -cp /tmp/ax8-auto-test ClientSnapshotPolicyTest
           java -cp /tmp/ax8-auto-test BackgroundSummaryTest
           java -cp /tmp/ax8-auto-test SmsAlertPlannerTest
