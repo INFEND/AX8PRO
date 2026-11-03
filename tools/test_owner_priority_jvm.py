@@ -105,6 +105,16 @@ public class OwnerPriorityHarness {
                           new DeviceTrafficMonitor(), qos);
         check(Integer.valueOf(500).equals(controller.cap),
               "successful update must preserve active cap during idle grace period");
+        // Owner departure must remove the temporary priority cap.
+        lastEval.setLong(controller, 0L);
+        int beforeDeparture = qos.calls;
+        controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
+        check(controller.cap == null && qos.applied == null,
+              "owner departure must remove the temporary cap");
+        check(qos.calls == beforeDeparture + 2,
+              "owner departure must refresh the cap then remove it");
+        check("ХОЗЯИН ВНЕ СЕТИ".equals(controller.mode),
+              "owner departure must expose disconnected state");
         controller.disable();
         check(!controller.enabled && controller.cap == null, "disable clears state");
         System.out.println("OwnerPriorityController JVM regression: PASS");
