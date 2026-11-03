@@ -113,8 +113,8 @@ public class OwnerPriorityHarness {
         controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
         check(controller.cap == null && qos.applied == null,
               "owner departure must remove the temporary cap");
-        check(qos.calls == beforeDeparture + 2,
-              "owner departure must refresh the cap then remove it");
+        check(qos.calls == beforeDeparture + 1,
+              "owner departure must remove cap without refreshing disconnected owner");
         check("ХОЗЯИН ВНЕ СЕТИ".equals(controller.mode),
               "owner departure must expose disconnected state");
         // A failed removal during departure must not forget the active cap.
@@ -150,7 +150,7 @@ public class OwnerPriorityHarness {
         check(controller.cap == null && qos.applied == null,
               "retry must reconcile a partially completed router operation");
         // Exercise post-mutation disconnect through update(), not just the helper.
-        // The first refresh may reach the router before its acknowledgment is lost.
+        // The removal may reach the router before its acknowledgment is lost.
         apply(controller, 500, qos);
         qos.failAfterApply = true;
         lastEval.setLong(controller, 0L);
@@ -161,8 +161,8 @@ public class OwnerPriorityHarness {
         check(threw, "post-mutation disconnect during update must propagate");
         check(Integer.valueOf(500).equals(controller.cap),
               "unconfirmed update must retain last confirmed cap");
-        check(Integer.valueOf(500).equals(qos.applied),
-              "fixture must record router mutation before transport failure");
+        check(qos.applied == null,
+              "fixture must record cap removal before transport failure");
         qos.failAfterApply = false;
         lastEval.setLong(controller, 0L);
         controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
