@@ -83,6 +83,28 @@ public class OwnerPriorityHarness {
         apply(controller, null, qos);
         check(controller.cap == null && qos.applied == null,
               "successful cap removal clears tracked cap");
+        // Exercise the real update() path, not only the private apply() helper.
+        // A failed refresh must preserve the previously committed cap.
+        RouterClient.Device owner = new RouterClient.Device("AA:BB:CC:DD:EE:FF");
+        apply(controller, 500, qos);
+        qos.fail = true;
+        Field lastEval = OwnerPriorityController.class.getDeclaredField("lastEval");
+        lastEval.setAccessible(true);
+        lastEval.setLong(controller, 0L);
+        threw = false;
+        try {
+            controller.update(Collections.singletonList(owner),
+                              new DeviceTrafficMonitor(), qos);
+        } catch (Exception expected) { threw = true; }
+        check(threw, "update must propagate failed cap refresh");
+        check(Integer.valueOf(500).equals(controller.cap),
+              "failed update must preserve committed cap");
+        qos.fail = false;
+        lastEval.setLong(controller, 0L);
+        controller.update(Collections.singletonList(owner),
+                          new DeviceTrafficMonitor(), qos);
+        check(Integer.valueOf(500).equals(controller.cap),
+              "successful update must preserve active cap during idle grace period");
         controller.disable();
         check(!controller.enabled && controller.cap == null, "disable clears state");
         System.out.println("OwnerPriorityController JVM regression: PASS");
