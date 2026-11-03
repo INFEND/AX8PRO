@@ -104,9 +104,13 @@ public class OwnerPriorityHarness {
         check(Integer.valueOf(500).equals(controller.cap),
               "failed update must preserve committed cap");
         qos.fail = false;
-        lastEval.setLong(controller, 0L);
+        int callsBeforeRetry = qos.calls;
+        // Do not bypass the throttle using reflection: the production error path
+        // itself must permit a retry immediately after the failed refresh.
         controller.update(Collections.singletonList(owner),
                           new DeviceTrafficMonitor(), qos);
+        check(qos.calls == callsBeforeRetry + 1,
+              "failed refresh must be retried without waiting for throttle");
         check(Integer.valueOf(500).equals(controller.cap),
               "successful update must preserve active cap during idle grace period");
         // Owner departure must remove the temporary priority cap.
@@ -130,9 +134,13 @@ public class OwnerPriorityHarness {
         check(threw, "failed owner-departure cleanup must propagate");
         check(Integer.valueOf(500).equals(controller.cap),
               "failed owner-departure cleanup must preserve tracked cap");
+        check(lastEval.getLong(controller) == 0L,
+              "failed owner-departure cleanup must reset retry throttle");
         qos.fail = false;
-        lastEval.setLong(controller, 0L);
+        int callsBeforeCleanupRetry = qos.calls;
         controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
+        check(qos.calls == callsBeforeCleanupRetry + 1,
+              "owner-departure cleanup must retry immediately after failure");
         check(controller.cap == null && qos.applied == null,
               "recovered owner-departure cleanup must remove temporary cap");
         // A transport failure can occur after the router has already accepted a command.
