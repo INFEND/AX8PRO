@@ -149,7 +149,26 @@ public class OwnerPriorityHarness {
         apply(controller, null, qos);
         check(controller.cap == null && qos.applied == null,
               "retry must reconcile a partially completed router operation");
-                controller.disable();
+        // Exercise post-mutation disconnect through update(), not just the helper.
+        // The first refresh may reach the router before its acknowledgment is lost.
+        apply(controller, 500, qos);
+        qos.failAfterApply = true;
+        lastEval.setLong(controller, 0L);
+        threw = false;
+        try {
+            controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
+        } catch (Exception expected) { threw = true; }
+        check(threw, "post-mutation disconnect during update must propagate");
+        check(Integer.valueOf(500).equals(controller.cap),
+              "unconfirmed update must retain last confirmed cap");
+        check(Integer.valueOf(500).equals(qos.applied),
+              "fixture must record router mutation before transport failure");
+        qos.failAfterApply = false;
+        lastEval.setLong(controller, 0L);
+        controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
+        check(controller.cap == null && qos.applied == null,
+              "owner departure retry must reconcile the temporary cap");
+        controller.disable();
         check(!controller.enabled && controller.cap == null, "disable clears state");
         System.out.println("OwnerPriorityController JVM regression: PASS");
     }
