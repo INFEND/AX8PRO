@@ -115,6 +115,22 @@ public class OwnerPriorityHarness {
               "owner departure must refresh the cap then remove it");
         check("ХОЗЯИН ВНЕ СЕТИ".equals(controller.mode),
               "owner departure must expose disconnected state");
+        // A failed removal during departure must not forget the active cap.
+        apply(controller, 500, qos);
+        qos.fail = true;
+        lastEval.setLong(controller, 0L);
+        threw = false;
+        try {
+            controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
+        } catch (Exception expected) { threw = true; }
+        check(threw, "failed owner-departure cleanup must propagate");
+        check(Integer.valueOf(500).equals(controller.cap),
+              "failed owner-departure cleanup must preserve tracked cap");
+        qos.fail = false;
+        lastEval.setLong(controller, 0L);
+        controller.update(Collections.emptyList(), new DeviceTrafficMonitor(), qos);
+        check(controller.cap == null && qos.applied == null,
+              "recovered owner-departure cleanup must remove temporary cap");
         controller.disable();
         check(!controller.enabled && controller.cap == null, "disable clears state");
         System.out.println("OwnerPriorityController JVM regression: PASS");
