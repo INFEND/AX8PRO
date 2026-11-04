@@ -252,7 +252,7 @@ jobs:
           aapt = str(Path(os.environ["ANDROID_SDK_ROOT"]) / "build-tools" / "36.0.0" / "aapt")
           badging = subprocess.check_output([aapt, "dump", "badging", str(apk)], text=True)
           package_line = next((line for line in badging.splitlines() if line.startswith("package: ")), "")
-          match = re.search(r"name='([^']+)'\\s+versionCode='([^']+)'\\s+versionName='([^']+)'", package_line)
+          match = re.search(r"name='([^']+)'\s+versionCode='([^']+)'\s+versionName='([^']+)'", package_line)
           if not match or match.group(1) != "ru.xarkon.ax8pro" or match.group(2) != str(version_code) or match.group(3) != version:
               raise SystemExit("Existing OTA APK has unexpected embedded package/version metadata")
           print("Existing OTA assets: APK identity, size, SHA-256 and manifest verified")
