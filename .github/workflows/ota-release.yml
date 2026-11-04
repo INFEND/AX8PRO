@@ -236,7 +236,11 @@ jobs:
           data = json.loads(manifest.read_text(encoding="utf-8"))
           actual_size = apk.stat().st_size
           actual_sha = hashlib.file_digest(apk.open("rb"), "sha256").hexdigest()
-          if (data.get("packageName") != "ru.xarkon.ax8pro"
+          expected_apk_url = ("https://github.com/ANTIFERMENT/AX8PRO/releases/download/"
+                              + "v" + version + "/AX8PRO.apk")
+          if (type(data.get("schema")) is not int or data["schema"] != 1
+                  or data.get("apkUrl") != expected_apk_url
+                  or data.get("packageName") != "ru.xarkon.ax8pro"
                   or data.get("versionName") != version
                   or type(data.get("versionCode")) is not int
                   or data.get("versionCode") != version_code
