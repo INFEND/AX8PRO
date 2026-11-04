@@ -62,7 +62,8 @@ public final class UpdateManager {
             if(!"https".equals(url.getProtocol())||!"github.com".equalsIgnoreCase(url.getHost())||
                 (!url.getPath().startsWith(RELEASE_PREFIX)&&!url.getPath().startsWith(RELEASE_PREFIX_NEW))||!url.getPath().endsWith("/AX8PRO.apk")||
                 !url.getPath().endsWith("/v"+versionName+"/AX8PRO.apk")||
-                versionCode<1||sizeBytes>MAX_APK||!sha256.matches("[A-F0-9]{64}"))
+                url.getUserInfo()!=null||url.getPort()!=-1||url.getQuery()!=null||url.getRef()!=null||
+                versionCode<1||sizeBytes<1||sizeBytes>MAX_APK||!sha256.matches("[A-F0-9]{64}"))
                 throw new IOException("Недоверенный APK или неверные метаданные");
         }
     }
