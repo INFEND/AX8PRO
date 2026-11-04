@@ -235,7 +235,8 @@ jobs:
           manifest = folder / "update.json"
           data = json.loads(manifest.read_text(encoding="utf-8"))
           actual_size = apk.stat().st_size
-          actual_sha = hashlib.file_digest(apk.open("rb"), "sha256").hexdigest()
+          with apk.open("rb") as apk_stream:
+              actual_sha = hashlib.file_digest(apk_stream, "sha256").hexdigest()
           expected_apk_url = ("https://github.com/ANTIFERMENT/AX8PRO/releases/download/"
                               + "v" + version + "/AX8PRO.apk")
           if (type(data.get("schema")) is not int or data["schema"] != 1
