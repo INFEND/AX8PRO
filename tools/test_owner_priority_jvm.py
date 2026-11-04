@@ -183,6 +183,29 @@ public class OwnerPriorityHarness {
               "post-mutation disconnect must trigger an immediate cleanup retry");
         check(controller.cap == null && qos.applied == null,
               "owner departure retry must reconcile the temporary cap");
+        // A persistent Telnet outage must not trigger one request per monitor tick.
+        apply(controller, 500, qos);
+        qos.fail = true;
+        lastEval.setLong(controller, 0L);
+        for (int i = 0; i < 2; i++) {
+            threw = false;
+            try {
+                controller.update(Collections.singletonList(owner),
+                                  new DeviceTrafficMonitor(), qos);
+            } catch (Exception expected) { threw = true; }
+            check(threw, "both simulated Telnet failures must propagate");
+        }
+        int callsAfterTwoFailures = qos.calls;
+        controller.update(Collections.singletonList(owner),
+                          new DeviceTrafficMonitor(), qos);
+        check(qos.calls == callsAfterTwoFailures,
+              "persistent Telnet failures must be paced, not retried every poll");
+        qos.fail = false;
+        lastEval.setLong(controller, 0L);
+        controller.update(Collections.singletonList(owner),
+                          new DeviceTrafficMonitor(), qos);
+        check(qos.calls == callsAfterTwoFailures + 1,
+              "successful recovery must resume QoS refresh");
         controller.disable();
         check(!controller.enabled && controller.cap == null, "disable clears state");
         System.out.println("OwnerPriorityController JVM regression: PASS");
