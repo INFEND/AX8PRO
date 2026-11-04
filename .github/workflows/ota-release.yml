@@ -255,7 +255,22 @@ jobs:
           match = re.search(r"name='([^']+)'\s+versionCode='([^']+)'\s+versionName='([^']+)'", package_line)
           if not match or match.group(1) != "ru.xarkon.ax8pro" or match.group(2) != str(version_code) or match.group(3) != version:
               raise SystemExit("Existing OTA APK has unexpected embedded package/version metadata")
-          print("Existing OTA assets: APK identity, size, SHA-256 and manifest verified")
+          # Also compare the actual signing identity of the published APK to
+          # the freshly signed artifact. Metadata and hashes alone cannot
+          # detect a release signed by a different certificate.
+          apksigner = str(Path(os.environ["ANDROID_SDK_ROOT"]) / "build-tools" / "36.0.0" / "apksigner")
+          def signer_digests(path):
+              output = subprocess.check_output(
+                  [apksigner, "verify", "--print-certs", str(path)],
+                  text=True, stderr=subprocess.STDOUT)
+              digests = re.findall(r"^Signer #\\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})$",
+                                   output, re.MULTILINE)
+              if len(digests) != 1:
+                  raise SystemExit("Expected exactly one verifiable APK signing certificate")
+              return digests[0].lower()
+          if signer_digests(apk) != signer_digests(Path("dist/AX8PRO.apk")):
+              raise SystemExit("Existing OTA APK signing certificate differs from current official build")
+          print("Existing OTA assets: APK identity, signature, size, SHA-256 and manifest verified")
           PY
             exit 0
           fi
