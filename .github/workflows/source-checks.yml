@@ -138,3 +138,20 @@ jobs:
           else
             gradle --no-daemon :app:assembleDebug
           fi
+      - name: Android lint static analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f gradlew && -f gradle/wrapper/gradle-wrapper.jar ]]; then
+            ./gradlew --no-daemon :app:lintDebug
+          else
+            gradle --no-daemon :app:lintDebug
+          fi
+      - name: Preserve Android lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax8pro-android-lint
+          path: app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
+          retention-days: 14
