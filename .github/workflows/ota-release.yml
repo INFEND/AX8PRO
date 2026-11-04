@@ -243,7 +243,19 @@ jobs:
                   or data.get("sizeBytes") != actual_size
                   or data.get("sha256") != actual_sha):
               raise SystemExit("Existing OTA release has inconsistent APK/manifest metadata")
-          print("Existing OTA assets: size, SHA-256, package and version verified")
+          # Check the APK's own package metadata, not only claims in update.json.
+          # A matching hash proves consistency between files, not that the APK
+          # actually contains the expected application identity.
+          import re
+          import subprocess
+          import os
+          aapt = str(Path(os.environ["ANDROID_SDK_ROOT"]) / "build-tools" / "36.0.0" / "aapt")
+          badging = subprocess.check_output([aapt, "dump", "badging", str(apk)], text=True)
+          package_line = next((line for line in badging.splitlines() if line.startswith("package: ")), "")
+          match = re.search(r"name='([^']+)'\\s+versionCode='([^']+)'\\s+versionName='([^']+)'", package_line)
+          if not match or match.group(1) != "ru.xarkon.ax8pro" or match.group(2) != str(version_code) or match.group(3) != version:
+              raise SystemExit("Existing OTA APK has unexpected embedded package/version metadata")
+          print("Existing OTA assets: APK identity, size, SHA-256 and manifest verified")
           PY
             exit 0
           fi
