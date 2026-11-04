@@ -1,5 +1,6 @@
 """Executable JVM regression tests for OwnerPriorityController without Android or a router."""
 from pathlib import Path
+import os
 import shutil
 import subprocess
 import tempfile
@@ -235,7 +236,9 @@ class OwnerPriorityJvmTest(unittest.TestCase):
         javac = shutil.which("javac")
         java = shutil.which("java")
         if not javac or not java:
-            self.skipTest("JDK unavailable; Android CI should run this test with a JDK")
+            if os.environ.get("CI", "").lower() in ("true", "1"):
+                self.fail("JDK is required in CI: OwnerPriorityController regression must not be skipped")
+            self.skipTest("JDK unavailable outside CI")
         with tempfile.TemporaryDirectory(prefix="ax8-owner-qos-") as tmp:
             folder = Path(tmp) / "ru/xarkon/ax8"
             folder.mkdir(parents=True)
