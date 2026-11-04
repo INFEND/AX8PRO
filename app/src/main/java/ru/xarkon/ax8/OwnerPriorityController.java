@@ -8,10 +8,10 @@ final class OwnerPriorityController {
     String owner="",mode="ВЫКЛ",failure="";
     Integer cap=null;
     private long lastEval=0,idleSince=0;
-    private int good=0;
+    private int good=0,consecutiveFailures=0;
     double ownerRate=0,othersRate=0;
-    void enable(String mac){owner=mac;enabled=true;mode="ОЖИДАНИЕ";failure="";lastEval=idleSince=0;good=0;}
-    void disable(){enabled=false;mode="ВЫКЛ";cap=null;good=0;idleSince=0;}
+    void enable(String mac){owner=mac;enabled=true;mode="ОЖИДАНИЕ";failure="";lastEval=idleSince=0;good=0;consecutiveFailures=0;}
+    void disable(){enabled=false;mode="ВЫКЛ";cap=null;good=0;idleSince=0;consecutiveFailures=0;}
     private int initial(double otherBps){for(int tier:TIERS)if(tier*1000<otherBps)return tier;return TIERS[TIERS.length-1];}
     private Integer next(Integer current,boolean tighter){if(current==null)return null;
         for(int i=0;i<TIERS.length;i++)if(TIERS[i]<=current){
@@ -22,6 +22,7 @@ final class OwnerPriorityController {
     void update(List<RouterClient.Device> devices,DeviceTrafficMonitor traffic,QosController qos)throws Exception{
         if(!enabled)return;
         long now=System.nanoTime()/1_000_000L;if(lastEval!=0&&now-lastEval>=0&&now-lastEval<2500)return;lastEval=now;
+        boolean failed=false;
         try {
         boolean present=false;double oDl=0,oUl=0;for(RouterClient.Device d:devices)if(d.mac.equals(owner)){
             present=true;DeviceTrafficMonitor.Rate rate=traffic.get(d.mac);if(rate!=null){oDl=rate.dl;oUl=rate.ul;}break;
@@ -46,9 +47,13 @@ final class OwnerPriorityController {
         else if(share>.82){mode="ОСЛАБЛЕНИЕ";if(cap!=null&&++good>=2){good=0;apply(next(cap,false),devices,qos);}}
         else{mode="БАЛАНС";good=0;}
         } catch (Exception error) {
-            // A failed Telnet operation must not suppress the next recovery attempt.
-            lastEval=0;
+            failed=true;
+            // Retry the first transport failure immediately; pace sustained failures.
+            consecutiveFailures++;
+            if(consecutiveFailures==1)lastEval=0;
             throw error;
+        } finally {
+            if(!failed)consecutiveFailures=0;
         }
     }
     private void apply(Integer wanted,List<RouterClient.Device> devices,QosController qos)throws Exception{
