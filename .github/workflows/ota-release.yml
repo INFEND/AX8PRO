@@ -217,6 +217,31 @@ jobs:
                 exit 1
               fi
             done
+            # Validate the published bytes, not just the asset list. A nonempty
+            # but truncated APK or stale manifest must never pass as healthy OTA.
+            check_dir="$(mktemp -d)"
+            trap 'rm -rf "$check_dir"' EXIT
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern AX8PRO.apk --pattern update.json --dir "$check_dir"
+            python3 - "$check_dir" "$RELEASE_VERSION" <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import sys
+
+          folder, version = Path(sys.argv[1]), sys.argv[2]
+          apk = folder / "AX8PRO.apk"
+          manifest = folder / "update.json"
+          data = json.loads(manifest.read_text(encoding="utf-8"))
+          actual_size = apk.stat().st_size
+          actual_sha = hashlib.file_digest(apk.open("rb"), "sha256").hexdigest()
+          if (data.get("packageName") != "ru.xarkon.ax8pro"
+                  or data.get("versionName") != version
+                  or data.get("sizeBytes") != actual_size
+                  or data.get("sha256") != actual_sha):
+              raise SystemExit("Existing OTA release has inconsistent APK/manifest metadata")
+          print("Existing OTA assets: size, SHA-256, package and version verified")
+          PY
             exit 0
           fi
           gh release create "$RELEASE_TAG" dist/AX8PRO.apk dist/update.json \
