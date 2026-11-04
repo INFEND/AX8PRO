@@ -64,7 +64,9 @@ def main():
     if package_name != "ru.xarkon.ax8pro" or int(code) < 1:
         raise SystemExit("Unexpected APK package or versionCode: " + package_name + " " + code)
     tag = "v" + version
-    # Stream the APK rather than loading the entire release into memory.\n    with apk.open("rb") as apk_file:\n        sha = hashlib.file_digest(apk_file, "sha256").hexdigest()
+    # Stream the APK rather than loading the entire release into memory.
+    with apk.open("rb") as apk_file:
+        sha = hashlib.file_digest(apk_file, "sha256").hexdigest()
     history_file = Path(__file__).resolve().parents[1] / "release_notes" / "history.json"
     history = cumulative_history(version, int(code),
         json.loads(history_file.read_text(encoding="utf-8")))
