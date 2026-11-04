@@ -61,6 +61,7 @@ public final class UpdateManager {
             URL url=new URL(apkUrl);
             if(!"https".equals(url.getProtocol())||!"github.com".equalsIgnoreCase(url.getHost())||
                 (!url.getPath().startsWith(RELEASE_PREFIX)&&!url.getPath().startsWith(RELEASE_PREFIX_NEW))||!url.getPath().endsWith("/AX8PRO.apk")||
+                !url.getPath().endsWith("/v"+versionName+"/AX8PRO.apk")||
                 versionCode<1||sizeBytes>MAX_APK||!sha256.matches("[A-F0-9]{64}"))
                 throw new IOException("Недоверенный APK или неверные метаданные");
         }
