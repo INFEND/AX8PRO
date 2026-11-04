@@ -206,7 +206,24 @@ public class OwnerPriorityHarness {
                           new DeviceTrafficMonitor(), qos);
         check(qos.calls == callsAfterTwoFailures + 1,
               "successful recovery must resume QoS refresh");
+        Field failures = OwnerPriorityController.class.getDeclaredField("consecutiveFailures");
+        failures.setAccessible(true);
+        check(failures.getInt(controller) == 0,
+              "successful QoS recovery must clear consecutive failure count");
+        // A later independent outage must again allow exactly one immediate retry.
+        qos.fail = true;
+        lastEval.setLong(controller, 0L);
+        threw = false;
+        try {
+            controller.update(Collections.singletonList(owner),
+                              new DeviceTrafficMonitor(), qos);
+        } catch (Exception expected) { threw = true; }
+        check(threw && lastEval.getLong(controller) == 0L,
+              "new outage after recovery must permit its first immediate retry");
+        qos.fail = false;
         controller.disable();
+        check(failures.getInt(controller) == 0,
+              "disabling owner priority must clear the retry failure counter");
         check(!controller.enabled && controller.cap == null, "disable clears state");
         System.out.println("OwnerPriorityController JVM regression: PASS");
     }
