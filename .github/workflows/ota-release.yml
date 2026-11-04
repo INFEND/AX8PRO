@@ -208,10 +208,12 @@ jobs:
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "::notice::Version $RELEASE_TAG was already released. Change versionName and versionCode for the next release."
             # Do not silently accept a release missing a required OTA asset.
-            assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+            # A named but zero-byte asset is not a usable OTA release.
             for asset in AX8PRO.apk update.json; do
-              if ! printf '%s\n' "$assets" | grep -Fxq "$asset"; then
-                echo "::error::Existing release $RELEASE_TAG is missing $asset"
+              size="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+                --json assets --jq ".assets[] | select(.name == \"$asset\") | .size")"
+              if [[ ! "$size" =~ ^[0-9]+$ ]] || (( size == 0 )); then
+                echo "::error::Existing release $RELEASE_TAG has missing or empty $asset"
                 exit 1
               fi
             done
