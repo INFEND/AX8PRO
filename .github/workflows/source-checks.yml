@@ -33,6 +33,73 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Test automatic monitoring logic
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ax8-auto-test
+          javac -d /tmp/ax8-auto-test \
+            app/src/main/java/ru/xarkon/ax8/AutoPollController.java \
+            app/src/main/java/ru/xarkon/ax8/RouterEndpointConfig.java \
+            app/src/main/java/ru/xarkon/ax8/RefreshSession.java \
+            app/src/main/java/ru/xarkon/ax8/ForegroundHandoff.java \
+            app/src/main/java/ru/xarkon/ax8/RouterOperationGate.java \
+            app/src/main/java/ru/xarkon/ax8/ClientSnapshotPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/BackgroundSummary.java \
+            app/src/main/java/ru/xarkon/ax8/SmsAlertPlanner.java \
+            app/src/main/java/ru/xarkon/ax8/TelnetReadPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/RetryBackoff.java \
+            app/src/main/java/ru/xarkon/ax8/QosRecoveryPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/QosResyncPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/BatteryLevelPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/ReleaseNotes.java \
+            app/src/main/java/ru/xarkon/ax8/OtaHistory.java \
+            app/src/main/java/ru/xarkon/ax8/JobRunGuard.java \
+            app/src/main/java/ru/xarkon/ax8/BackgroundCommandPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/BackgroundTickPolicy.java \
+            app/src/main/java/ru/xarkon/ax8/InternetStatusPolicy.java \
+            tools/AutoPollControllerTest.java \
+            tools/RouterEndpointConfigTest.java \
+            tools/RefreshSessionTest.java \
+            tools/ForegroundHandoffTest.java \
+            tools/RouterOperationGateTest.java \
+            tools/ClientSnapshotPolicyTest.java \
+            tools/BackgroundSummaryTest.java \
+            tools/SmsAlertPlannerTest.java \
+            tools/TelnetReadPolicyTest.java \
+            tools/RetryBackoffTest.java \
+            tools/QosRecoveryPolicyTest.java \
+            tools/QosResyncPolicyTest.java \
+            tools/BatteryLevelPolicyTest.java \
+            tools/OtaHistoryTest.java \
+            tools/JobRunGuardTest.java \
+            tools/BackgroundCommandPolicyTest.java \
+            tools/BackgroundTickPolicyTest.java \
+            tools/InternetStatusPolicyTest.java
+          java -cp /tmp/ax8-auto-test AutoPollControllerTest
+          java -cp /tmp/ax8-auto-test RouterEndpointConfigTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.RefreshSessionTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.ForegroundHandoffTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.RouterOperationGateTest
+          java -cp /tmp/ax8-auto-test ClientSnapshotPolicyTest
+          java -cp /tmp/ax8-auto-test BackgroundSummaryTest
+          java -cp /tmp/ax8-auto-test SmsAlertPlannerTest
+          java -cp /tmp/ax8-auto-test TelnetReadPolicyTest
+          java -cp /tmp/ax8-auto-test RetryBackoffTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.QosRecoveryPolicyTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.QosResyncPolicyTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.BatteryLevelPolicyTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.OtaHistoryTest
+          java -cp /tmp/ax8-auto-test JobRunGuardTest
+          java -cp /tmp/ax8-auto-test BackgroundCommandPolicyTest
+          java -cp /tmp/ax8-auto-test BackgroundTickPolicyTest
+          java -cp /tmp/ax8-auto-test ru.xarkon.ax8.InternetStatusPolicyTest
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
