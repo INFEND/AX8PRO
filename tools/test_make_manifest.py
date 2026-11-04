@@ -58,6 +58,30 @@ class ManifestTests(unittest.TestCase):
                     self.assertEqual(data["notes"], data["history"][-1]["notes"])
                     self.assertTrue(data["notes"].startswith(("[+] ", "[=] ", "[-] ")))
 
+    def test_apk_digest_is_streamed_without_reading_whole_file(self):
+        """Large APKs must not be loaded with Path.read_bytes for hashing."""
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            real_digest = hashlib.file_digest
+            calls = []
+
+            def checked_digest(stream, algorithm):
+                self.assertEqual(algorithm, "sha256")
+                self.assertFalse(stream.closed)
+                self.assertEqual(stream.mode, "rb")
+                calls.append(stream.name)
+                return real_digest(stream, algorithm)
+
+            with mock.patch.object(manifest.hashlib, "file_digest",
+                                   side_effect=checked_digest), mock.patch.object(
+                    Path, "read_bytes", side_effect=AssertionError(
+                        "Whole-file APK read is forbidden")):
+                data, _ = self.generate(root, "INFEND/AX8PRO")
+
+            self.assertEqual(calls, [str(root / "AX8PRO.apk")])
+            self.assertEqual(data["sha256"],
+                             hashlib.sha256(b"test-apk-bytes").hexdigest())
+
     def test_checked_in_android_version_has_release_notes(self):
         """Catch a missing changelog before spending time building and signing an APK."""
         root = SCRIPT.parents[1]
