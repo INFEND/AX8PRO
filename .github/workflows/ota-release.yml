@@ -203,6 +203,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
           RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
+          RELEASE_CODE: ${{ steps.metadata.outputs.version_code }}
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -223,13 +224,13 @@ jobs:
             trap 'rm -rf "$check_dir"' EXIT
             gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
               --pattern AX8PRO.apk --pattern update.json --dir "$check_dir"
-            python3 - "$check_dir" "$RELEASE_VERSION" <<'PY'
+            python3 - "$check_dir" "$RELEASE_VERSION" "$RELEASE_CODE" <<'PY'
           import hashlib
           import json
           from pathlib import Path
           import sys
 
-          folder, version = Path(sys.argv[1]), sys.argv[2]
+          folder, version, version_code = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3])
           apk = folder / "AX8PRO.apk"
           manifest = folder / "update.json"
           data = json.loads(manifest.read_text(encoding="utf-8"))
@@ -237,6 +238,8 @@ jobs:
           actual_sha = hashlib.file_digest(apk.open("rb"), "sha256").hexdigest()
           if (data.get("packageName") != "ru.xarkon.ax8pro"
                   or data.get("versionName") != version
+                  or type(data.get("versionCode")) is not int
+                  or data.get("versionCode") != version_code
                   or data.get("sizeBytes") != actual_size
                   or data.get("sha256") != actual_sha):
               raise SystemExit("Existing OTA release has inconsistent APK/manifest metadata")
