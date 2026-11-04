@@ -207,6 +207,14 @@ jobs:
           set -euo pipefail
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "::notice::Version $RELEASE_TAG was already released. Change versionName and versionCode for the next release."
+            # Do not silently accept a release missing a required OTA asset.
+            assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+            for asset in AX8PRO.apk update.json; do
+              if ! printf '%s\n' "$assets" | grep -Fxq "$asset"; then
+                echo "::error::Existing release $RELEASE_TAG is missing $asset"
+                exit 1
+              fi
+            done
             exit 0
           fi
           gh release create "$RELEASE_TAG" dist/AX8PRO.apk dist/update.json \
