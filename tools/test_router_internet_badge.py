@@ -25,6 +25,26 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("if(offlineCandidate==null)offlineCandidate=network;",source)
         self.assertIn("if(offlineCandidate!=null)return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);",source)
         self.assertNotIn("return new Result(InternetStatusPolicy.OFFLINE,network);",source)
+    def test_physical_router_gateway_fallback(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        self.assertIn("isRouterGateway(cm,network,host)",source)
+        self.assertIn("route.isDefaultRoute()",source)
+        self.assertIn("host.equalsIgnoreCase(gateway.getHostAddress())",source)
+        self.assertIn("if(!canReachRouter(network,host,port) && !isRouterGateway(cm,network,host))",source)
+        self.assertIn("network.openConnection",source)
+
+    def test_android_validated_wifi_fallback_never_uses_phone_vpn(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        self.assertIn("NET_CAPABILITY_VALIDATED",source)
+        self.assertIn("Network androidValidatedCandidate=null;",source)
+        self.assertIn("if(androidValidatedCandidate!=null)",source)
+        self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
+        self.assertIn("TRANSPORT_WIFI",source)
+        self.assertNotIn("TRANSPORT_CELLULAR",source)
+        self.assertLess(source.index("if(!canReachRouter("),
+                        source.index("if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)"))
+        self.assertIn("connectivitycheck.gstatic.com/generate_204",source)
+
     def test_ppp_transitions_invalidate_external_probe(self):
         main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
         policy=(SRC/"InternetStatusPolicy.java").read_text(encoding="utf-8")

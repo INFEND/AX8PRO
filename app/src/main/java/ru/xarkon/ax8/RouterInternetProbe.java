@@ -4,6 +4,8 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.LinkProperties;
+import android.net.RouteInfo;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -15,7 +17,8 @@ import java.net.URL;
 public final class RouterInternetProbe {
     private static final String[] ENDPOINTS={
         "https://cp.cloudflare.com/generate_204",
-        "https://www.google.com/generate_204"
+        "https://www.google.com/generate_204",
+        "https://connectivitycheck.gstatic.com/generate_204"
     };
     private RouterInternetProbe(){}
 
@@ -36,17 +39,30 @@ public final class RouterInternetProbe {
             // Never test through the default/mobile/VPN network: only AX8's Wi-Fi or wired LAN.
             // A VPN may advertise its underlying Wi-Fi transport as well: reject it explicitly.
             Network offlineCandidate=null;
+            Network androidValidatedCandidate=null;
             for(Network network:cm.getAllNetworks()){
                 NetworkCapabilities caps=cm.getNetworkCapabilities(network);
                 if(!isRouterLink(caps))continue;
-                if(!canReachRouter(network,host,port))continue;
+                // On some Android/VPN configurations the router WebUI is reachable
+                // but a separately network-bound TCP socket to it is not. Accept
+                // the router's *actual default gateway* as alternative link proof.
+                if(!canReachRouter(network,host,port) && !isRouterGateway(cm,network,host))
+                    continue;
+                // Keep the definitive HTTPS check bound to this physical network.
                 for(String endpoint:ENDPOINTS)if(reachesInternet(network,endpoint))
                     return new Result(InternetStatusPolicy.ONLINE,network);
-                // Multiple local networks can reach the same gateway address. Do not
-                // report OFFLINE until all reachable physical links have been checked.
+                // Android has independently validated this *same* Wi-Fi/LAN network
+                // for Internet access. Useful when our chosen 204 URLs are blocked.
+                // Never use the cellular default network or a VPN for this fallback.
+                if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                        && androidValidatedCandidate==null)
+                    androidValidatedCandidate=network;
                 if(offlineCandidate==null)offlineCandidate=network;
             }
-            if(offlineCandidate!=null)return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
+            if(androidValidatedCandidate!=null)
+                return new Result(InternetStatusPolicy.ONLINE,androidValidatedCandidate);
+            if(offlineCandidate!=null)
+                return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
         }catch(Exception ignored){}
         return new Result(InternetStatusPolicy.UNAVAILABLE,null);
     }
@@ -56,6 +72,20 @@ public final class RouterInternetProbe {
             && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
             && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
                 || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+    }
+
+    /** Match an AX8 LAN by its actual default gateway when TCP reachability is masked. */
+    private static boolean isRouterGateway(ConnectivityManager cm,Network network,String host){
+        try {
+            LinkProperties link=cm.getLinkProperties(network);
+            if(link==null)return false;
+            for(RouteInfo route:link.getRoutes()){
+                InetAddress gateway=route.getGateway();
+                if(route.isDefaultRoute() && gateway!=null &&
+                        host.equalsIgnoreCase(gateway.getHostAddress()))return true;
+            }
+        }catch(Exception ignored){}
+        return false;
     }
 
     /** Confirm this exact network reaches the configured AX8, without making a router API call. */
