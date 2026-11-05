@@ -20,7 +20,9 @@ public final class InternetStatusPolicy {
     public static int displayed(boolean routerFresh,boolean pppConnected,int result,long checkedAt,long now){
         if(!routerFresh)return UNKNOWN;
         if(!pppConnected)return OFFLINE;
-        return isFresh(checkedAt,now)?result:UNKNOWN;
+        if (!isFresh(checkedAt,now)) return UNKNOWN;
+        // Never propagate an unexpected probe value into the status UI.
+        return result==ONLINE||result==OFFLINE||result==UNAVAILABLE ? result : UNKNOWN;
     }
     public static String label(int result){
         if(result==ONLINE)return "● LTE ONLINE";
