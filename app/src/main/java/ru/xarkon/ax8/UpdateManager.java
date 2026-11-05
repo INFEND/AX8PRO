@@ -125,9 +125,18 @@ public final class UpdateManager {
                 if(r.sizeBytes>0&&r.sizeBytes!=bytes)throw new IOException("Неполная загрузка APK");
                 StringBuilder hash=new StringBuilder();for(byte b:digest.digest())hash.append(String.format(Locale.US,"%02X",b&255));
                 if(!hash.toString().equals(r.sha256))throw new IOException("SHA-256 APK не совпадает");
-                if(dest.exists()&&!dest.delete())throw new IOException("Не удалось заменить старый APK");
-                if(!temp.renameTo(dest))throw new IOException("Не удалось сохранить APK");
-                try{verifyApk(a,dest,r.versionCode);}catch(Exception e){dest.delete();throw e;}
+                // Verify the complete candidate before touching a previously downloaded APK.
+                verifyApk(a,temp,r.versionCode);
+                // Both files live in the same private directory. Prefer an atomic replacement;
+                // never delete the previous verified APK before the replacement succeeds.
+                try{
+                    java.nio.file.Files.move(temp.toPath(),dest.toPath(),
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }catch(java.nio.file.AtomicMoveNotSupportedException unsupported){
+                    java.nio.file.Files.move(temp.toPath(),dest.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
                 ui(a,()->listener.downloaded(dest));
             }catch(Exception e){temp.delete();ui(a,()->listener.error(friendly(e)));}
         },"ax8pro-ota-download").start();
