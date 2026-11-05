@@ -879,8 +879,8 @@ public final class MainActivity extends Activity {
         speeds.addView(graph,Ui.lp(this,-1,94));addCard(speeds);
         LinearLayout cell=Ui.card(this);Ui.title(cell,this,"Сотовая станция","Технические параметры радиосети");Ui.addSpace(cell,this,10);
         addRows(cell,new String[][]{{"Оператор / PLMN",stat("network_provider")},{"Технология",stat("network_type")},{"EARFCN",stat("nv_arfcn")},
-            {"PCI",stat("nv_pci")},{"eNodeB",stat("nv_enodbid")},{"CELL ID",stat("nv_globecellid")},{"TX Power",txPower()},
-            {"Батарея",battery()},{"Устройств Wi‑Fi",wifiCount()}});addCard(cell);
+            {"PCI",stat("nv_pci")},{"eNodeB",stat("nv_enodbid")},{"CELL ID",stat("nv_globecellid")},
+            {"Устройств Wi‑Fi",wifiCount()},{"Батарея",battery()}},true);addCard(cell);
         LinearLayout quick=Ui.card(this);Ui.title(quick,this,"Быстрые действия","Одно нажатие вместо команд терминала");Ui.addSpace(quick,this,12);
         LinearLayout first=Ui.horizontal(this);TextView b3=Ui.button(this,"B3",band().equals("B3")?Ui.CYAN:Ui.CARD2,band().equals("B3")?Ui.BG:Ui.CYAN,()->bandConfirm(3));
         TextView b20=Ui.button(this,"B20",band().equals("B20")?Ui.CYAN:Ui.CARD2,band().equals("B20")?Ui.BG:Ui.CYAN,()->bandConfirm(20));
@@ -893,8 +893,6 @@ public final class MainActivity extends Activity {
     private String firstStatus(String...keys){for(String key:keys){String v=stat(key);if(!v.equals("—"))return v;}return "—";}
     private String reading(String v,String unit){return v.equals("—")?"—":v+" "+unit;}
     private String wifiCount(){String x=stat("wifi_access_sta_num");return !x.equals("—")?x:clientsAt>0?String.valueOf(devices.size()):"—";}
-    private String txPower(){String raw=firstStatus("nv_txpower","nv_tx_power","txpower","tx_power","lte_txpower","lte_tx_power");
-        return raw.equals("—")?"—":raw.toLowerCase(Locale.US).contains("dbm")?raw:reading(raw,"dBm");}
     private TextView liveValue(String key,String value,int size,int color,boolean bold){
         TextView t=Ui.text(this,value,size,color,bold);overviewValues.put(key,t);return t;
     }
@@ -932,7 +930,7 @@ public final class MainActivity extends Activity {
         setLive("Оператор / PLMN",stat("network_provider"));setLive("Технология",stat("network_type"));
         setLive("EARFCN",stat("nv_arfcn"));setLive("PCI",stat("nv_pci"));
         setLive("eNodeB",stat("nv_enodbid"));setLive("CELL ID",stat("nv_globecellid"));
-        setLive("TX Power",txPower());setLive("Устройств Wi‑Fi",wifiCount());
+        setLive("Устройств Wi‑Fi",wifiCount());
         if(overviewBattery!=null)overviewBattery.setBattery(batteryIconLevel(),battery(),
             prefs.getBoolean("battery_level_icon",true),batteryCharging());
         if(overviewGauge!=null && newSample)overviewGauge.setLevel(quality());
@@ -954,8 +952,10 @@ public final class MainActivity extends Activity {
         return percent>=0?percent:BatteryLevelPolicy.coarseLevel(num(status,"battery_pers"));
     }
     private String battery(){int level=batteryPercent();return level>=0?level+"%":"—";}
-    private void addRows(LinearLayout c,String[][] rows){for(int i=0;i<rows.length;i++){
-        LinearLayout line=Ui.infoRow(this,rows[i][0],rows[i][1],rows[i][1].equals("—")?Ui.MUTED:i%2==0?Ui.TEXT:Ui.CYAN);
+    private void addRows(LinearLayout c,String[][] rows){addRows(c,rows,false);}
+    private void addRows(LinearLayout c,String[][] rows,boolean accentValues){for(int i=0;i<rows.length;i++){
+        int valueColor=accentValues?Ui.CYAN:(rows[i][1].equals("—")?Ui.MUTED:i%2==0?Ui.TEXT:Ui.CYAN);
+        LinearLayout line=Ui.infoRow(this,rows[i][0],rows[i][1],valueColor);
         if(tab==0&&"Батарея".equals(rows[i][0])){
             BatteryIndicator indicator=new BatteryIndicator(this);
             indicator.setBattery(batteryIconLevel(),rows[i][1],
