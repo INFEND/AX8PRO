@@ -39,9 +39,14 @@ class RefreshResumeTest(unittest.TestCase):
         self.assertIn("&&foregroundCycleActive(cycleGeneration))\n                                uiQosWatch.check",worker)
         self.assertIn("if(foregroundCycleActive(cycleGeneration)){",worker)
 
-    def test_cross_thread_generation_is_volatile(self):
+    def test_cross_thread_generation_uses_monitor_lock(self):
         session=(ROOT/"app/src/main/java/ru/xarkon/ax8/RefreshSession.java").read_text(encoding="utf-8")
-        self.assertIn("private volatile long generation;",session)
+        self.assertIn("private long generation;",session)
+        self.assertIn("synchronized long capture()",session)
+        self.assertIn("synchronized void invalidate()",session)
+        self.assertIn("synchronized boolean accepts(long captured, boolean active)",session)
+        self.assertIn("synchronized void deferForced()",session)
+        self.assertIn("synchronized boolean takeDeferredForced(boolean active)",session)
         self.assertIn("refreshSession.accepts(generation,running)",MAIN)
         self.assertIn('prefs.getBoolean("ui_visible",true)',MAIN)
 
