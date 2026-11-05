@@ -45,7 +45,8 @@ class InternetBadgeSourceTests(unittest.TestCase):
     def test_policy_has_nonpositive_states(self):
         policy=(SRC/"InternetStatusPolicy.java").read_text(encoding="utf-8")
         self.assertIn("if(!pppConnected)return OFFLINE",policy)
-        self.assertIn("isFresh(checkedAt,now)?result:UNKNOWN",policy)
+        self.assertIn("if (!isFresh(checkedAt,now)) return UNKNOWN;",policy)
+        self.assertIn("result==ONLINE||result==OFFLINE||result==UNAVAILABLE ? result : UNKNOWN",policy)
         self.assertIn("PROBE_INTERVAL_MS=15000L",policy)
 if __name__=="__main__":
     unittest.main()
