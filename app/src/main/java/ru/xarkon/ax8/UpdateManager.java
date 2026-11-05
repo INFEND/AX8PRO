@@ -85,7 +85,10 @@ public final class UpdateManager {
         }finally{c.disconnect();}
     }
     public static Release fetchLatest()throws Exception{return new Release(new JSONObject(readManifest()));}
-    public static long currentCode(Context c)throws Exception{return c.getPackageManager().getPackageInfo(c.getPackageName(),0).getLongVersionCode();}
+    private static long versionCode(PackageInfo info){
+        return Build.VERSION.SDK_INT>=28 ? versionCode(info) : info.versionCode;
+    }
+    public static long currentCode(Context c)throws Exception{return versionCode(c.getPackageManager().getPackageInfo(c.getPackageName(),0));}
     private static void ui(Activity a,Runnable r){a.runOnUiThread(r);}
     public static void check(Activity a,Listener listener){
         new Thread(()->{
@@ -142,7 +145,7 @@ public final class UpdateManager {
         int flag=Build.VERSION.SDK_INT>=28?PackageManager.GET_SIGNING_CERTIFICATES:PackageManager.GET_SIGNATURES;
         PackageInfo target=pm.getPackageArchiveInfo(apk.getAbsolutePath(),flag);
         if(target==null||!PACKAGE.equals(target.packageName))throw new IOException("Неверный APK: пакет не AX 8 PRO");
-        if(target.getLongVersionCode()!=requiredCode||requiredCode<=currentCode(c))throw new IOException("Версия APK не соответствует новой версии");
+        if(versionCode(target)!=requiredCode||requiredCode<=currentCode(c))throw new IOException("Версия APK не соответствует новой версии");
         Signature[] newSigns=signers(target);
         if(newSigns==null||newSigns.length!=1||!TRUSTED_CERT_SHA256.equals(signatureHash(newSigns[0])))
             throw new IOException("APK не подписан официальным ключом AX 8 PRO");
