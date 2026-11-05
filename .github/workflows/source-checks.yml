@@ -27,6 +27,11 @@ on:
 permissions:
   contents: read
 
+# Cancel obsolete checks on the same branch/PR; never cancel checks for other refs.
+concurrency:
+  group: source-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   python-regressions:
     runs-on: ubuntu-latest
