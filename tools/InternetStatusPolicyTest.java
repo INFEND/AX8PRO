@@ -20,6 +20,10 @@ public final class InternetStatusPolicyTest {
         state(InternetStatusPolicy.UNAVAILABLE,
             InternetStatusPolicy.displayed(true,true,InternetStatusPolicy.UNAVAILABLE,T,T+1000),"no router-bound network is unverified");
         state(InternetStatusPolicy.UNKNOWN,
+            InternetStatusPolicy.displayed(true,true,-1,T,T+1000),"invalid negative probe result");
+        state(InternetStatusPolicy.UNKNOWN,
+            InternetStatusPolicy.displayed(true,true,99,T,T+1000),"unexpected positive probe result");
+        state(InternetStatusPolicy.UNKNOWN,
             InternetStatusPolicy.displayed(true,true,InternetStatusPolicy.ONLINE,T,T+30001),"expired online must not persist");
         state(InternetStatusPolicy.ONLINE,
             InternetStatusPolicy.displayed(true,true,InternetStatusPolicy.ONLINE,T,T+30000),"freshness boundary");
