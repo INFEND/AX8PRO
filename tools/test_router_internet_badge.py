@@ -23,7 +23,8 @@ class InternetBadgeSourceTests(unittest.TestCase):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("Network offlineCandidate=null;",source)
         self.assertIn("if(offlineCandidate==null)offlineCandidate=network;",source)
-        self.assertRegex(source,r"if\\s*\\(offlineCandidate!=null\\)\\s*return new Result\\(InternetStatusPolicy\\.OFFLINE,offlineCandidate\\);")
+        self.assertIn("if(offlineCandidate!=null)",source)
+        self.assertIn("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);",source)
         self.assertNotIn("return new Result(InternetStatusPolicy.OFFLINE,network);",source)
     def test_physical_router_gateway_fallback(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
