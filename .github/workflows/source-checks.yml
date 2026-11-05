@@ -152,6 +152,35 @@ jobs:
           else
             gradle --no-daemon :app:lintDebug
           fi
+      - name: Summarize Android lint findings
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          report = Path("app/build/reports/lint-results-debug.xml")
+          if not report.is_file():
+              print("Android lint XML report is unavailable; inspect the lint step log.")
+          else:
+              issues = ET.parse(report).getroot().findall("issue")
+              errors = [i for i in issues if i.get("severity") in ("Fatal", "Error")]
+              warnings = [i for i in issues if i.get("severity") == "Warning"]
+              print(f"Android lint: {len(errors)} errors, {len(warnings)} warnings")
+              for issue in errors:
+                  loc = issue.find("location")
+                  filename = loc.get("file", "") if loc is not None else ""
+                  line = loc.get("line", "1") if loc is not None else "1"
+                  issue_id = issue.get("id", "Lint")
+                  message = issue.get("message", "Android lint error")
+                  print(f"{filename}:{line}: {issue_id}: {message}")
+                  if filename:
+                      filename = os.path.relpath(filename).replace("\\", "/")
+                      escaped = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error file={filename},line={line},title={issue_id}::{escaped}")
+          PY
       - name: Preserve Android lint reports
         if: always()
         uses: actions/upload-artifact@v4
