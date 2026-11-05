@@ -158,7 +158,7 @@ public final class UpdateManager {
             File apk=apkFile(a);if(!apk.isFile())throw new IOException("APK обновления отсутствует");
             PackageInfo info=a.getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(),0);
             if(info==null)throw new IOException("Не удалось прочитать APK");
-            verifyApk(a,apk,info.getLongVersionCode());
+            verifyApk(a,apk,versionCode(info));
             if(Build.VERSION.SDK_INT>=26&&!a.getPackageManager().canRequestPackageInstalls()){
                 a.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+a.getPackageName())));
                 android.widget.Toast.makeText(a,"Разрешите установку и повторно нажмите обновление",android.widget.Toast.LENGTH_LONG).show();return;
