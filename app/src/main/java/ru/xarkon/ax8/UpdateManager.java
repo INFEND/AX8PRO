@@ -72,6 +72,8 @@ public final class UpdateManager {
         URL u=new URL(url);if(!"https".equalsIgnoreCase(u.getProtocol()))throw new IOException("Требуется HTTPS");
         HttpsURLConnection c=(HttpsURLConnection)u.openConnection();
         c.setConnectTimeout(12000);c.setReadTimeout(24000);c.setInstanceFollowRedirects(true);
+        // Always request current OTA metadata; cached manifests can hide newly published releases.
+        c.setUseCaches(false);
         c.setRequestProperty("User-Agent","AX8PRO-Updater/1.0");return c;
     }
     private static String readManifest()throws Exception{
