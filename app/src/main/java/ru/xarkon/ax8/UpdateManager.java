@@ -86,7 +86,7 @@ public final class UpdateManager {
     }
     public static Release fetchLatest()throws Exception{return new Release(new JSONObject(readManifest()));}
     private static long versionCode(PackageInfo info){
-        return Build.VERSION.SDK_INT>=28 ? versionCode(info) : info.versionCode;
+        return Build.VERSION.SDK_INT>=28 ? info.getLongVersionCode() : info.versionCode;
     }
     public static long currentCode(Context c)throws Exception{return versionCode(c.getPackageManager().getPackageInfo(c.getPackageName(),0));}
     private static void ui(Activity a,Runnable r){a.runOnUiThread(r);}
