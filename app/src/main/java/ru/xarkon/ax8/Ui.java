@@ -98,7 +98,7 @@ final class Ui {
         a.setPadding(0,0,dp(c,12),0);
         b.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         b.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
-        b.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY);
+        b.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
         row.addView(a,new LinearLayout.LayoutParams(0,-2,.94f));
         row.addView(b,new LinearLayout.LayoutParams(0,-2,1.06f));return row;
     }
