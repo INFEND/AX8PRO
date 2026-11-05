@@ -26,6 +26,7 @@ public final class UpdateManager {
     private static final String RELEASE_PREFIX_NEW="/INFEND/AX8PRO/releases/download/";
     private static final long MAX_APK=200L*1024L*1024L;
     private static final String APK_NAME="AX8PRO-update.apk";
+    private static final java.util.concurrent.atomic.AtomicBoolean DOWNLOAD_ACTIVE = new java.util.concurrent.atomic.AtomicBoolean(false);
     public interface Listener {
         void status(String message);
         default void progress(long downloaded,long total){}
@@ -104,6 +105,10 @@ public final class UpdateManager {
     }
     public static File apkFile(Context c){return new File(new File(c.getFilesDir(),"ota"),APK_NAME);}
     public static void download(Activity a,Release r,Listener listener){
+        if(!DOWNLOAD_ACTIVE.compareAndSet(false,true)){
+            ui(a,()->listener.error("Загрузка обновления уже выполняется"));
+            return;
+        }
         new Thread(()->{
             File dest=apkFile(a),temp=new File(dest.getParentFile(),"AX8PRO-update.part.apk");
             try{
@@ -139,6 +144,7 @@ public final class UpdateManager {
                 }
                 ui(a,()->listener.downloaded(dest));
             }catch(Exception e){temp.delete();ui(a,()->listener.error(friendly(e)));}
+            finally{DOWNLOAD_ACTIVE.set(false);}
         },"ax8pro-ota-download").start();
     }
     private static String signatureHash(Signature s)throws Exception{
