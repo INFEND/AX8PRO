@@ -105,7 +105,7 @@ public final class UpdateManager {
     public static File apkFile(Context c){return new File(new File(c.getFilesDir(),"ota"),APK_NAME);}
     public static void download(Activity a,Release r,Listener listener){
         new Thread(()->{
-            File dest=apkFile(a),temp=new File(dest.getParentFile(),APK_NAME+".part");
+            File dest=apkFile(a),temp=new File(dest.getParentFile(),"AX8PRO-update.part.apk");
             try{
                 if(!dest.getParentFile().isDirectory()&&!dest.getParentFile().mkdirs())throw new IOException("Не удалось создать папку OTA");
                 if(r.sizeBytes>0&&dest.getParentFile().getUsableSpace()<r.sizeBytes+2*1024*1024)throw new IOException("Недостаточно памяти");
