@@ -28,7 +28,7 @@ def cumulative_history(version, code, entries):
             raise ValueError("Missing or oversized user-facing notes")
         lines = notes.splitlines()
         if any(len(line) > 260 or not line.startswith(("[+] ", "[-] ", "[–] ", "[=] "))
-               for line in lines):
+               or not line[4:].strip() for line in lines):
             raise ValueError("Invalid release note markup")
         if n <= code:
             selected.append(item)
