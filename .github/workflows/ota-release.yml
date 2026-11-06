@@ -227,6 +227,7 @@ jobs:
             python3 - "$check_dir" "$RELEASE_VERSION" "$RELEASE_CODE" <<'PY'
           import hashlib
           import json
+          import os
           from pathlib import Path
           import sys
 
@@ -259,7 +260,6 @@ jobs:
           # actually contains the expected application identity.
           import re
           import subprocess
-          import os
           aapt = str(Path(os.environ["ANDROID_SDK_ROOT"]) / "build-tools" / "36.0.0" / "aapt")
           badging = subprocess.check_output([aapt, "dump", "badging", str(apk)], text=True)
           package_line = next((line for line in badging.splitlines() if line.startswith("package: ")), "")
