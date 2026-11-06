@@ -16,7 +16,7 @@ class ManifestHistoryTest(unittest.TestCase):
 
     def test_accepts_contiguous_history(self):
         history = [self.entry(19), self.entry(20)]
-        self.assertEqual(MODULE.cumulative_history("1.5.20", 20, history), history)
+        self.assertEqual(MODULE.cumulative_history("1.5.2", 20, history), history)
 
     def test_rejects_gap_duplicate_and_wrong_version(self):
         for history in (
@@ -26,17 +26,17 @@ class ManifestHistoryTest(unittest.TestCase):
         ):
             with self.subTest(history=history):
                 with self.assertRaises(ValueError):
-                    MODULE.cumulative_history("1.5.20", 20, history)
+                    MODULE.cumulative_history("1.5.2", 20, history)
 
     def test_rejects_malformed_notes(self):
         for notes in ("", "Без маркера", "[=] " + "x" * 260, ["[=] список"]):
             with self.subTest(notes=notes):
                 with self.assertRaises(ValueError):
-                    MODULE.cumulative_history("1.5.19", 19, [self.entry(19, notes)])
+                    MODULE.cumulative_history("1.5.1", 19, [self.entry(19, notes)])
 
     def test_rejects_missing_requested_version(self):
         with self.assertRaises(ValueError):
-            MODULE.cumulative_history("1.5.20", 20, [self.entry(19)])
+            MODULE.cumulative_history("1.5.2", 20, [self.entry(19)])
 
 
 if __name__ == "__main__":
