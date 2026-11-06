@@ -21,7 +21,9 @@ class ReleaseHistorySyncTest(unittest.TestCase):
             and entry.get("versionName") == name.group(1)
         ]
         self.assertEqual(len(matching), 1, "Current APK version needs exactly one matching OTA history entry")
-        self.assertTrue(str(matching[0].get("notes", "")).strip(), "OTA notes must not be empty")
+        notes = matching[0].get("notes")
+        self.assertIsInstance(notes, str, "OTA notes must be a string, not a list/object/null")
+        self.assertTrue(notes.strip(), "OTA notes must not be empty")
 
 
 if __name__ == "__main__":
