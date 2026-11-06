@@ -25,6 +25,28 @@ public final class ForegroundHandoffTest {
         ForegroundHandoff.end();
         check(!ForegroundHandoff.pending(), "extra completion cannot underflow");
 
+        // A completed cleanup must not release the barrier while another is blocked.
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        CountDownLatch releaseSecond = new CountDownLatch(1);
+        ForegroundHandoff.begin();
+        Thread heldCleanup = new Thread(() -> {
+            ForegroundHandoff.begin();
+            secondStarted.countDown();
+            await(releaseSecond);
+            ForegroundHandoff.end();
+        });
+        heldCleanup.start();
+        try {
+            check(secondStarted.await(5, TimeUnit.SECONDS), "held cleanup must begin");
+            ForegroundHandoff.end();
+            check(ForegroundHandoff.pending(), "finishing first cleanup must not release held cleanup");
+        } finally {
+            releaseSecond.countDown();
+            heldCleanup.join(5000);
+        }
+        check(!heldCleanup.isAlive(), "held cleanup must finish");
+        check(!ForegroundHandoff.pending(), "barrier must clear after held cleanup");
+
         // Concurrent cleanups must not expose an idle barrier until all have ended.
         for (int iteration = 0; iteration < 100; iteration++) {
             CountDownLatch started = new CountDownLatch(2);
