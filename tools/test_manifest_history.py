@@ -29,7 +29,7 @@ class ManifestHistoryTest(unittest.TestCase):
                     MODULE.cumulative_history("1.5.2", 20, history)
 
     def test_rejects_malformed_notes(self):
-        for notes in ("", "Без маркера", "[=] " + "x" * 260, ["[=] список"]):
+        for notes in ("", "Без маркера", "[=]    ", "[+] \t", "[=] Полезное изменение\n[-]   ", "[=] " + "x" * 260, ["[=] список"]):
             with self.subTest(notes=notes):
                 with self.assertRaises(ValueError):
                     MODULE.cumulative_history("1.5.1", 19, [self.entry(19, notes)])
