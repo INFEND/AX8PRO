@@ -65,11 +65,15 @@ public final class ForegroundHandoffTest {
             });
             first.start();
             second.start();
-            check(started.await(5, TimeUnit.SECONDS), "both cleanup workers must begin");
-            check(ForegroundHandoff.pending(), "concurrent cleanups keep barrier active");
-            finish.countDown();
-            first.join(5000);
-            second.join(5000);
+            try {
+                check(started.await(5, TimeUnit.SECONDS), "both cleanup workers must begin");
+                check(ForegroundHandoff.pending(), "concurrent cleanups keep barrier active");
+            } finally {
+                // Always unblock and join workers, even when an assertion fails.
+                finish.countDown();
+                first.join(5000);
+                second.join(5000);
+            }
             check(!first.isAlive() && !second.isAlive(), "cleanup workers must finish");
             check(!ForegroundHandoff.pending(), "barrier must clear after both cleanups");
         }
