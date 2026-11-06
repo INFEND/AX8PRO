@@ -237,10 +237,16 @@ jobs:
           actual_size = apk.stat().st_size
           with apk.open("rb") as apk_stream:
               actual_sha = hashlib.file_digest(apk_stream, "sha256").hexdigest()
-          expected_apk_url = ("https://github.com/ANTIFERMENT/AX8PRO/releases/download/"
-                              + "v" + version + "/AX8PRO.apk")
+          # Releases created before the repository rename may still use the old
+          # canonical URL. Accept only these two known identities, never an
+          # arbitrary external host or repository in the signed OTA manifest.
+          release_path = "/releases/download/v" + version + "/AX8PRO.apk"
+          expected_apk_urls = {
+              "https://github.com/" + os.environ["GITHUB_REPOSITORY"] + release_path,
+              "https://github.com/ANTIFERMENT/AX8PRO" + release_path,
+          }
           if (type(data.get("schema")) is not int or data["schema"] != 1
-                  or data.get("apkUrl") != expected_apk_url
+                  or data.get("apkUrl") not in expected_apk_urls
                   or data.get("packageName") != "ru.xarkon.ax8pro"
                   or data.get("versionName") != version
                   or type(data.get("versionCode")) is not int
