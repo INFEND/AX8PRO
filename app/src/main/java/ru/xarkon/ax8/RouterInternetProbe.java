@@ -39,7 +39,6 @@ public final class RouterInternetProbe {
             // Never test through the default/mobile/VPN network: only AX8's Wi-Fi or wired LAN.
             // A VPN may advertise its underlying Wi-Fi transport as well: reject it explicitly.
             Network offlineCandidate=null;
-            Network androidValidatedCandidate=null;
             for(Network network:cm.getAllNetworks()){
                 NetworkCapabilities caps=cm.getNetworkCapabilities(network);
                 if(!isRouterLink(caps))continue;
@@ -48,19 +47,18 @@ public final class RouterInternetProbe {
                 // the router's *actual default gateway* as alternative link proof.
                 if(!canReachRouter(network,host,port) && !isRouterGateway(cm,network,host))
                     continue;
-                // Keep the definitive HTTPS check bound to this physical network.
+                // Android has already independently checked Internet access on this
+                // exact router-reachable physical network. Reuse that fresh platform
+                // verdict instead of waiting up to 15 seconds for three serial HTTPS
+                // probes. The cellular default network and VPN are excluded above.
+                if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+                    return new Result(InternetStatusPolicy.ONLINE,network);
+                // Without Android validation, require a successful router-bound HTTPS
+                // probe; a working WebUI alone is not proof of Internet access.
                 for(String endpoint:ENDPOINTS)if(reachesInternet(network,endpoint))
                     return new Result(InternetStatusPolicy.ONLINE,network);
-                // Android has independently validated this *same* Wi-Fi/LAN network
-                // for Internet access. Useful when our chosen 204 URLs are blocked.
-                // Never use the cellular default network or a VPN for this fallback.
-                if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                        && androidValidatedCandidate==null)
-                    androidValidatedCandidate=network;
                 if(offlineCandidate==null)offlineCandidate=network;
             }
-            if(androidValidatedCandidate!=null)
-                return new Result(InternetStatusPolicy.ONLINE,androidValidatedCandidate);
             if(offlineCandidate!=null)
                 return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
         }catch(Exception ignored){}
