@@ -31,7 +31,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("isRouterGateway(cm,network,host)",source)
         self.assertIn("route.isDefaultRoute()",source)
         self.assertIn("host.equalsIgnoreCase(gateway.getHostAddress())",source)
-        self.assertIn("if(!canReachRouter(network,host,port) && !isRouterGateway(cm,network,host))",source)
+        self.assertIn("if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port))",source)
         self.assertIn("network.openConnection",source)
 
     def test_android_validated_wifi_fallback_never_uses_phone_vpn(self):
@@ -61,6 +61,14 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn('connection.setReadTimeout(2500);',source)
         self.assertIn('network.openConnection(new URL(endpoint))',source)
         self.assertIn('finally{if(connection!=null)connection.disconnect();}',source)
+
+    def test_gateway_shortcut_precedes_router_socket_probe(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        # A matching AX8 gateway already proves the local link, so avoid a
+        # potentially slow TCP timeout before checking Android's verdict.
+        self.assertIn("if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port))",source)
+        self.assertLess(source.index("!isRouterGateway(cm,network,host) && !canReachRouter"),
+                        source.index("NET_CAPABILITY_VALIDATED"))
 
     def test_ppp_transitions_invalidate_external_probe(self):
         main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
