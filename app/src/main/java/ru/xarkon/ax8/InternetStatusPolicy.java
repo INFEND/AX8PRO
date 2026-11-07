@@ -31,7 +31,7 @@ public final class InternetStatusPolicy {
         return "◌ LTE ПРОВЕРКА";
     }
     public static String detail(int result){
-        if(result==ONLINE)return "Интернет через роутер подтверждён внешним HTTPS-запросом";
+        if(result==ONLINE)return "Доступ к интернету через сеть роутера подтверждён";
         if(result==OFFLINE)return "Интернет через роутер не подтверждён; LTE-соединение не гарантирует доступ";
         if(result==UNAVAILABLE)return "Не удалось проверить интернет через сеть роутера; мобильный интернет телефона не учитывается";
         return "Проверяем доступ к интернету через роутер";
