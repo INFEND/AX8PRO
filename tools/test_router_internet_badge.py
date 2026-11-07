@@ -48,6 +48,20 @@ class InternetBadgeSourceTests(unittest.TestCase):
                         source.index("if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)"))
         self.assertIn("connectivitycheck.gstatic.com/generate_204",source)
 
+    def test_external_probe_is_bounded_and_does_not_follow_redirects(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        # Redirects (including captive portals) are not proof of Internet.
+        self.assertIn('connection.setInstanceFollowRedirects(false);',source)
+        self.assertIn('connection.setUseCaches(false);',source)
+        self.assertIn('connection.setRequestProperty("Cache-Control","no-cache");',source)
+        self.assertIn('return connection.getResponseCode()==204;',source)
+        # Keep requests bounded on poor LTE without silently falling back to
+        # the phone's default cellular connection.
+        self.assertIn('connection.setConnectTimeout(2500);',source)
+        self.assertIn('connection.setReadTimeout(2500);',source)
+        self.assertIn('network.openConnection(new URL(endpoint))',source)
+        self.assertIn('finally{if(connection!=null)connection.disconnect();}',source)
+
     def test_ppp_transitions_invalidate_external_probe(self):
         main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
         policy=(SRC/"InternetStatusPolicy.java").read_text(encoding="utf-8")
