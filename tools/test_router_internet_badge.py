@@ -37,8 +37,10 @@ class InternetBadgeSourceTests(unittest.TestCase):
     def test_android_validated_wifi_fallback_never_uses_phone_vpn(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("NET_CAPABILITY_VALIDATED",source)
-        self.assertIn("Network androidValidatedCandidate=null;",source)
-        self.assertIn("if(androidValidatedCandidate!=null)",source)
+        self.assertIn("if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))",source)
+        self.assertIn("return new Result(InternetStatusPolicy.ONLINE,network);",source)
+        self.assertLess(source.index("if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))"),
+                        source.index("for(String endpoint:ENDPOINTS)"))
         self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
         self.assertIn("TRANSPORT_WIFI",source)
         self.assertNotIn("TRANSPORT_CELLULAR",source)
