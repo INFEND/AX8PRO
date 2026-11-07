@@ -44,7 +44,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
         self.assertIn("TRANSPORT_WIFI",source)
         self.assertNotIn("TRANSPORT_CELLULAR",source)
-        self.assertLess(source.index("if(!canReachRouter("),
+        self.assertLess(source.index("if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port))"),
                         source.index("if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)"))
         self.assertIn("connectivitycheck.gstatic.com/generate_204",source)
 
