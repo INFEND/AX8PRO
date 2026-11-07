@@ -45,7 +45,8 @@ public final class RouterInternetProbe {
                 // On some Android/VPN configurations the router WebUI is reachable
                 // but a separately network-bound TCP socket to it is not. Accept
                 // the router's *actual default gateway* as alternative link proof.
-                if(!canReachRouter(network,host,port) && !isRouterGateway(cm,network,host))
+                // Gateway proof is sufficient: avoid waiting for a TCP timeout first.
+                if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port))
                     continue;
                 // Android has already independently checked Internet access on this
                 // exact router-reachable physical network. Reuse that fresh platform
