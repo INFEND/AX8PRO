@@ -45,6 +45,8 @@ public final class InternetStatusPolicyTest {
         check(InternetStatusPolicy.label(InternetStatusPolicy.OFFLINE).contains("OFFLINE"),"offline label");
         check(InternetStatusPolicy.label(InternetStatusPolicy.UNAVAILABLE).contains("НЕ ПРОВЕРЕНО"),"unverified label");
         check(!InternetStatusPolicy.detail(InternetStatusPolicy.UNAVAILABLE).contains("подтверждён"),"no false confirmation");
+        check(InternetStatusPolicy.detail(InternetStatusPolicy.ONLINE).contains("через сеть роутера"),"online is router-bound");
+        check(!InternetStatusPolicy.detail(InternetStatusPolicy.ONLINE).contains("HTTPS"),"Android validation is also valid proof");
         System.out.println("Internet status policy: "+checks+" checks passed.");
     }
 }
