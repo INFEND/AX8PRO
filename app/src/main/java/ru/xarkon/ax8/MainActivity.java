@@ -144,8 +144,16 @@ public final class MainActivity extends Activity {
             getIntent().removeExtra("open_tab");showTab(2);
         }
         // Background service owns priority only when the UI is not visible.
-        if(prefs.getBoolean("background_mode",false)&&prefs.getBoolean("background_priority",false)
-                &&monitorOn&&!ownerMac.isEmpty()&&!priority.enabled)priority.enable(ownerMac);
+        // Queue priority activation behind any onPause() cleanup. An immediate enable
+        // here can be undone by a delayed cleanup from the previous foreground session.
+        final long resumeGeneration=refreshSession.capture();
+        try{workers.execute(()->{
+            if(refreshSession.accepts(resumeGeneration,running)
+                    &&prefs.getBoolean("background_mode",false)
+                    &&prefs.getBoolean("background_priority",false)
+                    &&monitorOn&&!ownerMac.isEmpty()&&!priority.enabled)
+                priority.enable(ownerMac);
+        });}catch(RejectedExecutionException ignored){/* Activity is being destroyed. */}
         autoPollMs=AutoPollController.clamp(prefs.getInt("auto_poll_ms",500));
         running=true;resetInternetResult();
         internetNetworkSignature=routerNetworkFingerprint();
