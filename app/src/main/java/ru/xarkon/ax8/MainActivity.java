@@ -27,6 +27,8 @@ public final class MainActivity extends Activity {
     private static final String[] SYMBOL={"⌂","◫","✉","⌁","⚙"};
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final ExecutorService workers=Executors.newSingleThreadExecutor();
+    // Timed Wi-Fi actions must never occupy the single-flight status polling queue.
+    private final ExecutorService temporaryWorker=Executors.newSingleThreadExecutor();
     // Internet tests never delay the WebUI/SMS/QoS polling worker.
     private final ExecutorService internetWorker=Executors.newSingleThreadExecutor();
     private boolean internetBusy=false,internetWatching=false,internetChangeScheduled=false;
@@ -409,7 +411,7 @@ public final class MainActivity extends Activity {
         
         if(bandAction){error="";notice="";}
         actionBusy=true;temporaryAction=title.equals("Временное отключение")||title.equals("Отключение остальных");notice="";displayWork(title);
-        workers.execute(()->{
+        (temporaryAction?temporaryWorker:workers).execute(()->{
             String result=null,failed=null;
             try{operation.run(message->displayWork(message));result=title.equals("Отправка SMS")?
                 "Роутер принял запрос отправки. Доставка получателю не подтверждена.":title+": выполнено";}
@@ -568,28 +570,6 @@ public final class MainActivity extends Activity {
                 autoSelectOwner(false);
                 lastCompleteAt=System.currentTimeMillis();
                 rebuildNav();
-                if(false){
-                    String result;
-                    if(status2!=null){
-                        result=bandTracker.observe(status2.optString("nv_band",""),
-                            status2.optString("ppp_status",""),System.currentTimeMillis());
-                    }else{
-                        bandTracker.recordUnavailable();
-                        result=bandTracker.checkTimeout(System.currentTimeMillis());
-                    }
-                    if(BandSwitchTracker.CONFIRMED.equals(result)){
-                        clearPendingBand();
-                        toast("LTE Band подтверждён: "+band());
-                    }else if(BandSwitchTracker.AUTO_UNVERIFIED.equals(result)){
-                        clearPendingBand();
-                        toast("LTE восстановлена. Маска AUTO не подтверждена WebUI");
-                    }else if(BandSwitchTracker.TIMED_OUT.equals(result)){
-                        clearPendingBand();
-                        alert("Band не подтверждён",
-                            "В течение 180 секунд не получены два устойчивых подтверждения нового Band и LTE. " +
-                            "Текущий: "+band()+". Роутер может оставаться доступным с прежней настройкой.");
-                    }
-                }
                 if(fail!=null){
                     // Loss of WebUI during a known reboot is expected. Do not show a
                     // misleading login failure while the band verification is pending.
