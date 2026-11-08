@@ -721,13 +721,17 @@ public final class MainActivity extends Activity {
         internetLastStart=now;
         internetBusy=true;
         final long generation=internetRevision;
+        final String networkSignature=routerNetworkFingerprint();
         final String target=api.host();
         internetWorker.execute(()->{
             RouterInternetProbe.Result result=RouterInternetProbe.check(getApplicationContext(),target);
             handler.post(()->{
                 internetBusy=false;
                 if(!running)return;
-                if(generation!=internetRevision||!target.equals(api.host())){
+                if(generation!=internetRevision||!target.equals(api.host())||
+                        !networkSignature.equals(routerNetworkFingerprint())){
+                    internetNetworkSignature=routerNetworkFingerprint();
+                    resetInternetResult();updateInternetChip();
                     maybeProbeInternet(true);return;
                 }
                 if(result.network!=null &&
