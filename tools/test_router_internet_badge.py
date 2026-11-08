@@ -70,6 +70,14 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertLess(source.index("!isRouterGateway(cm,network,host) && !canReachRouter"),
                         source.index("NET_CAPABILITY_VALIDATED"))
 
+    def test_network_fingerprint_rechecked_before_accepting_probe(self):
+        main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
+        self.assertIn("final String networkSignature=routerNetworkFingerprint();",main)
+        self.assertIn("!networkSignature.equals(routerNetworkFingerprint())",main)
+        self.assertIn("resetInternetResult();updateInternetChip();",main)
+        self.assertLess(main.index("!networkSignature.equals(routerNetworkFingerprint())"),
+                        main.index("internetResult=result.state;"))
+
     def test_ppp_transitions_invalidate_external_probe(self):
         main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
         policy=(SRC/"InternetStatusPolicy.java").read_text(encoding="utf-8")
