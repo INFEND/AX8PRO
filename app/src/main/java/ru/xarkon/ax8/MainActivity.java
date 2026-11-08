@@ -736,7 +736,7 @@ public final class MainActivity extends Activity {
                 }
                 if(result.network!=null &&
                         !RouterInternetProbe.networkStillPresent(getApplicationContext(),result.network)){
-                    resetInternetResult();maybeProbeInternet(true);return;
+                    resetInternetResult();updateInternetChip();maybeProbeInternet(true);return;
                 }
                 internetResult=result.state;
                 internetCheckedAt=SystemClock.elapsedRealtime();
