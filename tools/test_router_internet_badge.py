@@ -98,7 +98,10 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("!previous.equals(current)",policy)
     def test_badges_use_independent_policy(self):
         main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
-        self.assertIn('else label=online?"●  ONLINE"',main)
+        self.assertIn('label=online?"●  ONLINE"',main)
+        # A pending Band reboot must not replace the normal connectivity badge.
+        connection=main.split("private void updateConnection(){",1)[1].split("private void draw(",1)[0]
+        self.assertNotIn("bandTracker.isPending()",connection)
         self.assertIn("InternetStatusPolicy.label(internetState)",main)
         self.assertIn("RouterInternetProbe.check(getApplicationContext(),target)",main)
         self.assertNotIn('setLive("ppp",connected?',main)

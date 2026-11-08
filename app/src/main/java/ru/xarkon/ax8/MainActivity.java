@@ -206,7 +206,7 @@ public final class MainActivity extends Activity {
         }
     }
     @Override protected void onDestroy(){
-        internetWorker.shutdownNow();workers.shutdown();super.onDestroy();
+        internetWorker.shutdownNow();temporaryWorker.shutdown();workers.shutdown();super.onDestroy();
     }
     private void applySystemBarTheme(){
         getWindow().setStatusBarColor(Ui.BG);getWindow().setNavigationBarColor(Ui.BG);
@@ -2167,7 +2167,7 @@ public final class MainActivity extends Activity {
         LinearLayout body=Ui.vertical(this);final Dialog[] sheet={null};
         for(int i=0;i<values.length;i+=3){LinearLayout line=Ui.horizontal(this);
             for(int j=i;j<Math.min(i+3,values.length);j++){
-                Integer limit=values[j];TextView b=Ui.button(this,limit==null?"Без лимита":limitName(limit),Ui.CARD2,Ui.CYAN,()->{
+                Integer limit=values[j];TextView b=Ui.button(this,limit==null?"∞":limitName(limit),Ui.CARD2,Ui.CYAN,()->{
                     sheet[0].dismiss();confirm("Массовый лимит","Применить "+limitName(limit)+" ко всем кроме "+ownerMac+"?",
                         ()->action("Массовый QoS",pr->qos.limitEveryoneExcept(ownerMac,limit,api.devices(),pr)));
                 });LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,d(54),1);lp.rightMargin=d(6);line.addView(b,lp);

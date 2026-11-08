@@ -10,7 +10,8 @@ class RefreshResumeTest(unittest.TestCase):
         gate=MAIN.split("private void refresh(boolean forced){",1)[1].split("long now=System.currentTimeMillis();",1)[0]
         self.assertIn("if(refreshBusy){",gate)
         self.assertIn("if(forced&&running)refreshSession.deferForced();",gate)
-        self.assertIn("if(actionBusy||!running)return;",gate)
+        self.assertIn("if((actionBusy&&!temporaryAction)||!running)return;",gate)
+        self.assertIn("if(forced&&running)refreshSession.deferForced();",gate)
 
     def test_stale_result_restarts_queued_foreground_refresh(self):
         callback=MAIN.split("handler.post(()->{\n                refreshBusy=false;",1)[1].split("observePoll(",1)[0]
