@@ -146,6 +146,7 @@ public final class MainActivity extends Activity {
         // Background service owns priority only when the UI is not visible.
         // Queue priority activation behind any onPause() cleanup. An immediate enable
         // here can be undone by a delayed cleanup from the previous foreground session.
+        running=true;
         final long resumeGeneration=refreshSession.capture();
         try{workers.execute(()->{
             if(refreshSession.accepts(resumeGeneration,running)
@@ -155,7 +156,7 @@ public final class MainActivity extends Activity {
                 priority.enable(ownerMac);
         });}catch(RejectedExecutionException ignored){/* Activity is being destroyed. */}
         autoPollMs=AutoPollController.clamp(prefs.getInt("auto_poll_ms",500));
-        running=true;resetInternetResult();
+        resetInternetResult();
         internetNetworkSignature=routerNetworkFingerprint();
         watchRouterNetwork();
         handler.removeCallbacks(ticker);refresh(true);maybeProbeInternet(true);
