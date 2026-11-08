@@ -78,6 +78,14 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertLess(main.index("!networkSignature.equals(routerNetworkFingerprint())"),
                         main.index("internetResult=result.state;"))
 
+    def test_disappeared_probe_network_clears_badge_before_retry(self):
+        main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
+        start=main.index("if(result.network!=null &&")
+        end=main.index("internetResult=result.state;",start)
+        branch=main[start:end]
+        self.assertIn("!RouterInternetProbe.networkStillPresent(",branch)
+        self.assertIn("resetInternetResult();updateInternetChip();maybeProbeInternet(true);return;",branch)
+
     def test_ppp_transitions_invalidate_external_probe(self):
         main=(SRC/"MainActivity.java").read_text(encoding="utf-8")
         policy=(SRC/"InternetStatusPolicy.java").read_text(encoding="utf-8")
