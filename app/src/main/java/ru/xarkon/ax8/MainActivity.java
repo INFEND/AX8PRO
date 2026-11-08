@@ -99,7 +99,7 @@ public final class MainActivity extends Activity {
     private List<RouterClient.Device> devices=new ArrayList<>();
     private List<RouterClient.Sms> messages=new ArrayList<>();
     private RouterClient.BlockState blocked;
-    private volatile boolean actionBusy=false,refreshBusy=false;
+    private volatile boolean actionBusy=false,refreshBusy=false,temporaryAction=false;
     private volatile boolean running=false;
     private final RefreshSession refreshSession=new RefreshSession();
     private int tab=0,lastNavTab=-1,lastNavUnread=-1;
@@ -114,7 +114,7 @@ public final class MainActivity extends Activity {
         maybeProbeInternet(false);
         updateInternetChip();
         // Never hammer a router WebUI while it is still booting.
-        handler.postDelayed(this,bandTracker.isPending()?Math.max(1500,refreshInterval()):refreshInterval());
+        handler.postDelayed(this,refreshInterval());
     }};
     private int d(float x){return Ui.dp(this,x);}
 
@@ -124,9 +124,8 @@ public final class MainActivity extends Activity {
         api=new RouterClient(prefs.getString("host","192.168.150.1"),prefs.getString("username","root"),prefs.getString("password","admin"));
         qos=new QosController(api,prefs);traffic=new DeviceTrafficMonitor(api,prefs);
         ownerMac=prefs.getString("owner_mac","");monitorOn=prefs.getBoolean("traffic_monitor",false);
-        bandTracker.restore(prefs.getInt("pending_band",BandSwitchTracker.NONE),
-            prefs.getLong("pending_band_since",0L),System.currentTimeMillis());
-        if(!bandTracker.isPending() && prefs.contains("pending_band"))clearPendingBand();
+        // Never restore a blocking Band verification after a router reboot.
+        clearPendingBand();
         restoreRecentRouterSnapshot();
         Ui.load(prefs);applySystemBarTheme();requestNotificationPermission();createShell();showTab(0);UpdateSchedule.configure(this);
     }
@@ -248,13 +247,7 @@ public final class MainActivity extends Activity {
         header.addView(titles,new LinearLayout.LayoutParams(0,-2,1));
         connectionLabel=Ui.chip(this,"●  ОФЛАЙН",Ui.RED);
         connectionLabel.setOnClickListener(v->{
-            if(bandTracker.isPending()){
-                confirm("Прекратить проверку Band",
-                    "Прекратить ожидание подтверждения? Это отменит только проверку в приложении. " +
-                    "Роутер продолжит запуск с уже записанной настройкой.",()->{
-                        clearPendingBand();error="";updateConnection();draw(true);refresh(true);
-                    });
-            }else refresh(true);
+            refresh(true);
         });
         header.addView(connectionLabel);
         root.addView(header);
@@ -413,11 +406,9 @@ public final class MainActivity extends Activity {
     private void action(String title,Work operation,int requestedBand){
         if(actionBusy){toast("Дождитесь завершения предыдущего действия");return;}
         boolean bandAction=requestedBand!=BandSwitchTracker.NONE;
-        if(bandAction && bandTracker.isPending()){
-            toast("Сначала дождитесь проверки предыдущей смены Band");return;
-        }
+        
         if(bandAction){error="";notice="";}
-        actionBusy=true;notice="";displayWork(title);
+        actionBusy=true;temporaryAction=title.equals("Временное отключение")||title.equals("Отключение остальных");notice="";displayWork(title);
         workers.execute(()->{
             String result=null,failed=null;
             try{operation.run(message->displayWork(message));result=title.equals("Отправка SMS")?
@@ -434,15 +425,14 @@ public final class MainActivity extends Activity {
             final RouterClient.BlockState currentAcl=actual;
             final String ok=result,fail=failed;
             handler.post(()->{
-                actionBusy=false;displayWork("");
+                actionBusy=false;temporaryAction=false;displayWork("");
                 if(currentAcl!=null)blocked=currentAcl;
                 if(bandAction && fail==null){
                     // A successful WebUI POST is not proof of a new active Band.
                     long now=System.currentTimeMillis();
-                    bandTracker.begin(requestedBand,now);
-                    prefs.edit().putInt("pending_band",requestedBand).putLong("pending_band_since",now).apply();
+                    clearPendingBand();
                     status=null;statusAt=0;error="";api.invalidate();
-                    toast("Запрос принят. Проверяю Band после запуска AX8…");
+                    toast("Команда Band отправлена. Приложение остаётся доступным во время перезапуска AX8.");
                 }else if(fail!=null){
                     alert("Ошибка выполнения",fail);
                 }else toast(ok);
@@ -451,6 +441,7 @@ public final class MainActivity extends Activity {
             });
         });
     }
+    private RouterClient temporaryRouter(){return new RouterClient(prefs.getString("host","192.168.150.1"),prefs.getString("username","root"),prefs.getString("password","admin"));}
     private interface Work{void run(RouterClient.Progress p)throws Exception;}
     /** Never let a poll from an earlier foreground session operate on router QoS. */
     private boolean foregroundCycleActive(long generation){
@@ -464,7 +455,7 @@ public final class MainActivity extends Activity {
             if(forced&&running)refreshSession.deferForced();
             return;
         }
-        if(actionBusy||!running)return;
+        if((actionBusy&&!temporaryAction)||!running)return;
         long now=System.currentTimeMillis();
         // One global interval for all WebUI parameters. Never overlap cycles.
         boolean wantStatus=forced||now-statusAt>=refreshInterval();
@@ -480,10 +471,10 @@ public final class MainActivity extends Activity {
             String failure=null,partialFailure=null;
             if(wantStatus&&foregroundCycleActive(cycleGeneration))try{
                 next=api.status();
-                if(next!=null && forced && !bandTracker.isPending()){
+                if(next!=null && forced){
                     final JSONObject early=next;
                     handler.post(()->{
-                        if(!refreshSession.accepts(cycleGeneration,running)||bandTracker.isPending())return;
+                        if(!refreshSession.accepts(cycleGeneration,running))return;
                         invalidateInternetOnPppChange(early);
                         status=early;statusAt=System.currentTimeMillis();error="";
                         updateConnection();
@@ -494,7 +485,7 @@ public final class MainActivity extends Activity {
             }catch(Exception e){failure=e.getMessage()==null?e.toString():e.getMessage();}
             // After a requested Band reboot only status is needed. Other WebUI calls
             // would multiply failed login attempts and delay recovery by many seconds.
-            if(!bandTracker.isPending()){
+            {
                 if(wantClients&&foregroundCycleActive(cycleGeneration))try{d=api.devices();}catch(Exception e){partialFailure="Устройства: "+e.getMessage();}
                 if(wantBlocked&&foregroundCycleActive(cycleGeneration))try{b=api.blockState();}catch(Exception e){if(tab==1)partialFailure="Список блокировок: "+e.getMessage();}
                 if(wantSms&&foregroundCycleActive(cycleGeneration))try{m=api.sms();}catch(Exception e){partialFailure="SMS: "+e.getMessage();}
@@ -577,7 +568,7 @@ public final class MainActivity extends Activity {
                 autoSelectOwner(false);
                 lastCompleteAt=System.currentTimeMillis();
                 rebuildNav();
-                if(bandTracker.isPending()){
+                if(false){
                     String result;
                     if(status2!=null){
                         result=bandTracker.observe(status2.optString("nv_band",""),
@@ -602,7 +593,7 @@ public final class MainActivity extends Activity {
                 if(fail!=null){
                     // Loss of WebUI during a known reboot is expected. Do not show a
                     // misleading login failure while the band verification is pending.
-                    if(!bandTracker.isPending() && (statusAt==0||System.currentTimeMillis()-statusAt>30000)){
+                    if(statusAt==0||System.currentTimeMillis()-statusAt>30000){
                         error=fail.contains("Failed to connect")||fail.contains("Connection refused")||fail.contains("connect timed out")?
                             "WebUI AX8 временно недоступен. Проверьте подключение к Wi-Fi роутера.\n"+fail:fail;
                     }
@@ -611,7 +602,7 @@ public final class MainActivity extends Activity {
                 else if(devices2!=null||sms2!=null||blacklist!=null)sectionError="";
                 updateConnection();
                 maybeProbeInternet(false);
-                if(!actionBusy){
+                if(!actionBusy||temporaryAction){
                     // Every value is polled on the selected interval, but View hierarchies
                     // survive a poll: focus, touch interactions, scroll and gauge are retained.
                     if(!error.isEmpty() && overviewGauge==null && tab==0){draw(true);}
@@ -748,12 +739,10 @@ public final class MainActivity extends Activity {
         boolean fresh=status!=null&&statusAt>0&&System.currentTimeMillis()-statusAt<30000;
         boolean online=fresh&&error.isEmpty();
         String label;
-        if(bandTracker.isPending())label="◌  ПРОВЕРКА "+(bandTracker.requestedBand()==0?"AUTO":"B"+bandTracker.requestedBand());
-        else label=online?"●  ONLINE":(error.isEmpty()?"◌  ОБНОВЛЕНИЕ":"●  ОФЛАЙН");
+        label=online?"●  ONLINE":(error.isEmpty()?"◌  ОБНОВЛЕНИЕ":"●  ОФЛАЙН");
         connectionLabel.setText(label);
         connectionLabel.setContentDescription("Соединение с роутером AX8 Pro: "+label);
-        connectionLabel.setTextColor(bandTracker.isPending()?Ui.ORANGE:
-            (online?Ui.GREEN:(statusAt==0&&error.isEmpty()?Ui.ORANGE:Ui.RED)));
+        connectionLabel.setTextColor((online?Ui.GREEN:(statusAt==0&&error.isEmpty()?Ui.ORANGE:Ui.RED)));
     }
     private void draw(boolean preserveScroll){
         int y=preserveScroll?scroll.getScrollY():0;
@@ -1086,7 +1075,7 @@ public final class MainActivity extends Activity {
         if(bps>=1000)return String.format(Locale.US,"%.1f KB/s",bps/1000);
         return String.format(Locale.US,"%.0f B/s",bps);
     }
-    private static String limitName(Integer kb){if(kb==null)return "Без лимита";if(kb==0)return "0 KB/s";
+    private static String limitName(Integer kb){if(kb==null)return "∞";if(kb==0)return "0 KB/s";
         return kb>=1000?String.format(Locale.US,"%.2f MB/s",kb/1000.):kb+" KB/s";
     }
     private void showDevice(RouterClient.Device dev){
@@ -1138,7 +1127,7 @@ public final class MainActivity extends Activity {
         body.addView(Ui.button(this,"↯  Отключить на 10 секунд",Ui.CARD2,Ui.ORANGE,()->{
             sheet[0].dismiss();confirm("Временно отключить клиента",
                 "MAC будет временно добавлен в чёрный список на 10 секунд и затем восстановлен. При сбое проверьте blacklist.",
-                ()->action("Временное отключение",p->api.kick(dev.mac,p)));
+                ()->action("Временное отключение",p->temporaryRouter().kick(dev.mac,p)));
         }));
         sheet[0]=Ui.sheet(this,name,"Управление устройством · "+dev.ip,body);
     }
@@ -1225,6 +1214,7 @@ public final class MainActivity extends Activity {
             "Останется подключённым: "+savedMac+" ("+source+").\n\n"+
             "Остальные подключённые устройства временно попадут в blacklist. После 10 секунд приложение попытается вернуть исходный список. При обрыве питания/процесса проверьте blacklist.",
             ()->action("Отключение остальных",progress->{
+                RouterClient api=temporaryRouter();
                 // The state might have changed between the button tap and worker execution.
                 List<RouterClient.Device> latest=api.devices();
                 RouterClient.BlockState initial=api.blockState();
