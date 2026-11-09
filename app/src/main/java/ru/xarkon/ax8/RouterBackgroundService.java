@@ -418,7 +418,9 @@ public final class RouterBackgroundService extends Service {
         try{if(priority.enabled){qos.applyPriority(priority.owner,null,router.devices(),msg->{});priority.disable();}}
         catch(Exception e){prefs.edit().putString("bg_error","Не удалось снять временный приоритет: "+e.getMessage()).apply();}
         try{traffic.stop();}catch(Exception ignored){}
-        notifyState("Приложение открыто · мониторинг через интерфейс");
+        // Shutdown can race with the queued foreground handoff cleanup.
+        // Never recreate the persistent notification after stopSelf()/onDestroy().
+        if(!stopping)notifyState("Приложение открыто · мониторинг через интерфейс");
     }
     @Override public void onDestroy(){
         stopping=true;running=false;handler.removeCallbacks(tick);releaseLocks();
