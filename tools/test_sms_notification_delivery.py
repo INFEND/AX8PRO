@@ -14,6 +14,14 @@ class SmsDeliveryHandoffTest(unittest.TestCase):
         self.assertIn("RouterClient.Sms item=smsList.get(i);\n                    if(item==null)continue;", SOURCE)
         self.assertIn("for(RouterClient.Sms s:list){\n            if(s==null)continue;", SOURCE)
 
+    def test_null_sms_entries_do_not_inflate_count(self):
+        section = SOURCE.split("if(smsList!=null){", 1)[1].split(
+            "List<String> freshIds=SmsAlertPlanner.newUnreadIds(", 1)[0]
+        self.assertIn("int validSms=0;", section)
+        self.assertLess(section.index("if(item==null)continue;"),
+                        section.index("validSms++;"))
+        self.assertIn('putInt("bg_sms",validSms)', SOURCE)
+
     def test_notification_reports_success(self):
         section = SOURCE.split("private boolean notifyNewSms(", 1)[1].split(
             "private static String joinUnreadIds", 1)[0]
