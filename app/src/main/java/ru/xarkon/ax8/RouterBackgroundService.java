@@ -334,9 +334,11 @@ public final class RouterBackgroundService extends Service {
             }
         }
         try{radio=router.status();}catch(Exception e){statusIssue=e.getMessage()==null?e.toString():e.getMessage();}
-        if(stopping){releaseLocks();return;}
+        // A slow LTE request can finish after the UI takes ownership or the
+        // router endpoint changes. Do not start more requests in that case.
+        if(!ownsBackgroundCycle()){releaseLocks();return;}
         try{devices=router.devices();}catch(Exception e){deviceIssue=e.getMessage()==null?e.toString():e.getMessage();}
-        if(stopping){releaseLocks();return;}
+        if(!ownsBackgroundCycle()){releaseLocks();return;}
         try{blockState=router.blockState();}catch(Exception ignored){}
         // No QoS write may target an endpoint whose settings changed mid-poll.
         if(!ownsBackgroundCycle()){releaseLocks();return;}
