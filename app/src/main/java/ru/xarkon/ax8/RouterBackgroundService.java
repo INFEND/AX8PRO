@@ -306,6 +306,7 @@ public final class RouterBackgroundService extends Service {
             LinkedHashSet<String> seen=new LinkedHashSet<>();
             List<String> unreadIds=new ArrayList<>();
             for(RouterClient.Sms item:smsList){
+                if(item==null)continue;
                 if(item.id!=null&&!item.id.isEmpty())seen.add(item.id);
                 if(item.unread()){
                     unread++;
@@ -326,6 +327,7 @@ public final class RouterBackgroundService extends Service {
             if(!pending.isEmpty()){
                 for(int i=smsList.size()-1;i>=0&&ownsBackgroundCycle();i--){
                     RouterClient.Sms item=smsList.get(i);
+                    if(item==null)continue;
                     if(pending.contains(item.id) && notifyNewSms(item,unread)){
                         pending.remove(item.id);
                         delivered.add(item.id);
