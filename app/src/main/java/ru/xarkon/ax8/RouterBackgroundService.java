@@ -207,15 +207,15 @@ public final class RouterBackgroundService extends Service {
         try {((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(NOTIFICATION,notification(msg));}
         catch(Exception ignored){}
     }
-    private void notifyNewSms(RouterClient.Sms sms,int unread){
+    private boolean notifyNewSms(RouterClient.Sms sms,int unread){
         try{
             NotificationManager nm=(NotificationManager)getSystemService(NOTIFICATION_SERVICE);
             if(!nm.areNotificationsEnabled()){
-                prefs.edit().putString("bg_notification_error","Уведомления приложения запрещены в Android").apply();return;
+                prefs.edit().putString("bg_notification_error","Уведомления приложения запрещены в Android").apply();return false;
             }
             NotificationChannel channel=nm.getNotificationChannel(CHANNEL_SMS);
             if(channel!=null&&channel.getImportance()==NotificationManager.IMPORTANCE_NONE){
-                prefs.edit().putString("bg_notification_error","Канал AX8 · SMS отключён в настройках Android").apply();return;
+                prefs.edit().putString("bg_notification_error","Канал AX8 · SMS отключён в настройках Android").apply();return false;
             }
             Intent launch=new Intent(this,MainActivity.class);
             launch.putExtra("open_tab",2).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -234,7 +234,8 @@ public final class RouterBackgroundService extends Service {
             // the previous message when several arrive between two background polls.
             nm.notify("ax8_sms_"+(sms.id==null?"test":sms.id),SMS_NOTIFICATION,n);
             prefs.edit().putLong("bg_last_notification_at",System.currentTimeMillis()).putString("bg_notification_error","").apply();
-        }catch(Exception e){prefs.edit().putString("bg_notification_error",e.toString()).apply();}
+            return true;
+        }catch(Exception e){prefs.edit().putString("bg_notification_error",e.toString()).apply();return false;}
     }
     private static String joinUnreadIds(List<RouterClient.Sms> list){
         StringBuilder b=new StringBuilder();
@@ -317,21 +318,27 @@ public final class RouterBackgroundService extends Service {
             String previous=prefs.getString("bg_sms_seen_ids","");
             boolean initialized=prefs.getBoolean("bg_sms_seen_initialized",false);
             List<String> freshIds=SmsAlertPlanner.newUnreadIds(unreadIds,previous,initialized);
-            // Preserve recently observed IDs even if the router returns a valid
-            // but temporarily empty or truncated page. A missing ID is not a new SMS.
+            // Do not mark an unread SMS as handled before Android accepts its
+            // notification. Otherwise a foreground handoff or disabled channel
+            // silently loses the alert on the next scan.
+            Set<String> pending=new HashSet<>(freshIds);
+            Set<String> delivered=new HashSet<>();
+            if(!pending.isEmpty()){
+                for(int i=smsList.size()-1;i>=0&&ownsBackgroundCycle();i--){
+                    RouterClient.Sms item=smsList.get(i);
+                    if(pending.remove(item.id) && notifyNewSms(item,unread))
+                        delivered.add(item.id);
+                }
+            }
+            if(!ownsBackgroundCycle()){releaseLocks();return;}
+            // Keep the baseline and already-seen IDs, but retry alerts whose
+            // notification failed or was skipped during a handoff.
+            seen.removeAll(freshIds);
+            seen.addAll(delivered);
             String mergedIds=SmsAlertPlanner.mergeSeenIds(previous,seen);
             prefs.edit().putInt("bg_sms",smsList.size()).putInt("bg_sms_unread",unread)
                 .putString("bg_sms_seen_ids",mergedIds).putBoolean("bg_sms_seen_initialized",true)
                 .putString("bg_sms_json",smsJson(smsList).toString()).putLong("bg_sms_at",System.currentTimeMillis()).apply();
-            // The first scan establishes a baseline. Notify for every new unread message,
-            // oldest first, rather than silently dropping all but one from a batch.
-            if(!freshIds.isEmpty()){
-                Set<String> pending=new HashSet<>(freshIds);
-                for(int i=smsList.size()-1;i>=0&&ownsBackgroundCycle();i--){
-                    RouterClient.Sms item=smsList.get(i);
-                    if(pending.remove(item.id))notifyNewSms(item,unread);
-                }
-            }
         }
         try{radio=router.status();}catch(Exception e){statusIssue=e.getMessage()==null?e.toString():e.getMessage();}
         // A slow LTE request can finish after the UI takes ownership or the
