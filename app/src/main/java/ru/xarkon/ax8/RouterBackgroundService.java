@@ -247,8 +247,9 @@ public final class RouterBackgroundService extends Service {
     }
     private static JSONArray devicesJson(List<RouterClient.Device> list){
         JSONArray arr=new JSONArray();if(list==null)return arr;for(RouterClient.Device d:list){
+            if(d==null)continue;
             JSONObject o=new JSONObject();try{o.put("mac",d.mac);o.put("name",d.name);o.put("ip",d.ip);o.put("type",d.type);o.put("connectionTime",d.connectionTime);
-                JSONArray ip6=new JSONArray();for(String x:d.ipv6)ip6.put(x);o.put("ipv6",ip6);}catch(Exception ignored){}
+                JSONArray ip6=new JSONArray();if(d.ipv6!=null)for(String x:d.ipv6)ip6.put(x);o.put("ipv6",ip6);}catch(Exception ignored){}
             arr.put(o);
         }return arr;
     }
