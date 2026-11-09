@@ -30,6 +30,16 @@ class SmsDeliveryHandoffTest(unittest.TestCase):
         self.assertIn(".commit();", section)
         self.assertNotIn(".apply();", section)
 
+    def test_failed_sms_commit_aborts_cycle(self):
+        section = SOURCE.split('boolean smsPersisted=prefs.edit().putInt("bg_sms"', 1)[1].split(
+            "try{radio=router.status()", 1)[0]
+        self.assertIn(".commit();", section)
+        self.assertIn("if(!smsPersisted){", section)
+        failure = section.split("if(!smsPersisted){", 1)[1].split("}", 1)[0]
+        self.assertIn("bg_sms_persistence_error", failure)
+        self.assertIn("releaseLocks();", failure)
+        self.assertIn("return;", failure)
+
     def test_seen_ids_committed_after_notification_attempts(self):
         section = SOURCE.split("List<String> freshIds=SmsAlertPlanner.newUnreadIds(", 1)[1].split(
             "try{radio=router.status()", 1)[0]
