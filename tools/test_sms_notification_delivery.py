@@ -14,6 +14,15 @@ class SmsDeliveryHandoffTest(unittest.TestCase):
         self.assertIn("return true;", section)
         self.assertGreaterEqual(section.count("return false;"), 3)
 
+    def test_failed_duplicate_id_remains_pending_in_same_scan(self):
+        section = SOURCE.split("Set<String> pending=new HashSet<>(freshIds);", 1)[1].split(
+            "if(!ownsBackgroundCycle()){releaseLocks();return;}", 1)[0]
+        self.assertIn("pending.contains(item.id) && notifyNewSms(item,unread)", section)
+        self.assertLess(section.index("notifyNewSms(item,unread)"),
+                        section.index("pending.remove(item.id)"))
+        self.assertLess(section.index("pending.remove(item.id)"),
+                        section.index("delivered.add(item.id)"))
+
     def test_seen_ids_committed_after_notification_attempts(self):
         section = SOURCE.split("List<String> freshIds=SmsAlertPlanner.newUnreadIds(", 1)[1].split(
             "try{radio=router.status()", 1)[0]
