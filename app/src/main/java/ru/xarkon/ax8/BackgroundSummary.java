@@ -6,7 +6,10 @@ import java.util.List;
 public final class BackgroundSummary {
     private BackgroundSummary(){}
     public static String clientCount(List<?> devices){
-        return devices==null?"?":Integer.toString(devices.size());
+        if(devices==null)return "?";
+        int count=0;
+        for(Object device:devices)if(device!=null)count++;
+        return Integer.toString(count);
     }
     /** Reject missing, expired and future-dated cached measurements. */
     public static boolean isFresh(long sampleAt,long now,long maxAgeMs){
