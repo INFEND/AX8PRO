@@ -15,7 +15,9 @@ class BackgroundShutdownErrorTest(unittest.TestCase):
         guard = catch_body.index('if(ownsBackgroundCycle()){')
         self.assertLess(guard, catch_body.index('putString("bg_error",reason)'))
         self.assertLess(guard, catch_body.index('notifyState("Фоновый опрос AX8: "+reason)'))
-        self.assertIn('if(!stopping && prefs.getBoolean("refresh_auto",true))', source)
+        self.assertIn('if(ownsBackgroundCycle() && prefs.getBoolean("refresh_auto",true))', source)
+        self.assertLess(source.index('if(ownsBackgroundCycle() && prefs.getBoolean("refresh_auto",true))'),
+                        source.index('AutoPollController.next(old,elapsed,ok)'))
         self.assertIn('!ForegroundHandoff.pending()', source)
         self.assertIn('!prefs.getBoolean("ui_visible",true)', source)
         self.assertIn('endpoint.sameConnection(configuredEndpoint())', source)
