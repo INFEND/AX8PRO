@@ -19,5 +19,12 @@ class BackgroundDeviceCacheTest(unittest.TestCase):
         self.assertIn("if(d.ipv6!=null)for(String x:d.ipv6)", section)
 
 
+    def test_null_devices_do_not_inflate_cached_client_count(self):
+        section = SOURCE.split('if(devices!=null){int validClients=', 1)[1].split(
+            'if(blockState!=null)', 1)[0]
+        self.assertIn('for(RouterClient.Device device:devices)if(device!=null)validClients++;', section)
+        self.assertIn('editor.putInt("bg_clients",validClients)', section)
+        self.assertNotIn('editor.putInt("bg_clients",devices.size())', section)
+
 if __name__ == "__main__":
     unittest.main()
