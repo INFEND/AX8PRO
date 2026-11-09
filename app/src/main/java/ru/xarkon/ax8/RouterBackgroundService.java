@@ -396,6 +396,9 @@ public final class RouterBackgroundService extends Service {
             (!statusIssue.isEmpty()?"LTE: "+statusIssue+"; ":"")+
             (!smsIssue.isEmpty()?"SMS: "+smsIssue+"; ":"")+
             (!deviceIssue.isEmpty()?"Клиенты: "+deviceIssue+"; ":"")+qosIssue;
+        // Building a snapshot can take time (JSON/history serialization). Recheck
+        // ownership immediately before publishing it to shared preferences.
+        if(!ownsBackgroundCycle()){releaseLocks();return;}
         editor.putString("bg_error",issues).putString("bg_qos",qosIssue.isEmpty()?watchdog.status():qosIssue)
             .putString("bg_priority_status",priority.mode).apply();
         // The UI may become visible after the snapshot was assembled.
