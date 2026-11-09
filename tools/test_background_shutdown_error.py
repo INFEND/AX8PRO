@@ -1,4 +1,4 @@
-"""Regression: a stopped service must not publish a late poll failure."""
+"""Regression: a stopped or foreground-owned poll must not publish late failures."""
 from pathlib import Path
 import unittest
 
@@ -12,10 +12,13 @@ class BackgroundShutdownErrorTest(unittest.TestCase):
         start = source.index('catch(Exception e){', source.index('backgroundCycle();'))
         end = source.index('}finally{', start)
         catch_body = source[start:end]
-        guard = catch_body.index('if(!stopping){')
+        guard = catch_body.index('if(ownsBackgroundCycle()){')
         self.assertLess(guard, catch_body.index('putString("bg_error",reason)'))
         self.assertLess(guard, catch_body.index('notifyState("Фоновый опрос AX8: "+reason)'))
         self.assertIn('if(!stopping && prefs.getBoolean("refresh_auto",true))', source)
+        self.assertIn('!ForegroundHandoff.pending()', source)
+        self.assertIn('!prefs.getBoolean("ui_visible",true)', source)
+        self.assertIn('endpoint.sameConnection(configuredEndpoint())', source)
 
 
 if __name__ == "__main__":
