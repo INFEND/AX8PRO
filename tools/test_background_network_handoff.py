@@ -7,6 +7,16 @@ SOURCE = (Path(__file__).resolve().parents[1] /
 
 
 class BackgroundNetworkHandoffTest(unittest.TestCase):
+    def test_snapshot_commit_rechecks_ownership(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        start = source.index("private void backgroundCycle(){")
+        end = source.index("private ArrayDeque<Float> history(", start)
+        body = source[start:end]
+        guard = "if(!ownsBackgroundCycle()){releaseLocks();return;}"
+        last_guard = body.rfind(guard, 0, body.index('editor.putString("bg_error",issues)'))
+        self.assertGreater(last_guard, body.index('String issues='))
+        self.assertLess(last_guard, body.index('editor.putString("bg_error",issues)'))
+
     def test_each_followup_read_checks_ownership(self):
         source = SOURCE.read_text(encoding="utf-8")
         start = source.index("private void backgroundCycle(){")
