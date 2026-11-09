@@ -395,7 +395,9 @@ public final class RouterBackgroundService extends Service {
             (!deviceIssue.isEmpty()?"Клиенты: "+deviceIssue+"; ":"")+qosIssue;
         editor.putString("bg_error",issues).putString("bg_qos",qosIssue.isEmpty()?watchdog.status():qosIssue)
             .putString("bg_priority_status",priority.mode).apply();
-        if(stopping)return;
+        // The UI may become visible after the snapshot was assembled.
+        // Do not overwrite its foreground notification with a stale background result.
+        if(!ownsBackgroundCycle())return;
         if(!issues.isEmpty())notifyState("AX8: "+issues);
         else notifyState("Клиентов: "+BackgroundSummary.clientCount(devices)+" · SMS: "+(smsList==null?"?":smsList.size())+
             " · "+(radio!=null&&"ppp_connected".equals(radio.optString("ppp_status"))?"LTE online":"LTE проверяется"));
