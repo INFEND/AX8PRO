@@ -326,8 +326,10 @@ public final class RouterBackgroundService extends Service {
             if(!pending.isEmpty()){
                 for(int i=smsList.size()-1;i>=0&&ownsBackgroundCycle();i--){
                     RouterClient.Sms item=smsList.get(i);
-                    if(pending.remove(item.id) && notifyNewSms(item,unread))
+                    if(pending.contains(item.id) && notifyNewSms(item,unread)){
+                        pending.remove(item.id);
                         delivered.add(item.id);
+                    }
                 }
             }
             if(!ownsBackgroundCycle()){releaseLocks();return;}
