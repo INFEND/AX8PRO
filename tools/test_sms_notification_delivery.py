@@ -25,7 +25,7 @@ class SmsDeliveryHandoffTest(unittest.TestCase):
 
     def test_delivered_sms_ids_are_persisted_synchronously(self):
         section = SOURCE.split('putString("bg_sms_seen_ids",mergedIds)', 1)[1].split(
-            "try{radio=router.status()", 1)[0]
+            ".commit();", 1)[0] + ".commit();"
         self.assertIn('putString("bg_sms_json",smsJson(smsList).toString())', section)
         self.assertIn(".commit();", section)
         self.assertNotIn(".apply();", section)
