@@ -98,6 +98,7 @@ public final class MainActivity extends Activity {
     private BatteryIndicator overviewBattery;
     private Ui.SpeedGraph overviewGraph;
     private String sectionError="";
+    private boolean knownClientsExpanded=false,savedLimitsExpanded=false;
     private List<RouterClient.Device> devices=new ArrayList<>();
     private List<RouterClient.Sms> messages=new ArrayList<>();
     private RouterClient.BlockState blocked;
@@ -733,6 +734,13 @@ public final class MainActivity extends Activity {
         connectionLabel.setContentDescription("Соединение с роутером AX8 Pro: "+label);
         connectionLabel.setTextColor((online?Ui.GREEN:(statusAt==0&&error.isEmpty()?Ui.ORANGE:Ui.RED)));
     }
+    private static boolean routerTransportFailure(String message){
+        String s=message==null?"":message.toLowerCase(Locale.ROOT);
+        return s.contains("connection refused")||s.contains("econnrefused")||
+            s.contains("connectexception")||s.contains("sockettimeoutexception")||
+            s.contains("timed out")||s.contains("unreachable")||
+            s.contains("no route to host")||s.contains("failed to connect");
+    }
     private void draw(boolean preserveScroll){
         int y=preserveScroll?scroll.getScrollY():0;
         rebuildNav();
@@ -740,7 +748,8 @@ public final class MainActivity extends Activity {
         if(!error.isEmpty()) {
             LinearLayout err=Ui.card(this);err.setBackground(Ui.shape(this,0xFF301B2C,0xFF77405B,16));
             err.addView(Ui.text(this,"ПРОБЛЕМА С ПОДКЛЮЧЕНИЕМ",12,Ui.RED,true));Ui.addSpace(err,this,8);
-            err.addView(Ui.text(this,error,12,Ui.TEXT,false));Ui.addSpace(err,this,11);
+            String visibleError=routerTransportFailure(error)?"Отсутствует подключение к роутеру.":error;
+            err.addView(Ui.text(this,visibleError,12,Ui.TEXT,false));Ui.addSpace(err,this,11);
             err.addView(Ui.button(this,"↻ Повторить",Ui.CARD2,Ui.TEXT,()->refresh(true)));addCard(err);
         } else if(!notice.isEmpty()){
             LinearLayout n=Ui.card(this);n.addView(Ui.text(this,"✓ "+notice,12,Ui.GREEN,true));addCard(n);
@@ -851,8 +860,11 @@ public final class MainActivity extends Activity {
         LinearLayout dl=Ui.vertical(this),ul=Ui.vertical(this);
         dl.addView(Ui.text(this,"↓  ЗАГРУЗКА",12,Ui.CYAN,true));Ui.addSpace(dl,this,6);
         dl.addView(liveValue("dl",speed("realtime_rx_thrpt"),19,Ui.TEXT,true));
-        ul.addView(Ui.text(this,"↑  ОТДАЧА",12,Ui.ORANGE,true));Ui.addSpace(ul,this,6);
-        ul.addView(liveValue("ul",speed("realtime_tx_thrpt"),19,Ui.TEXT,true));
+        ul.setGravity(Gravity.END);
+        TextView upLabel=Ui.text(this,"↑  ОТДАЧА",12,Ui.ORANGE,true);
+        upLabel.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);ul.addView(upLabel);Ui.addSpace(ul,this,6);
+        TextView upValue=liveValue("ul",speed("realtime_tx_thrpt"),19,Ui.TEXT,true);
+        upValue.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);ul.addView(upValue);
         summary.addView(dl,new LinearLayout.LayoutParams(0,-2,1));summary.addView(ul,new LinearLayout.LayoutParams(0,-2,1));speeds.addView(summary);
         Ui.addSpace(speeds,this,13);Ui.SpeedGraph graph=new Ui.SpeedGraph(this);
         java.util.Iterator<Float> itDl=historyDl.iterator(),itUl=historyUl.iterator();
@@ -1011,7 +1023,12 @@ public final class MainActivity extends Activity {
         limit.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-2,-2);
         params.leftMargin=d(10);row.addView(limit,params);
-        target.addView(row);
+        row.setOnClickListener(v->{
+            RouterClient.Device known=new RouterClient.Device();
+            known.mac=mac;known.name=savedLimitDeviceName(mac);
+            chooseLimit(known);
+        });
+        Ui.animateTouch(row);target.addView(row);
     }
     private void clients(){
         clientDlValues.clear();clientUlValues.clear();clientLimitValues.clear();qosStatusLive=null;
@@ -1057,6 +1074,49 @@ public final class MainActivity extends Activity {
             card.setOnClickListener(v->showDevice(dev));Ui.animateTouch(card);addCard(card);
             clientDlValues.put(dev.mac,down[0]);clientUlValues.put(dev.mac,up[0]);clientLimitValues.put(dev.mac,cap[0]);
         }
+        showRememberedClients();
+    }
+    private void showRememberedClients(){
+        TreeSet<String> known=new TreeSet<>();
+        for(String key:prefs.getAll().keySet()){
+            String mac="";
+            if(key.startsWith("alias_"))mac=key.substring("alias_".length());
+            else if(key.startsWith("cached_client_name_"))mac=key.substring("cached_client_name_".length());
+            if(!mac.isEmpty()){
+                String normalized=RouterClient.normalizeMac(mac);
+                if(!normalized.isEmpty())known.add(normalized);
+            }
+        }
+        for(String mac:qos.limits().keySet()){
+            String normalized=RouterClient.normalizeMac(mac);
+            if(!normalized.isEmpty())known.add(normalized);
+        }
+        if(blocked!=null)for(String mac:blocked.black){
+            String normalized=RouterClient.normalizeMac(mac);
+            if(!normalized.isEmpty())known.add(normalized);
+        }
+        for(RouterClient.Device active:devices)if(active!=null)known.remove(RouterClient.normalizeMac(active.mac));
+        if(known.isEmpty())return;
+        LinearLayout saved=Ui.card(this);
+        saved.addView(Ui.button(this,(knownClientsExpanded?"⌃  ":"⌄  ")+"Сохранённые устройства ("+known.size()+")",
+            Ui.CARD2,Ui.TEXT,()->{knownClientsExpanded=!knownClientsExpanded;draw(true);}));
+        if(knownClientsExpanded){
+            Ui.addSpace(saved,this,9);
+            saved.addView(Ui.text(this,"Устройства отсутствуют в текущем списке. Можно изменить локально сохранённый лимит; применение на AX8 требует повторного подключения и активного мониторинга.",12,Ui.MUTED,false));
+            Ui.addSpace(saved,this,9);
+            int shown=0;
+            for(String mac:known){
+                if(shown++>=100){saved.addView(Ui.text(this,"Показаны первые 100 устройств",11,Ui.MUTED,false));break;}
+                String label=savedLimitDeviceName(mac)+" · "+mac+" · "+limitName(qos.limits().get(mac));
+                saved.addView(Ui.button(this,label,Ui.CARD2,Ui.CYAN,()->{
+                    RouterClient.Device remembered=new RouterClient.Device();
+                    remembered.mac=mac;remembered.name=savedLimitDeviceName(mac);
+                    chooseLimit(remembered);
+                }));
+                Ui.addSpace(saved,this,5);
+            }
+        }
+        addCard(saved);
     }
     private static String humanRate(double bps){
         if(Double.isNaN(bps))return "—";
@@ -1299,9 +1359,27 @@ public final class MainActivity extends Activity {
     }
     private void applyLimitFromSheet(Dialog[] sheet,RouterClient.Device dev,Integer kb){
         if(sheet[0]!=null)sheet[0].dismiss();
-        confirm("Применить QoS","Установить для "+prefs.getString("alias_"+dev.mac,dev.name)+" лимит «"+
+        String mac=RouterClient.normalizeMac(dev.mac);
+        if(mac.isEmpty()){toast("Некорректный MAC устройства");return;}
+        boolean live=routerStatusFresh()&&error.isEmpty();
+        boolean present=false;
+        for(RouterClient.Device active:devices)if(active!=null&&mac.equals(RouterClient.normalizeMac(active.mac))){present=true;break;}
+        if(!live||!present){
+            confirm("Сохранить лимит локально","Устройство не подтверждено как подключённое к AX8. Сохранить «"+
+                limitName(kb)+"» для "+prefs.getString("alias_"+mac,dev.name)+
+                "? Это НЕ отправит команду роутеру. Применение возможно только при следующем обнаружении устройства и активном мониторинге AX8.",
+                ()->{
+                    Map<String,Integer> saved=qos.limits();
+                    if(kb==null)saved.remove(mac);else saved.put(mac,kb);
+                    qos.persist(saved);
+                    toast("Лимит сохранён локально. Применение на AX8 не подтверждено.");
+                    draw(true);
+                });
+            return;
+        }
+        confirm("Применить QoS","Установить для "+prefs.getString("alias_"+mac,dev.name)+" лимит «"+
             limitName(kb)+"» на приём и отдачу через Telnet?",
-            ()->action("QoS · "+limitName(kb),p->qos.setLimit(dev.mac,kb,devices,p)));
+            ()->action("QoS · "+limitName(kb),p->qos.setLimit(mac,kb,devices,p)));
     }
     private void sms(){
         smsSignature=smsFingerprint();
@@ -1453,7 +1531,7 @@ public final class MainActivity extends Activity {
                 LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,d(49),1);lp.rightMargin=d(8);one.addView(btn,lp);
             }grid.addView(one);Ui.addSpace(grid,this,8);
         }
-        bands.addView(grid);bands.addView(Ui.button(this,"◎  AUTO BAND  ·  Все поддерживаемые",0xFF174A4B,Ui.CYAN,()->bandConfirm(0)));addCard(bands);
+        bands.addView(grid);bands.addView(Ui.button(this,"AUTO",0xFF174A4B,Ui.CYAN,()->bandConfirm(0)));addCard(bands);
         LinearLayout technical=Ui.card(this);Ui.title(technical,this,"Расширенная диагностика","Поля радиомодуля и параметры LTE");Ui.addSpace(technical,this,9);
         addRows(technical,new String[][]{{"RSRP",reading(rsrp(),"dBm")},{"RSRQ",reading(rsrq(),"dB")},{"SINR",reading(sinr(),"dB")},{"RSSI",rssi()},
             {"Bandwidth",bandwidth()}});addCard(technical);
@@ -1463,15 +1541,19 @@ public final class MainActivity extends Activity {
         if(savedLimits.isEmpty())q.addView(Ui.text(this,"Сохранённых правил пока нет. Добавьте лимит в разделе «Клиенты».",12,Ui.MUTED,false));
         else {
             Ui.addSpace(q,this,8);
-            q.addView(Ui.text(this,"Список сохранённых ограничений",12,Ui.MUTED,true));
-            ArrayList<String> macs=new ArrayList<>(savedLimits.keySet());
-            macs.sort((a,b)->savedLimitDeviceName(a).compareToIgnoreCase(savedLimitDeviceName(b)));
-            for(String mac:macs)savedLimitRow(q,mac,savedLimits.get(mac));
-            Ui.addSpace(q,this,8);
-            q.addView(Ui.button(this,"↻  Применить сохранённые лимиты",Ui.CARD2,Ui.TEXT,
-                ()->confirm("Восстановить QoS","Пересобрать правила IPv4/IPv6 на роутере?",()->action("Применение QoS",p->{
-                    List<RouterClient.Device> list=api.devices();qos.restore(list,p);
-                }))));
+            q.addView(Ui.button(this,(savedLimitsExpanded?"⌃  ":"⌄  ")+"Сохранённые ограничения ("+savedLimits.size()+")",
+                Ui.CARD2,Ui.TEXT,()->{savedLimitsExpanded=!savedLimitsExpanded;draw(true);}));
+            if(savedLimitsExpanded){
+                Ui.addSpace(q,this,8);
+                ArrayList<String> macs=new ArrayList<>(savedLimits.keySet());
+                macs.sort((a,b)->savedLimitDeviceName(a).compareToIgnoreCase(savedLimitDeviceName(b)));
+                for(String mac:macs)savedLimitRow(q,mac,savedLimits.get(mac));
+                Ui.addSpace(q,this,8);
+                q.addView(Ui.button(this,"↻  Применить сохранённые лимиты",Ui.CARD2,Ui.TEXT,
+                    ()->confirm("Восстановить QoS","Пересобрать правила IPv4/IPv6 на роутере?",()->action("Применение QoS",p->{
+                        List<RouterClient.Device> list=api.devices();qos.restore(list,p);
+                    }))));
+            }
         }
         Ui.addSpace(q,this,10);
         q.addView(Ui.button(this,"◎  Проверить реальные правила tc",Ui.CARD2,Ui.YELLOW,()->{
@@ -1501,7 +1583,7 @@ public final class MainActivity extends Activity {
     }
     private void networkReconnect(){confirm("Переподключить WAN","Мобильный интернет временно отключится. Продолжить?",()->action("Переподключение",p->api.reconnect(p)));}
     private void bandConfirm(int b){
-        String label=b==0?"AUTO BAND":"B"+b;
+        String label=b==0?"AUTO":"B"+b;
         confirm("Сменить LTE Band","Применить "+label+"? Роутер перезагрузится. Дождитесь подтверждения LockBandSuc перед перезагрузкой.",
             ()->action("Band Lock "+label,p->api.setBand(b,p),b));
     }
@@ -1983,8 +2065,6 @@ public final class MainActivity extends Activity {
             });
         }));
         Ui.addSpace(theme,this,13);
-        theme.addView(Ui.button(this,"Aa  Шрифт · "+fontLabel(prefs.getString("font","sans-serif")),Ui.CARD2,Ui.TEXT,()->chooseFont()));
-        Ui.addSpace(theme,this,12);
         theme.addView(Ui.infoRow(this,"Масштаб текста",prefs.getInt("font_scale",100)+"%",Ui.CYAN));
         SeekBar size=new SeekBar(this);size.setMax(55);size.setProgress(prefs.getInt("font_scale",100)-80);
         size.setProgressTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));

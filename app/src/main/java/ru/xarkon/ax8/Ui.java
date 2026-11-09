@@ -41,7 +41,7 @@ final class Ui {
         // Prevent invisible text on pale or custom backgrounds: base text is theme-appropriate.
         FONT_SCALE=Math.max(.8f,Math.min(1.35f,pref.getInt("font_scale",100)/100f));
         CORNER=pref.getInt("corner",22);
-        FONT=pref.getString("font","sans-serif");
+        FONT="sans-serif-condensed";
         MOTION=pref.getBoolean("motion",true);COMPACT=pref.getBoolean("compact",false);
     }
     static boolean isLight(){return (Color.red(BG)*299+Color.green(BG)*587+Color.blue(BG)*114)/1000>155;}
@@ -310,16 +310,19 @@ final class Ui {
             int rightPad=dp(getContext(),58),top=dp(getContext(),6),bottom=dp(getContext(),14),left=dp(getContext(),2);
             int plotW=Math.max(dp(getContext(),80),w-rightPad-left),plotH=Math.max(dp(getContext(),36),h-top-bottom);
             float max=1f;for(float x:down)max=Math.max(max,x);for(float x:up)max=Math.max(max,x);
-            float mid=max/2f;
             p.setShader(null);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(getContext(),1));p.setColor(0x33506A80);
-            for(float ratio:new float[]{0f,.5f,1f}){
-                float y=top+plotH-(plotH*ratio);c.drawLine(left,y,left+plotW,y,p);
+            for(int mark=0;mark<=4;mark++){
+                float ratio=mark/4f;
+                float y=top+plotH-(plotH*ratio);
+                c.drawLine(left,y,left+plotW,y,p);
             }
             p.setStyle(Paint.Style.FILL);p.setTextAlign(Paint.Align.RIGHT);p.setTypeface(Typeface.create(FONT,Typeface.NORMAL));
-            p.setTextSize(dp(getContext(),10));p.setColor(MUTED);
-            c.drawText(rate(max),w-dp(getContext(),2),top+dp(getContext(),3),p);
-            c.drawText(rate(mid),w-dp(getContext(),2),top+plotH/2f+dp(getContext(),3),p);
-            c.drawText("0 B/s",w-dp(getContext(),2),top+plotH+dp(getContext(),3),p);
+            p.setTextSize(dp(getContext(),9));p.setColor(MUTED);
+            for(int mark=0;mark<=4;mark++){
+                float ratio=mark/4f;
+                float y=top+plotH-(plotH*ratio);
+                c.drawText(mark==0?"0 B/s":rate(max*ratio),w-dp(getContext(),2),y+dp(getContext(),3),p);
+            }
             drawSeries(c,down,max,plotW,plotH,left,top,CYAN,0x3045DACD);
             drawSeries(c,up,max,plotW,plotH,left,top,ORANGE,0x26FFB765);
         }
