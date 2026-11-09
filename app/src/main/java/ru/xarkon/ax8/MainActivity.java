@@ -1053,6 +1053,9 @@ public final class MainActivity extends Activity {
         addCard(summary);
         if(devices.isEmpty())rowCard(clientsAt>0?"Устройства не обнаружены":"Список клиентов ещё не загружен",
             clientsAt>0?"Подключитесь к AX8 и обновите список":"Ожидание ответа AX8. При необходимости повторите обновление",null,Ui.MUTED,null);
+        if(clientsAt>0&&System.currentTimeMillis()-clientsAt>Math.max(10000L,refreshInterval()*3L)){
+            rowCard("Список клиентов устарел","Показаны последние известные данные. Действия QoS не применяются по старым IP-адресам. Обновите соединение с AX8.",null,Ui.ORANGE,null);
+        }
         for(RouterClient.Device dev:devices){
             boolean deny=blocked!=null&&blocked.black.contains(dev.mac);
             Integer limit=qos.effectiveLimit(dev.mac);
@@ -1361,13 +1364,17 @@ public final class MainActivity extends Activity {
         if(sheet[0]!=null)sheet[0].dismiss();
         String mac=RouterClient.normalizeMac(dev.mac);
         if(mac.isEmpty()){toast("Некорректный MAC устройства");return;}
-        boolean live=routerStatusFresh()&&error.isEmpty();
+        // A fresh status reply does not make an older station_list fresh.
+        // Never apply router-side tc rules using a stale client/IP snapshot.
+        boolean live=routerStatusFresh()&&error.isEmpty()
+            &&clientsAt>0&&System.currentTimeMillis()-clientsAt<=Math.max(10000L,refreshInterval()*3L)
+            &&sectionError.isEmpty();
         boolean present=false;
         for(RouterClient.Device active:devices)if(active!=null&&mac.equals(RouterClient.normalizeMac(active.mac))){present=true;break;}
         if(!live||!present){
-            confirm("Сохранить лимит локально","Устройство не подтверждено как подключённое к AX8. Сохранить «"+
+            confirm("Сохранить лимит локально","Свежий список подключённых устройств AX8 недоступен либо устройство отсутствует в нём. Сохранить «"+
                 limitName(kb)+"» для "+prefs.getString("alias_"+mac,dev.name)+
-                "? Это НЕ отправит команду роутеру. Применение возможно только при следующем обнаружении устройства и активном мониторинге AX8.",
+                "? Это НЕ отправит команду роутеру. Применение возможно только после получения свежего списка клиентов и при активном мониторинге AX8.",
                 ()->{
                     Map<String,Integer> saved=qos.limits();
                     if(kb==null)saved.remove(mac);else saved.put(mac,kb);
