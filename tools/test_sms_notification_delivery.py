@@ -8,6 +8,11 @@ SOURCE = (pathlib.Path(__file__).resolve().parents[1] /
 
 
 class SmsDeliveryHandoffTest(unittest.TestCase):
+    def test_null_sms_entries_are_ignored(self):
+        # A malformed router response must not abort the whole SMS poll.
+        self.assertIn("for(RouterClient.Sms item:smsList){\\n                if(item==null)continue;", SOURCE)
+        self.assertIn("RouterClient.Sms item=smsList.get(i);\\n                    if(item==null)continue;", SOURCE)
+
     def test_notification_reports_success(self):
         section = SOURCE.split("private boolean notifyNewSms(", 1)[1].split(
             "private static String joinUnreadIds", 1)[0]
