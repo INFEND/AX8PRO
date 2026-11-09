@@ -55,9 +55,13 @@ public final class RouterBackgroundService extends Service {
                 try{backgroundCycle();}
                 catch(Exception e){
                     String reason=e.getMessage()==null?e.toString():e.getMessage();
-                    prefs.edit().putLong("bg_last_poll",System.currentTimeMillis())
-                        .putString("bg_error",reason).apply();
-                    notifyState("Фоновый опрос AX8: "+reason);
+                    // An in-flight request can fail after the service is stopped.
+                    // Never overwrite the next session's status with that stale error.
+                    if(!stopping){
+                        prefs.edit().putLong("bg_last_poll",System.currentTimeMillis())
+                            .putString("bg_error",reason).apply();
+                        notifyState("Фоновый опрос AX8: "+reason);
+                    }
                 }finally{
                     // A queued poll may outlive stopSelf()/onDestroy(). Never
                     // keep its wake locks or tune cadence after shutdown.
