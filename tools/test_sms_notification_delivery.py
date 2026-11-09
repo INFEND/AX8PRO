@@ -23,6 +23,13 @@ class SmsDeliveryHandoffTest(unittest.TestCase):
         self.assertLess(section.index("pending.remove(item.id)"),
                         section.index("delivered.add(item.id)"))
 
+    def test_delivered_sms_ids_are_persisted_synchronously(self):
+        section = SOURCE.split('putString("bg_sms_seen_ids",mergedIds)', 1)[1].split(
+            "try{radio=router.status()", 1)[0]
+        self.assertIn('putString("bg_sms_json",smsJson(smsList).toString())', section)
+        self.assertIn(".commit();", section)
+        self.assertNotIn(".apply();", section)
+
     def test_seen_ids_committed_after_notification_attempts(self):
         section = SOURCE.split("List<String> freshIds=SmsAlertPlanner.newUnreadIds(", 1)[1].split(
             "try{radio=router.status()", 1)[0]
