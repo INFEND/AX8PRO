@@ -66,7 +66,8 @@ public final class RouterBackgroundService extends Service {
                     // A queued poll may outlive stopSelf()/onDestroy(). Never
                     // keep its wake locks or tune cadence after shutdown.
                     if(stopping)releaseLocks();
-                    if(!stopping && prefs.getBoolean("refresh_auto",true)){
+                    // A poll that lost ownership must not retune the foreground cadence.
+                    if(ownsBackgroundCycle() && prefs.getBoolean("refresh_auto",true)){
                         long elapsed=android.os.SystemClock.elapsedRealtime()-started;
                         int old=prefs.getInt("auto_poll_ms",500);
                         // A current successful radio sample confirms that AX8 has answered.
