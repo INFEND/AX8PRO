@@ -408,7 +408,7 @@ public final class RouterBackgroundService extends Service {
             editor.putLong("bg_fallback_dl_bits",Double.doubleToRawLongBits(rx));
             editor.putLong("bg_fallback_ul_bits",Double.doubleToRawLongBits(tx));
         }
-        if(devices!=null){editor.putInt("bg_clients",devices.size())
+        if(devices!=null){int validClients=0;for(RouterClient.Device device:devices)if(device!=null)validClients++;editor.putInt("bg_clients",validClients)
             .putString("bg_devices_json",devicesJson(devices).toString())
             .putLong("bg_devices_at",now);}
         if(blockState!=null){editor.putInt("bg_blocked",blockState.black.size())
