@@ -304,10 +304,12 @@ public final class RouterBackgroundService extends Service {
         if(!ownsBackgroundCycle()){releaseLocks();return;}
         if(smsList!=null){
             int unread=0;
+            int validSms=0;
             LinkedHashSet<String> seen=new LinkedHashSet<>();
             List<String> unreadIds=new ArrayList<>();
             for(RouterClient.Sms item:smsList){
                 if(item==null)continue;
+                validSms++;
                 if(item.id!=null&&!item.id.isEmpty())seen.add(item.id);
                 if(item.unread()){
                     unread++;
@@ -341,7 +343,7 @@ public final class RouterBackgroundService extends Service {
             seen.removeAll(freshIds);
             seen.addAll(delivered);
             String mergedIds=SmsAlertPlanner.mergeSeenIds(previous,seen);
-            boolean smsPersisted=prefs.edit().putInt("bg_sms",smsList.size()).putInt("bg_sms_unread",unread)
+            boolean smsPersisted=prefs.edit().putInt("bg_sms",validSms).putInt("bg_sms_unread",unread)
                 .putString("bg_sms_seen_ids",mergedIds).putBoolean("bg_sms_seen_initialized",true)
                 // Persist delivered SMS IDs before continuing with LTE/network work.
                 // apply() can lose the deduplication record on process death.
