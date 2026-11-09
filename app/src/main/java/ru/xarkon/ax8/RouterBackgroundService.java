@@ -306,6 +306,9 @@ public final class RouterBackgroundService extends Service {
                     if(item.id!=null&&!item.id.isEmpty())unreadIds.add(item.id);
                 }
             }
+            // The UI may regain ownership while SMS IDs are being processed.
+            // Do not publish a stale background SMS snapshot or alert afterward.
+            if(!ownsBackgroundCycle()){releaseLocks();return;}
             String previous=prefs.getString("bg_sms_seen_ids","");
             boolean initialized=prefs.getBoolean("bg_sms_seen_initialized",false);
             List<String> freshIds=SmsAlertPlanner.newUnreadIds(unreadIds,previous,initialized);
@@ -319,7 +322,7 @@ public final class RouterBackgroundService extends Service {
             // oldest first, rather than silently dropping all but one from a batch.
             if(!freshIds.isEmpty()){
                 Set<String> pending=new HashSet<>(freshIds);
-                for(int i=smsList.size()-1;i>=0&&!stopping;i--){
+                for(int i=smsList.size()-1;i>=0&&ownsBackgroundCycle();i--){
                     RouterClient.Sms item=smsList.get(i);
                     if(pending.remove(item.id))notifyNewSms(item,unread);
                 }
