@@ -12,6 +12,7 @@ class SmsDeliveryHandoffTest(unittest.TestCase):
         # A malformed router response must not abort the whole SMS poll.
         self.assertIn("for(RouterClient.Sms item:smsList){\\n                if(item==null)continue;", SOURCE)
         self.assertIn("RouterClient.Sms item=smsList.get(i);\\n                    if(item==null)continue;", SOURCE)
+        self.assertIn("for(RouterClient.Sms s:list){\\n            if(s==null)continue;", SOURCE)
 
     def test_notification_reports_success(self):
         section = SOURCE.split("private boolean notifyNewSms(", 1)[1].split(
