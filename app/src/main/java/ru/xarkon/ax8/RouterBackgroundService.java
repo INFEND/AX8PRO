@@ -55,9 +55,9 @@ public final class RouterBackgroundService extends Service {
                 try{backgroundCycle();}
                 catch(Exception e){
                     String reason=e.getMessage()==null?e.toString():e.getMessage();
-                    // An in-flight request can fail after the service is stopped.
-                    // Never overwrite the next session's status with that stale error.
-                    if(!stopping){
+                    // A late failure must not overwrite status or notify after
+                    // the UI takes ownership, the endpoint changes, or shutdown.
+                    if(ownsBackgroundCycle()){
                         prefs.edit().putLong("bg_last_poll",System.currentTimeMillis())
                             .putString("bg_error",reason).apply();
                         notifyState("Фоновый опрос AX8: "+reason);
