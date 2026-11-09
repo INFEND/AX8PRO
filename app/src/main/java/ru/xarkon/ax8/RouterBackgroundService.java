@@ -254,6 +254,7 @@ public final class RouterBackgroundService extends Service {
     }
     private static JSONArray smsJson(List<RouterClient.Sms> list){
         JSONArray arr=new JSONArray();if(list==null)return arr;for(RouterClient.Sms s:list){
+            if(s==null)continue;
             JSONObject o=new JSONObject();try{o.put("id",s.id);o.put("number",s.number);o.put("date",s.date);o.put("content",s.content);o.put("tag",s.tag);}catch(Exception ignored){}
             arr.put(o);
         }return arr;
