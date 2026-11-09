@@ -17,7 +17,7 @@ class BackgroundSmsHandoffTest(unittest.TestCase):
 
     def test_sms_alert_loop_rechecks_ownership_for_each_message(self):
         source = SOURCE.read_text(encoding="utf-8")
-        section = source.split("if(!freshIds.isEmpty()){", 1)[1].split(
+        section = source.split("if(!pending.isEmpty()){", 1)[1].split(
             "try{radio=router.status();", 1
         )[0]
         self.assertIn("i>=0&&ownsBackgroundCycle()", section)
