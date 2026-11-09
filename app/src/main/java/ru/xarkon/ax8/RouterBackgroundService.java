@@ -340,7 +340,7 @@ public final class RouterBackgroundService extends Service {
             String mergedIds=SmsAlertPlanner.mergeSeenIds(previous,seen);
             prefs.edit().putInt("bg_sms",smsList.size()).putInt("bg_sms_unread",unread)
                 .putString("bg_sms_seen_ids",mergedIds).putBoolean("bg_sms_seen_initialized",true)
-                .putString("bg_sms_json",smsJson(smsList).toString()).putLong("bg_sms_at",System.currentTimeMillis()).apply();
+                // Persist delivered SMS IDs before continuing with LTE/network work.\n                // apply() can lose the deduplication record on process death.\n                .putString("bg_sms_json",smsJson(smsList).toString()).putLong("bg_sms_at",System.currentTimeMillis()).commit();
         }
         try{radio=router.status();}catch(Exception e){statusIssue=e.getMessage()==null?e.toString():e.getMessage();}
         // A slow LTE request can finish after the UI takes ownership or the
