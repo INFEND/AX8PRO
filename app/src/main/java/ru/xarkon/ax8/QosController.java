@@ -226,7 +226,9 @@ final class QosController implements AutoCloseable {
         resyncPolicy.onAttempt(nowNs);
         progress.note("QoS: проверка соответствия MAC и IP...");
         apply(devices,saved,progress);
-        resyncPolicy.onSuccess(signature);
+        // apply() may enrich IPv6 neighbors; remember the rules actually
+        // installed, not the earlier incomplete station-list snapshot.
+        rememberApplied(devices,saved);
     }
     /** Query actual tc classes and ingress/egress filters on the router. Presence of filters
      *  is not proof of effective shaping if the firmware uses hardware/offload forwarding.
