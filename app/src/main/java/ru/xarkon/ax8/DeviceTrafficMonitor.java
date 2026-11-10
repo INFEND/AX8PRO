@@ -108,8 +108,33 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         }
         }
     }
-    private static boolean validIp4(String s){return s!=null&&s.matches("(?:\\d{1,3}\\.){3}\\d{1,3}");}
-    private static boolean validIp6(String s){return s!=null&&s.matches("[0-9a-fA-F:]+");}
+    // Validate before embedding an address in router shell commands. A character-only
+    // check is insufficient: 999.999.999.999 and "::::" are not IP addresses.
+    private static boolean validIp4(String s){
+        if(s==null)return false;
+        String[] parts=s.split("\\.",-1);
+        if(parts.length!=4)return false;
+        for(String part:parts){
+            if(part.isEmpty()||part.length()>3)return false;
+            int value=0;
+            for(int i=0;i<part.length();i++){
+                char c=part.charAt(i);
+                if(c<'0'||c>'9')return false;
+                value=value*10+(c-'0');
+            }
+            if(value>255)return false;
+        }
+        return true;
+    }
+    private static boolean validIp6(String s){
+        if(s==null||s.isEmpty()||s.indexOf(':')<0||
+           !s.matches("[0-9a-fA-F:]+"))return false;
+        try{
+            return java.net.InetAddress.getByName(s) instanceof java.net.Inet6Address;
+        }catch(java.net.UnknownHostException ignored){
+            return false;
+        }
+    }
     private static String shortText(String s){
         if(s==null||s.trim().isEmpty())return "неизвестная ошибка";
         s=s.replace('\r',' ').replace('\n',' ').trim();return s.length()>250?s.substring(0,250)+"…":s;
