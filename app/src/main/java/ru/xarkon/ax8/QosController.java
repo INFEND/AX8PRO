@@ -51,13 +51,15 @@ final class QosController implements AutoCloseable {
         String normalized=RouterClient.normalizeMac(mac);if(normalized.isEmpty())throw new IOException("Некорректный MAC");
         Map<String,Integer> old=limits();Map<String,Integer> next=new HashMap<>(old);
         if(kb==null)next.remove(normalized);else next.put(normalized,kb);
-        try {apply(devices,merge(next),progress);persist(next);}
+        try {Map<String,Integer> applied=merge(next);apply(devices,applied,progress);persist(next);rememberApplied(devices,applied);}
         catch(Exception e){
             try{apply(devices,merge(old),m->{});}catch(Exception ignored){}
             throw e;
         }
     }
-    synchronized void restore(List<RouterClient.Device> devices,RouterClient.Progress progress)throws Exception{apply(devices,merge(limits()),progress);}
+    synchronized void restore(List<RouterClient.Device> devices,RouterClient.Progress progress)throws Exception{
+        Map<String,Integer> applied=merge(limits());apply(devices,applied,progress);rememberApplied(devices,applied);
+    }
     private Map<String,Integer> merge(Map<String,Integer> saved){
         Map<String,Integer> joined=new HashMap<>(saved);
         for(Map.Entry<String,Integer> e:priorityOverrides.entrySet()){
@@ -76,7 +78,7 @@ final class QosController implements AutoCloseable {
         }
         if(wanted.equals(former))return;
         priorityOverrides=wanted;
-        try{apply(devices,merge(limits()),progress);}
+        try{Map<String,Integer> applied=merge(limits());apply(devices,applied,progress);rememberApplied(devices,applied);}
         catch(Exception e){priorityOverrides=former;try{apply(devices,merge(limits()),m->{});}catch(Exception ignored){}throw e;}
     }
     synchronized boolean priorityActive(){return !priorityOverrides.isEmpty();}
@@ -89,7 +91,7 @@ final class QosController implements AutoCloseable {
             if(d.mac.equals(ownerMac))continue;
             if(kb==null)wanted.remove(d.mac);else wanted.put(d.mac,kb);
         }
-        try{apply(devices,merge(wanted),progress);persist(wanted);}
+        try{Map<String,Integer> applied=merge(wanted);apply(devices,applied,progress);persist(wanted);rememberApplied(devices,applied);}
         catch(Exception e){try{apply(devices,merge(current),m->{});}catch(Exception ignored){}throw e;}
     }
     private void enrichIpv6Neighbors(List<RouterClient.Device> devices) {
@@ -178,6 +180,24 @@ final class QosController implements AutoCloseable {
         progress.note("tc настроен. Проверьте фильтры и реальную скорость через диагностику QoS");
         }
     }
+    /** Stable fingerprint for an applied client/IP/rate snapshot. */
+    private static String signature(List<Active> active){
+        ArrayList<String> ids=new ArrayList<>();
+        for(Active a:active){
+            ArrayList<String> ipv6=new ArrayList<>(a.v6);
+            Collections.sort(ipv6);
+            ids.add(a.mac+"="+a.ip+"/"+String.join(",",ipv6)+"/"+a.kb);
+        }
+        Collections.sort(ids);
+        return String.join(";",ids);
+    }
+    /** A successful explicit QoS write already installed these rules.
+     *  Avoid repeating the entire tc/iptables transaction on the next monitor tick.
+     */
+    private void rememberApplied(List<RouterClient.Device> devices,Map<String,Integer> requested){
+        List<Active> active=selected(devices,requested);
+        if(!active.isEmpty())resyncPolicy.onSuccess(signature(active));
+    }
     /** Reapply saved MAC-based rules when a client gets another IP or after a new session.
      *  This prevents an old tc u32 filter remaining tied to the previous DHCP address.
      */
@@ -200,12 +220,7 @@ final class QosController implements AutoCloseable {
         if(needsIpv6Lookup)enrichIpv6Neighbors(devices);
         List<Active> eligible=selected(devices,saved);
         if(eligible.isEmpty())return;
-        ArrayList<String> ids=new ArrayList<>();
-        for(Active a:eligible){
-            ArrayList<String> ipv6=new ArrayList<>(a.v6);Collections.sort(ipv6);
-            ids.add(a.mac+"="+a.ip+"/"+String.join(",",ipv6)+"/"+a.kb);
-        }
-        Collections.sort(ids);String signature=String.join(";",ids);
+        String signature=signature(eligible);
         long nowNs=System.nanoTime();
         if(!resyncPolicy.shouldResync(signature,nowNs))return;
         resyncPolicy.onAttempt(nowNs);
