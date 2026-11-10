@@ -1386,7 +1386,21 @@ public final class MainActivity extends Activity {
         }
         confirm("Применить QoS","Установить для "+prefs.getString("alias_"+mac,dev.name)+" лимит «"+
             limitName(kb)+"» на приём и отдачу через Telnet?",
-            ()->action("QoS · "+limitName(kb),p->qos.setLimit(mac,kb,devices,p)));
+            ()->action("QoS · "+limitName(kb),p->{
+                // Confirmation can remain open while a client reconnects or receives
+                // a different DHCP address. Re-read the station list on the worker,
+                // and never use the UI snapshot for router-side QoS changes.
+                List<RouterClient.Device> current=api.devices();
+                boolean found=false;
+                for(RouterClient.Device candidate:current){
+                    if(candidate!=null&&mac.equals(RouterClient.normalizeMac(candidate.mac))){
+                        found=true;break;
+                    }
+                }
+                if(!found)throw new java.io.IOException(
+                    "Устройство больше не подключено. Лимит не применён; обновите список клиентов.");
+                qos.setLimit(mac,kb,current,p);
+            }));
     }
     private void sms(){
         smsSignature=smsFingerprint();
