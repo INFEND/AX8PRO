@@ -48,6 +48,13 @@ final class QosResyncPolicy {
         return out;
     }
 
+    /** A failed or uncertain router transaction must never leave a trusted applied snapshot. */
+    void invalidate() {
+        lastAppliedSignature = "";
+        pendingReducedSignature = "";
+        attempted = false;
+    }
+
     void onAttempt(long nowNs) {
         attempted = true;
         lastAttemptNs = nowNs;

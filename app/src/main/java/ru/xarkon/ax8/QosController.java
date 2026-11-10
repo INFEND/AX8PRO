@@ -53,7 +53,8 @@ final class QosController implements AutoCloseable {
         if(kb==null)next.remove(normalized);else next.put(normalized,kb);
         try {Map<String,Integer> applied=merge(next);apply(devices,applied,progress);persist(next);rememberApplied(devices,applied);}
         catch(Exception e){
-            try{apply(devices,merge(old),m->{});}catch(Exception ignored){}
+            resyncPolicy.invalidate();
+            try{apply(devices,merge(old),m->{});rememberApplied(devices,merge(old));}catch(Exception ignored){}
             throw e;
         }
     }
@@ -79,7 +80,12 @@ final class QosController implements AutoCloseable {
         if(wanted.equals(former))return;
         priorityOverrides=wanted;
         try{Map<String,Integer> applied=merge(limits());apply(devices,applied,progress);rememberApplied(devices,applied);}
-        catch(Exception e){priorityOverrides=former;try{apply(devices,merge(limits()),m->{});}catch(Exception ignored){}throw e;}
+        catch(Exception e){
+            resyncPolicy.invalidate();
+            priorityOverrides=former;
+            try{Map<String,Integer> rollback=merge(limits());apply(devices,rollback,m->{});rememberApplied(devices,rollback);}catch(Exception ignored){}
+            throw e;
+        }
     }
     synchronized boolean priorityActive(){return !priorityOverrides.isEmpty();}
 
@@ -92,7 +98,11 @@ final class QosController implements AutoCloseable {
             if(kb==null)wanted.remove(d.mac);else wanted.put(d.mac,kb);
         }
         try{Map<String,Integer> applied=merge(wanted);apply(devices,applied,progress);persist(wanted);rememberApplied(devices,applied);}
-        catch(Exception e){try{apply(devices,merge(current),m->{});}catch(Exception ignored){}throw e;}
+        catch(Exception e){
+            resyncPolicy.invalidate();
+            try{Map<String,Integer> rollback=merge(current);apply(devices,rollback,m->{});rememberApplied(devices,rollback);}catch(Exception ignored){}
+            throw e;
+        }
     }
     private void enrichIpv6Neighbors(List<RouterClient.Device> devices) {
         try {
@@ -196,7 +206,7 @@ final class QosController implements AutoCloseable {
      */
     private void rememberApplied(List<RouterClient.Device> devices,Map<String,Integer> requested){
         List<Active> active=selected(devices,requested);
-        if(!active.isEmpty())resyncPolicy.onSuccess(signature(active));
+        resyncPolicy.onSuccess(signature(active));
     }
     /** Reapply saved MAC-based rules when a client gets another IP or after a new session.
      *  This prevents an old tc u32 filter remaining tied to the previous DHCP address.
@@ -225,7 +235,8 @@ final class QosController implements AutoCloseable {
         if(!resyncPolicy.shouldResync(signature,nowNs))return;
         resyncPolicy.onAttempt(nowNs);
         progress.note("QoS: проверка соответствия MAC и IP...");
-        apply(devices,saved,progress);
+        try{apply(devices,saved,progress);}
+        catch(Exception e){resyncPolicy.invalidate();throw e;}
         // apply() may enrich IPv6 neighbors; remember the rules actually
         // installed, not the earlier incomplete station-list snapshot.
         rememberApplied(devices,saved);
