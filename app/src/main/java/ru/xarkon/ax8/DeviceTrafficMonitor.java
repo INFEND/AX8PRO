@@ -82,9 +82,18 @@ final class DeviceTrafficMonitor implements AutoCloseable {
             }
             Map<String,long[]> totals=new HashMap<>();
             readCounters(active4,totals);
-            if(active6!=null)try{readCounters(active6,totals);}catch(Exception e){note="IPv6: ошибка счётчика · "+shortText(e.getMessage());}
+            boolean ipv6ReadFailed=false;
+            if(active6!=null)try{readCounters(active6,totals);}catch(Exception e){
+                ipv6ReadFailed=true;
+                note="IPv6: ошибка счётчика · "+shortText(e.getMessage());
+            }
             long now=System.nanoTime();double secs=lastAt==0?0:(now-lastAt)/1_000_000_000.0;
             for(RouterClient.Device d:devices){
+                // A partial dual-stack sample cannot be compared with a complete one.
+                // Keep IPv4-only stations updating, but re-baseline dual-stack stations.
+                if(ipv6ReadFailed && d.ipv6!=null && !d.ipv6.isEmpty()){
+                    prior.remove(d.mac);rates.remove(d.mac);continue;
+                }
                 long dl=0,ul=0;boolean found=false;
                 ArrayList<String> addresses=new ArrayList<>();addresses.add(d.ip);addresses.addAll(d.ipv6);
                 for(String ip:addresses){long[] n=totals.get(ip);if(n!=null){found=true;dl+=n[0];ul+=n[1];}}
