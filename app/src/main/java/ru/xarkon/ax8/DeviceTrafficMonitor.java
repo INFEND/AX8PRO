@@ -215,12 +215,17 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         TelnetShell.Result output=call(b,"-L "+b.chain+" -n -v -x");
         if(output.code!=0)throw new IOException("Не удалось прочитать "+b.label()+": "+reason(output));
         Matcher m=COUNTER.matcher(output.output);
+        int matchedRules=0;
         while(m.find()){
+            matchedRules++;
             long n;try{n=Long.parseLong(m.group(1));}catch(NumberFormatException e){continue;}
             String src=address(m.group(2)),dst=address(m.group(3));
             if(!src.equals("0.0.0.0")&&!src.equals("::"))counts.computeIfAbsent(src,k->new long[2])[1]+=n;
             if(!dst.equals("0.0.0.0")&&!dst.equals("::"))counts.computeIfAbsent(dst,k->new long[2])[0]+=n;
         }
+        // A successful shell command can still return an empty chain after a
+        // router ruleset reset. Never treat missing accounting rules as zero traffic.
+        if(matchedRules==0)throw new IOException("Отсутствуют правила учёта в "+b.label());
     }
     private void remove(Backend b){
         if(b==null)return;
