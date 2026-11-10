@@ -48,12 +48,20 @@ public static void main(String[] args) {
     check(false, validIp4("192.168.8.256"), "192.168.8.256");
     check(false, validIp4("192.168.8.1;reboot"), "shell injection");
     check(false, validIp4("192..8.1"), "empty octet");
+    check(false, validIp4("192.168.8.1\\nreboot"), "newline injection");
+    check(false, validIp4("192.168.8.1 "), "trailing whitespace");
+    check(false, validIp4("256.0.0.1"), "octet upper boundary");
+    check(false, validIp4("-1.0.0.1"), "negative octet");
     check(true, validIp6("2001:db8::1"), "2001:db8::1");
     check(true, validIp6("fe80::abcd"), "fe80::abcd");
     check(false, validIp6("::::"), "invalid compression");
     check(false, validIp6("2001:db8:::1"), "triple colon");
     check(false, validIp6("2001:db8::1;reboot"), "shell injection v6");
     check(false, validIp6("192.168.8.1"), "IPv4 passed as IPv6");
+    check(false, validIp6("2001:db8:0:0:0:0:0:0:1"), "nine hextets");
+    check(false, validIp6("2001:db8::gg"), "invalid hex digits");
+    check(false, validIp6("fe80::1%eth0"), "interface scope injection");
+    check(false, validIp6("2001:db8::1\\nreboot"), "newline injection v6");
 }
 }
 """ % methods
