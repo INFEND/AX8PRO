@@ -10,7 +10,10 @@ class QosResyncAfterManualWriteTest(unittest.TestCase):
     def test_resync_uses_same_signature(self):
         self.assertIn("String signature=signature(eligible);",src)
         self.assertIn("resyncPolicy.onSuccess(signature(active))",src)
-        self.assertIn("if(!active.isEmpty())",src)
+        # Empty applied sets must clear the trusted snapshot, otherwise a
+        # reappearing client can inherit a stale fingerprint and skip QoS.
+        remember=src.split("private void rememberApplied(",1)[1].split("/** Reapply",1)[0]
+        self.assertNotIn("if(!active.isEmpty())",remember)
     def test_no_router_write_in_remember(self):
         part=src.split("private void rememberApplied(",1)[1].split("/** Reapply",1)[0]
         self.assertNotIn("apply(",part)
