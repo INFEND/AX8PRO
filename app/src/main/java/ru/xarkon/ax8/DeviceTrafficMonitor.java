@@ -89,9 +89,9 @@ final class DeviceTrafficMonitor implements AutoCloseable {
             }
             long now=System.nanoTime();double secs=lastAt==0?0:(now-lastAt)/1_000_000_000.0;
             for(RouterClient.Device d:devices){
-                // A partial dual-stack sample cannot be compared with a complete one.
+                // Missing IPv6 backend or failed IPv6 read makes dual-stack totals partial.\n                // Never present IPv4-only bytes as a complete dual-stack rate.
                 // Keep IPv4-only stations updating, but re-baseline dual-stack stations.
-                if(ipv6ReadFailed && d.ipv6!=null && !d.ipv6.isEmpty()){
+                if((ipv6ReadFailed || active6==null) && d.ipv6!=null && !d.ipv6.isEmpty()){
                     prior.remove(d.mac);rates.remove(d.mac);continue;
                 }
                 long dl=0,ul=0;boolean found=false;
