@@ -38,6 +38,9 @@ final class DeviceTrafficMonitor implements AutoCloseable {
     private Backend active4,active6;
     private boolean started=false;
     private long lastAt=0;
+    // Retry an unavailable IPv6 backend without repeatedly rebuilding IPv4 chains.
+    private long nextIpv6ProbeAt=0;
+    private static final long IPV6_PROBE_INTERVAL_NS=30_000_000_000L;
     private final RetryBackoff retry=new RetryBackoff(15_000);
 
     DeviceTrafficMonitor(RouterClient router,android.content.SharedPreferences prefs){
@@ -70,15 +73,30 @@ final class DeviceTrafficMonitor implements AutoCloseable {
             if(!started||!ips4.equals(next4)||!ips6.equals(next6)){
                 if(active4!=null)remove(active4);
                 if(active6!=null)remove(active6);
-                active4=null;active6=null;
+                active4=null;active6=null;nextIpv6ProbeAt=0;
                 if(!a4.isEmpty())active4=choose(false,a4);
                 if(!a6.isEmpty()){
-                    try{active6=choose(true,a6);}catch(Exception ignored){active6=null;}
+                    try{active6=choose(true,a6);}catch(Exception ignored){
+                        active6=null;nextIpv6ProbeAt=System.nanoTime()+IPV6_PROBE_INTERVAL_NS;
+                    }
                 }
                 if(active4==null && active6==null)throw new IOException("Нет поддерживаемого механизма учёта IPv4/IPv6");
                 ips4=next4;ips6=next6;started=true;retry.reset();prior.clear();rates.clear();lastAt=0;
                 note="IPv4: "+(a4.isEmpty()?"нет адресов":active4==null?"недоступен":active4.label())+
                     " · IPv6: "+(a6.isEmpty()?"нет адресов":active6==null?"недоступен":active6.label());
+            }
+            // The initial IPv6 probe can fail while IPv4 remains operational. Retry
+            // periodically without touching IPv4 rules or using partial dual-stack rates.
+            if(started && active6==null && !a6.isEmpty() &&
+               System.nanoTime()-nextIpv6ProbeAt>=0){
+                nextIpv6ProbeAt=System.nanoTime()+IPV6_PROBE_INTERVAL_NS;
+                try{
+                    active6=choose(true,a6);
+                    // A newly installed chain starts with fresh counters. Discard the
+                    // previous time baseline before the next complete measurement.
+                    prior.clear();rates.clear();lastAt=0;
+                    note="IPv6: восстановлен "+active6.label();
+                }catch(Exception ignored){active6=null;}
             }
             Map<String,long[]> totals=new HashMap<>();
             readCounters(active4,totals);
@@ -226,7 +244,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
     synchronized void stop(){
         try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){
         remove(active4);remove(active6);
-        active4=null;active6=null;started=false;lastAt=0;retry.reset();prior.clear();rates.clear();ips4=ips6="";
+        active4=null;active6=null;started=false;lastAt=0;nextIpv6ProbeAt=0;retry.reset();prior.clear();rates.clear();ips4=ips6="";
         note="Монитор остановлен";error="";
         }
     }
