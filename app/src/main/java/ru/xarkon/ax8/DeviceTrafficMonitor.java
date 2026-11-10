@@ -90,6 +90,12 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                     rates.put(d.mac,new Rate((dl-prev[0])/secs,(ul-prev[1])/secs));
                 else rates.remove(d.mac);
             }
+            // Drop samples for stations absent from this poll; otherwise a returning MAC
+            // can briefly display a stale rate and trigger an incorrect QoS watchdog alarm.
+            Set<String> currentMacs=new HashSet<>();
+            for(RouterClient.Device d:devices)currentMacs.add(d.mac);
+            prior.keySet().retainAll(currentMacs);
+            rates.keySet().retainAll(currentMacs);
             lastAt=now;error="";
         }catch(Exception e){
             error=shortText(e.getMessage());note="Монитор недоступен: "+error;
