@@ -77,6 +77,24 @@ public final class QosResyncPolicyTest {
         check(!wrappedReduction.shouldResync(one, start + 5 * second - 1), "wrap before confirmation");
         check(wrappedReduction.shouldResync(one, start + 5 * second), "wrap at confirmation");
 
+        // Clearing every QoS limit must discard the previously trusted snapshot.
+        // Re-adding the same client/IP/rate is a fresh router transaction, not a no-op.
+        QosResyncPolicy cleared = new QosResyncPolicy();
+        cleared.onSuccess(both);
+        cleared.onSuccess("");
+        check(cleared.shouldResync(both, 0), "same rules must be reapplied after an empty success");
+        cleared.onAttempt(0);
+        cleared.onSuccess(both);
+        check(!cleared.shouldResync(both, second), "reinstalled rules must not be repeated");
+
+        // An uncertain transaction invalidates the retry cooldown as well as
+        // the trusted fingerprint, allowing immediate recovery after rollback.
+        QosResyncPolicy uncertain = new QosResyncPolicy();
+        uncertain.onAttempt(0);
+        uncertain.onSuccess(both);
+        uncertain.invalidate();
+        check(uncertain.shouldResync(both, second), "invalidated rules need immediate recovery");
+
         System.out.println("QosResyncPolicyTest: " + checks + " checks passed");
     }
 }
