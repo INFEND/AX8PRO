@@ -103,6 +103,10 @@ final class DeviceTrafficMonitor implements AutoCloseable {
             boolean ipv6ReadFailed=false;
             if(active6!=null)try{readCounters(active6,totals);}catch(Exception e){
                 ipv6ReadFailed=true;
+                // The selected backend may have disappeared after a router restart.
+                // Retry discovery later instead of polling the same broken chain forever.
+                active6=null;
+                nextIpv6ProbeAt=System.nanoTime()+IPV6_PROBE_INTERVAL_NS;
                 note="IPv6: ошибка счётчика · "+shortText(e.getMessage());
             }
             long now=System.nanoTime();double secs=lastAt==0?0:(now-lastAt)/1_000_000_000.0;
