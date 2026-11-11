@@ -245,6 +245,11 @@ final class DeviceTrafficMonitor implements AutoCloseable {
             if(b.chain.equals(V6_CHAIN)){
                 if(validIp6(src))src=normalizeIp6(src);
                 if(validIp6(dst))dst=normalizeIp6(dst);
+            }else{
+                // Some iptables variants print noncanonical IPv4 octets.
+                // Match the same normalized keys used when installing rules.
+                if(validIp4(src))src=normalizeIp4(src);
+                if(validIp4(dst))dst=normalizeIp4(dst);
             }
             boolean isUpload=expected.contains(src) && !expected.contains(dst);
             boolean isDownload=expected.contains(dst) && !expected.contains(src);
