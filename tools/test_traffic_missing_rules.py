@@ -24,6 +24,14 @@ class MissingRulesTest(unittest.TestCase):
         self.assertIn('Integer.parseInt(octets[0])', source)
         self.assertIn('Integer.parseInt(octets[3])', source)
 
+    def test_ipv4_counter_output_is_normalized_before_matching(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
+        self.assertIn("if(validIp4(src))src=normalizeIp4(src);", block)
+        self.assertIn("if(validIp4(dst))dst=normalizeIp4(dst);", block)
+        self.assertLess(block.index("if(validIp4(src))src=normalizeIp4(src);"),
+                        block.index("boolean isUpload=expected.contains(src)"))
+
     def test_ipv6_text_forms_are_normalized_for_matching(self):
         source = SOURCE.read_text(encoding="utf-8")
         block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
