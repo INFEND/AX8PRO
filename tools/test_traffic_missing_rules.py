@@ -56,6 +56,14 @@ class MissingRulesTest(unittest.TestCase):
         self.assertNotIn("dl+=n[0];", block)
         self.assertNotIn("ul+=n[1];", block)
 
+    def test_duplicate_client_addresses_are_counted_once(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        block = source.split("synchronized void sample(", 1)[1].split("private static boolean validIp4(", 1)[0]
+        self.assertIn("Set<String> addresses=new LinkedHashSet<>();", block)
+        self.assertIn("addresses.add(normalizeIp6(ip));", block)
+        self.assertLess(block.index("Set<String> addresses=new LinkedHashSet<>();"),
+                        block.index("for(String ip:addresses)"))
+
     def test_partial_or_duplicate_rules_are_rejected_before_publish(self):
         source = SOURCE.read_text(encoding="utf-8")
         block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
