@@ -121,7 +121,19 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                 ArrayList<String> addresses=new ArrayList<>();
                 if(validIp4(d.ip))addresses.add(normalizeIp4(d.ip));
                 if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))addresses.add(normalizeIp6(ip));
-                for(String ip:addresses){long[] n=totals.get(ip);if(n!=null){found=true;dl+=n[0];ul+=n[1];}}
+                for(String ip:addresses){
+                    long[] n=totals.get(ip);
+                    if(n==null)continue;
+                    found=true;
+                    // Multiple IP addresses can belong to one client. Reject an
+                    // overflowing aggregate instead of displaying negative rates.
+                    try{
+                        dl=Math.addExact(dl,n[0]);
+                        ul=Math.addExact(ul,n[1]);
+                    }catch(ArithmeticException e){
+                        throw new IOException("Переполнение счётчиков клиента",e);
+                    }
+                }
                 if(!found){prior.remove(d.mac);rates.remove(d.mac);continue;}
                 long[] prev=prior.put(d.mac,new long[]{dl,ul});
                 if(prev!=null&&secs>.09&&dl>=prev[0]&&ul>=prev[1])
