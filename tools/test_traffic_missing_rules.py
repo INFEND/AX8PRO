@@ -17,6 +17,13 @@ class MissingRulesTest(unittest.TestCase):
         self.assertIn("if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))a6.add(normalizeIp6(ip));", source)
         self.assertIn("if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))addresses.add(normalizeIp6(ip));", source)
 
+    def test_ipv4_octets_are_canonicalized_before_rule_install_and_rate_lookup(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("if(validIp4(d.ip))a4.add(normalizeIp4(d.ip));", source)
+        self.assertIn("if(validIp4(d.ip))addresses.add(normalizeIp4(d.ip));", source)
+        self.assertIn('Integer.parseInt(octets[0])', source)
+        self.assertIn('Integer.parseInt(octets[3])', source)
+
     def test_ipv6_text_forms_are_normalized_for_matching(self):
         source = SOURCE.read_text(encoding="utf-8")
         block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
