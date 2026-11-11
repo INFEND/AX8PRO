@@ -118,7 +118,9 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                     prior.remove(d.mac);rates.remove(d.mac);continue;
                 }
                 long dl=0,ul=0;boolean found=false;
-                ArrayList<String> addresses=new ArrayList<>();
+                // Discovery may report the same address multiple times or in different
+                // IPv6 textual forms. Count each normalized IP only once per client.
+                Set<String> addresses=new LinkedHashSet<>();
                 if(validIp4(d.ip))addresses.add(normalizeIp4(d.ip));
                 if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))addresses.add(normalizeIp6(ip));
                 for(String ip:addresses){
