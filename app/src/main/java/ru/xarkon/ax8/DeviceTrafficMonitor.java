@@ -271,8 +271,14 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                 ", загрузка "+download.size()+"/"+expected.size());
         for(Map.Entry<String,long[]> entry:parsed.entrySet()){
             long[] value=counts.computeIfAbsent(entry.getKey(),k->new long[2]);
-            value[0]+=entry.getValue()[0];
-            value[1]+=entry.getValue()[1];
+            // Counter totals must never wrap into negative rates on long-running routers.
+            // Reject the sample instead of publishing corrupted aggregate bytes.
+            try{
+                value[0]=Math.addExact(value[0],entry.getValue()[0]);
+                value[1]=Math.addExact(value[1],entry.getValue()[1]);
+            }catch(ArithmeticException e){
+                throw new IOException("Переполнение счётчиков в "+b.label(),e);
+            }
         }
     }
     private void remove(Backend b){
