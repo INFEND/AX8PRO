@@ -8,10 +8,19 @@ class MissingRulesTest(unittest.TestCase):
     def test_empty_chain_is_an_error(self):
         source = SOURCE.read_text(encoding="utf-8")
         block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
-        self.assertIn("int matchedRules=0;", block)
-        self.assertIn("matchedRules++;", block)
-        self.assertIn("if(matchedRules==0)throw new IOException", block)
+        self.assertIn("Set<String> expected=new HashSet<>();", block)
+        self.assertIn("if(!upload.equals(expected)||!download.equals(expected))", block)
         self.assertIn("if(output.code!=0)throw new IOException", block)
+
+    def test_partial_or_duplicate_rules_are_rejected_before_publish(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
+        self.assertIn("if(!upload.equals(expected)||!download.equals(expected))", block)
+        self.assertIn("if(!upload.add(src))throw new IOException", block)
+        self.assertIn("if(!download.add(dst))throw new IOException", block)
+        self.assertIn("Map<String,long[]> parsed=new HashMap<>();", block)
+        self.assertLess(block.index("if(!upload.equals(expected)||!download.equals(expected))",
+                        block.index("for(Map.Entry<String,long[]> entry:parsed.entrySet())"))
 
 if __name__ == "__main__":
     unittest.main()
