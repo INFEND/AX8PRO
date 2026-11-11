@@ -60,7 +60,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         }
         TreeSet<String> a4=new TreeSet<>(),a6=new TreeSet<>();
         for(RouterClient.Device d:devices){
-            if(validIp4(d.ip))a4.add(d.ip);
+            if(validIp4(d.ip))a4.add(normalizeIp4(d.ip));
             if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))a6.add(normalizeIp6(ip));
         }
         String next4=String.join(",",a4),next6=String.join(",",a6);
@@ -118,7 +118,8 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                     prior.remove(d.mac);rates.remove(d.mac);continue;
                 }
                 long dl=0,ul=0;boolean found=false;
-                ArrayList<String> addresses=new ArrayList<>();addresses.add(d.ip);
+                ArrayList<String> addresses=new ArrayList<>();
+                if(validIp4(d.ip))addresses.add(normalizeIp4(d.ip));
                 if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))addresses.add(normalizeIp6(ip));
                 for(String ip:addresses){long[] n=totals.get(ip);if(n!=null){found=true;dl+=n[0];ul+=n[1];}}
                 if(!found){prior.remove(d.mac);rates.remove(d.mac);continue;}
@@ -158,6 +159,13 @@ final class DeviceTrafficMonitor implements AutoCloseable {
             if(value>255)return false;
         }
         return true;
+    }
+    // iptables prints canonical decimal octets even if client discovery supplies
+    // leading zeros. Normalize before installing rules and matching counters.
+    private static String normalizeIp4(String ip){
+        String[] octets=ip.split("\\.");
+        return Integer.parseInt(octets[0])+"."+Integer.parseInt(octets[1])+"."+
+            Integer.parseInt(octets[2])+"."+Integer.parseInt(octets[3]);
     }
     private static boolean validIp6(String s){
         if(s==null||s.isEmpty()||s.indexOf(':')<0||
