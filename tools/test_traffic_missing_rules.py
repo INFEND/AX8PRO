@@ -47,6 +47,15 @@ class MissingRulesTest(unittest.TestCase):
         self.assertIn('throw new IOException("Переполнение счётчиков', block)
         self.assertNotIn("value[0]+=entry.getValue()[0]", block)
 
+    def test_multi_address_client_totals_reject_overflow(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        block = source.split("synchronized void sample(", 1)[1].split("private static boolean validIp4(", 1)[0]
+        self.assertIn("dl=Math.addExact(dl,n[0]);", block)
+        self.assertIn("ul=Math.addExact(ul,n[1]);", block)
+        self.assertIn('throw new IOException("Переполнение счётчиков клиента",e);', block)
+        self.assertNotIn("dl+=n[0];", block)
+        self.assertNotIn("ul+=n[1];", block)
+
     def test_partial_or_duplicate_rules_are_rejected_before_publish(self):
         source = SOURCE.read_text(encoding="utf-8")
         block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
