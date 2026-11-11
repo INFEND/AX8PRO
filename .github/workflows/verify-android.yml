@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Avoid stale verification runs competing for runner time on rapid pushes.
+concurrency:
+  group: android-verification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -33,3 +38,14 @@ jobs:
         run: python3 -m unittest discover -s tools -p 'test_*.py' -v
       - name: Compile debug APK and run lint
         run: gradle --no-daemon :app:assembleDebug :app:lintDebug
+      - name: Preserve lint diagnostics on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-verification-reports
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-debug.xml
+            app/build/reports/problems/
+          if-no-files-found: ignore
+          retention-days: 7
