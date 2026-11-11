@@ -12,6 +12,11 @@ class MissingRulesTest(unittest.TestCase):
         self.assertIn("if(!upload.equals(expected)||!download.equals(expected))", block)
         self.assertIn("if(output.code!=0)throw new IOException", block)
 
+    def test_missing_ipv6_list_is_safe_in_both_polling_paths(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("if(d.ipv6!=null)for(String ip:d.ipv6)", source)
+        self.assertIn("if(d.ipv6!=null)addresses.addAll(d.ipv6);", source)
+
     def test_partial_or_duplicate_rules_are_rejected_before_publish(self):
         source = SOURCE.read_text(encoding="utf-8")
         block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
