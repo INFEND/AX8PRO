@@ -58,6 +58,8 @@ jobs:
           unzip -t "$apk" > apk-integrity.log
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" > apk-badging.log
           grep -q "^package: name='ru.xarkon.ax8pro' " apk-badging.log
+          # A structurally valid APK may still be unsigned or have a broken signature.
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk" > apk-signature.log 2>&1
       - name: Android lint
         # Lint independently, including when compilation or Python checks fail.
         if: ${{ !cancelled() }}
@@ -89,5 +91,6 @@ jobs:
             android-lint.log
             apk-integrity.log
             apk-badging.log
+            apk-signature.log
           if-no-files-found: ignore
           retention-days: 7
