@@ -40,6 +40,9 @@ jobs:
           set -o pipefail
           python3 -m unittest discover -s tools -p 'test_*.py' -v 2>&1 | tee python-regressions.log
       - name: Compile debug APK and run lint
+        # Run independently of Python regression failures so both diagnostics are available.
+        # Still respect cancellation; do not waste runner time after a cancelled run.
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -o pipefail
