@@ -39,6 +39,14 @@ class MissingRulesTest(unittest.TestCase):
         self.assertIn("if(validIp6(dst))dst=normalizeIp6(dst);", block)
         self.assertIn("if((ipv6ReadFailed || active6==null) && hasValidIpv6(d.ipv6))", source)
 
+    def test_aggregated_counter_overflow_rejects_sample(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
+        self.assertIn("Math.addExact(value[0],entry.getValue()[0])", block)
+        self.assertIn("Math.addExact(value[1],entry.getValue()[1])", block)
+        self.assertIn('throw new IOException("Переполнение счётчиков', block)
+        self.assertNotIn("value[0]+=entry.getValue()[0]", block)
+
     def test_partial_or_duplicate_rules_are_rejected_before_publish(self):
         source = SOURCE.read_text(encoding="utf-8")
         block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
