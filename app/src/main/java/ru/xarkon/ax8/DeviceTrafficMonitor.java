@@ -61,7 +61,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         TreeSet<String> a4=new TreeSet<>(),a6=new TreeSet<>();
         for(RouterClient.Device d:devices){
             if(validIp4(d.ip))a4.add(d.ip);
-            if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))a6.add(ip);
+            if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))a6.add(normalizeIp6(ip));
         }
         String next4=String.join(",",a4),next6=String.join(",",a6);
         if(a4.isEmpty() && a6.isEmpty()){
@@ -114,12 +114,12 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                 // Missing IPv6 backend or failed IPv6 read makes dual-stack totals partial.
                 // Never present IPv4-only bytes as a complete dual-stack rate.
                 // Keep IPv4-only stations updating, but re-baseline dual-stack stations.
-                if((ipv6ReadFailed || active6==null) && d.ipv6!=null && !d.ipv6.isEmpty()){
+                if((ipv6ReadFailed || active6==null) && hasValidIpv6(d.ipv6)){
                     prior.remove(d.mac);rates.remove(d.mac);continue;
                 }
                 long dl=0,ul=0;boolean found=false;
                 ArrayList<String> addresses=new ArrayList<>();addresses.add(d.ip);
-                if(d.ipv6!=null)addresses.addAll(d.ipv6);
+                if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))addresses.add(normalizeIp6(ip));
                 for(String ip:addresses){long[] n=totals.get(ip);if(n!=null){found=true;dl+=n[0];ul+=n[1];}}
                 if(!found){prior.remove(d.mac);rates.remove(d.mac);continue;}
                 long[] prev=prior.put(d.mac,new long[]{dl,ul});
@@ -167,6 +167,15 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         }catch(java.net.UnknownHostException ignored){
             return false;
         }
+    }
+    private static boolean hasValidIpv6(List<String> addresses){
+        if(addresses==null)return false;
+        for(String address:addresses)if(validIp6(address))return true;
+        return false;
+    }
+    private static String normalizeIp6(String ip){
+        try{return java.net.InetAddress.getByName(ip).getHostAddress();}
+        catch(java.net.UnknownHostException e){throw new IllegalArgumentException("Invalid IPv6 address",e);}
     }
     private static String shortText(String s){
         if(s==null||s.trim().isEmpty())return "неизвестная ошибка";
@@ -225,6 +234,10 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         Matcher m=COUNTER.matcher(output.output);
         while(m.find()){
             String src=address(m.group(2)),dst=address(m.group(3));
+            if(b.chain.equals(V6_CHAIN)){
+                if(validIp6(src))src=normalizeIp6(src);
+                if(validIp6(dst))dst=normalizeIp6(dst);
+            }
             boolean isUpload=expected.contains(src) && !expected.contains(dst);
             boolean isDownload=expected.contains(dst) && !expected.contains(src);
             if(!isUpload && !isDownload)continue;
