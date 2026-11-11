@@ -61,7 +61,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         TreeSet<String> a4=new TreeSet<>(),a6=new TreeSet<>();
         for(RouterClient.Device d:devices){
             if(validIp4(d.ip))a4.add(d.ip);
-            for(String ip:d.ipv6)if(validIp6(ip))a6.add(ip);
+            if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))a6.add(ip);
         }
         String next4=String.join(",",a4),next6=String.join(",",a6);
         if(a4.isEmpty() && a6.isEmpty()){
@@ -118,7 +118,8 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                     prior.remove(d.mac);rates.remove(d.mac);continue;
                 }
                 long dl=0,ul=0;boolean found=false;
-                ArrayList<String> addresses=new ArrayList<>();addresses.add(d.ip);addresses.addAll(d.ipv6);
+                ArrayList<String> addresses=new ArrayList<>();addresses.add(d.ip);
+                if(d.ipv6!=null)addresses.addAll(d.ipv6);
                 for(String ip:addresses){long[] n=totals.get(ip);if(n!=null){found=true;dl+=n[0];ul+=n[1];}}
                 if(!found){prior.remove(d.mac);rates.remove(d.mac);continue;}
                 long[] prev=prior.put(d.mac,new long[]{dl,ul});
