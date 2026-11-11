@@ -5,6 +5,12 @@ from pathlib import Path
 SOURCE = Path(__file__).resolve().parents[1] / "app/src/main/java/ru/xarkon/ax8/DeviceTrafficMonitor.java"
 
 class MissingRulesTest(unittest.TestCase):
+    def test_ui_status_is_visible_across_polling_threads(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn('private volatile String error="",note="Ожидание первого опроса";', source)
+        self.assertIn("String error(){return error;}", source)
+        self.assertIn("String status(){return note;}", source)
+
     def test_empty_chain_is_an_error(self):
         source = SOURCE.read_text(encoding="utf-8")
         block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
