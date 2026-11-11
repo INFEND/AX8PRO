@@ -214,18 +214,39 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         if(b==null)return;
         TelnetShell.Result output=call(b,"-L "+b.chain+" -n -v -x");
         if(output.code!=0)throw new IOException("Не удалось прочитать "+b.label()+": "+reason(output));
+        // Validate the complete expected rule set before publishing any counters.
+        // A partial chain is not a valid zero-traffic sample.
+        String configured=b.chain.equals(V6_CHAIN)?ips6:ips4;
+        Set<String> expected=new HashSet<>();
+        if(!configured.isEmpty())expected.addAll(Arrays.asList(configured.split(",")));
+        Set<String> upload=new HashSet<>(),download=new HashSet<>();
+        Map<String,long[]> parsed=new HashMap<>();
         Matcher m=COUNTER.matcher(output.output);
-        int matchedRules=0;
         while(m.find()){
-            matchedRules++;
-            long n;try{n=Long.parseLong(m.group(1));}catch(NumberFormatException e){continue;}
             String src=address(m.group(2)),dst=address(m.group(3));
-            if(!src.equals("0.0.0.0")&&!src.equals("::"))counts.computeIfAbsent(src,k->new long[2])[1]+=n;
-            if(!dst.equals("0.0.0.0")&&!dst.equals("::"))counts.computeIfAbsent(dst,k->new long[2])[0]+=n;
+            boolean isUpload=expected.contains(src) && !expected.contains(dst);
+            boolean isDownload=expected.contains(dst) && !expected.contains(src);
+            if(!isUpload && !isDownload)continue;
+            long bytes;
+            try{bytes=Long.parseLong(m.group(1));}
+            catch(NumberFormatException e){throw new IOException("Некорректный счётчик в "+b.label(),e);}
+            if(isUpload){
+                if(!upload.add(src))throw new IOException("Дублирование правила отдачи "+src+" в "+b.label());
+                parsed.computeIfAbsent(src,k->new long[2])[1]=bytes;
+            }else{
+                if(!download.add(dst))throw new IOException("Дублирование правила загрузки "+dst+" в "+b.label());
+                parsed.computeIfAbsent(dst,k->new long[2])[0]=bytes;
+            }
         }
-        // A successful shell command can still return an empty chain after a
-        // router ruleset reset. Never treat missing accounting rules as zero traffic.
-        if(matchedRules==0)throw new IOException("Отсутствуют правила учёта в "+b.label());
+        if(!upload.equals(expected)||!download.equals(expected))
+            throw new IOException("Неполные правила учёта в "+b.label()+
+                ": отдача "+upload.size()+"/"+expected.size()+
+                ", загрузка "+download.size()+"/"+expected.size());
+        for(Map.Entry<String,long[]> entry:parsed.entrySet()){
+            long[] value=counts.computeIfAbsent(entry.getKey(),k->new long[2]);
+            value[0]+=entry.getValue()[0];
+            value[1]+=entry.getValue()[1];
+        }
     }
     private void remove(Backend b){
         if(b==null)return;
