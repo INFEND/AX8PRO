@@ -35,7 +35,10 @@ jobs:
         with:
           gradle-version: '9.6.1'
       - name: Python regression checks
-        run: python3 -m unittest discover -s tools -p 'test_*.py' -v
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 -m unittest discover -s tools -p 'test_*.py' -v 2>&1 | tee python-regressions.log
       - name: Compile debug APK and run lint
         run: gradle --no-daemon :app:assembleDebug :app:lintDebug
       - name: Preserve debug APK for verification
@@ -55,5 +58,6 @@ jobs:
             app/build/reports/lint-results-debug.html
             app/build/reports/lint-results-debug.xml
             app/build/reports/problems/
+            python-regressions.log
           if-no-files-found: ignore
           retention-days: 7
