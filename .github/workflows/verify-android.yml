@@ -39,15 +39,21 @@ jobs:
         run: |
           set -o pipefail
           python3 -m unittest discover -s tools -p 'test_*.py' -v 2>&1 | tee python-regressions.log
-      - name: Compile debug APK and run lint
+      - name: Compile debug APK
         id: android_build
-        # Run independently of Python regression failures so both diagnostics are available.
-        # Still respect cancellation; do not waste runner time after a cancelled run.
+        # Compile even if Python regressions fail, but respect cancellation.
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -o pipefail
-          gradle --no-daemon --stacktrace :app:assembleDebug :app:lintDebug 2>&1 | tee android-build.log
+          gradle --no-daemon --stacktrace :app:assembleDebug 2>&1 | tee android-build.log
+      - name: Android lint
+        # Lint independently, including when compilation or Python checks fail.
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace :app:lintDebug 2>&1 | tee android-lint.log
       - name: Preserve debug APK for verification
         # Keep a successfully built test APK even if independent Python checks failed.
         # Never upload a failed or incomplete Android build.
@@ -69,5 +75,6 @@ jobs:
             app/build/reports/problems/
             python-regressions.log
             android-build.log
+            android-lint.log
           if-no-files-found: ignore
           retention-days: 7
