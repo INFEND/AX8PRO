@@ -34,7 +34,9 @@ final class DeviceTrafficMonitor implements AutoCloseable {
     private final TelnetShell shell;
     private final Map<String,long[]> prior=new HashMap<>();
     private final Map<String,Rate> rates=new java.util.concurrent.ConcurrentHashMap<>();
-    private String ips4="",ips6="",error="",note="Ожидание первого опроса";
+    private String ips4="",ips6="";
+    // Read by UI threads outside sample()/stop(): publish the latest status safely.
+    private volatile String error="",note="Ожидание первого опроса";
     private Backend active4,active6;
     private boolean started=false;
     private long lastAt=0;
