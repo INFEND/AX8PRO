@@ -40,7 +40,10 @@ jobs:
           set -o pipefail
           python3 -m unittest discover -s tools -p 'test_*.py' -v 2>&1 | tee python-regressions.log
       - name: Compile debug APK and run lint
-        run: gradle --no-daemon :app:assembleDebug :app:lintDebug
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace :app:assembleDebug :app:lintDebug 2>&1 | tee android-build.log
       - name: Preserve debug APK for verification
         if: success()
         uses: actions/upload-artifact@v4
@@ -59,5 +62,6 @@ jobs:
             app/build/reports/lint-results-debug.xml
             app/build/reports/problems/
             python-regressions.log
+            android-build.log
           if-no-files-found: ignore
           retention-days: 7
