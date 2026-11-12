@@ -358,12 +358,15 @@ public final class RouterBackgroundService extends Service {
             }
             prefs.edit().remove("bg_sms_persistence_error").apply();
         }
+        long radioAt=System.currentTimeMillis();
         try{radio=router.status();}catch(Exception e){statusIssue=e.getMessage()==null?e.toString():e.getMessage();}
         // A slow LTE request can finish after the UI takes ownership or the
         // router endpoint changes. Do not start more requests in that case.
         if(!ownsBackgroundCycle()){releaseLocks();return;}
+        long devicesAt=System.currentTimeMillis();
         try{devices=router.devices();}catch(Exception e){deviceIssue=e.getMessage()==null?e.toString():e.getMessage();}
         if(!ownsBackgroundCycle()){releaseLocks();return;}
+        long blockedAt=System.currentTimeMillis();
         try{blockState=router.blockState();}catch(Exception ignored){}
         // No QoS write may target an endpoint whose settings changed mid-poll.
         if(!ownsBackgroundCycle()){releaseLocks();return;}
@@ -395,7 +398,7 @@ public final class RouterBackgroundService extends Service {
         long now=System.currentTimeMillis();
         android.content.SharedPreferences.Editor editor=prefs.edit().putLong("bg_last_poll",now);
         if(radio!=null){
-            editor.putString("bg_status_json",radio.toString()).putLong("bg_snapshot_at",now)
+            editor.putString("bg_status_json",radio.toString()).putLong("bg_snapshot_at",radioAt)
                 .putString("bg_wan",radio.optString("ppp_status","?"));
             // If a field is absent, don't substitute an old speed as a current measurement.
             double rx=parseNum(radio.optString("realtime_rx_thrpt",""));
@@ -410,10 +413,10 @@ public final class RouterBackgroundService extends Service {
         }
         if(devices!=null){int validClients=0;for(RouterClient.Device device:devices)if(device!=null)validClients++;editor.putInt("bg_clients",validClients)
             .putString("bg_devices_json",devicesJson(devices).toString())
-            .putLong("bg_devices_at",now);}
+            .putLong("bg_devices_at",devicesAt);}
         if(blockState!=null){editor.putInt("bg_blocked",blockState.black.size())
             .putString("bg_blocked_json",blockedJson(blockState).toString())
-            .putLong("bg_blocked_at",now);}
+            .putLong("bg_blocked_at",blockedAt);}
         // Link SMS to this completed cycle, not merely to a previous successful read.
         if(smsList!=null)editor.putLong("bg_sms_cycle_at",now);
         String rebindWarning=prefs.getString("bg_rebind_warning","");
