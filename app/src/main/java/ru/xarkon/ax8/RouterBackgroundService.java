@@ -458,7 +458,8 @@ public final class RouterBackgroundService extends Service {
         try{traffic.stop();}catch(Exception ignored){}
         // Shutdown can race with the queued foreground handoff cleanup.
         // Never recreate the persistent notification after stopSelf()/onDestroy().
-        if(!stopping)notifyState("Приложение открыто · мониторинг через интерфейс");
+        if(BackgroundTickPolicy.showForegroundState(stopping,prefs.getBoolean("ui_visible",true)))
+            notifyState("Приложение открыто · мониторинг через интерфейс");
     }
     @Override public void onDestroy(){
         stopping=true;running=false;handler.removeCallbacks(tick);releaseLocks();

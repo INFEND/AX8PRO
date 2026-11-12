@@ -5,6 +5,11 @@ public final class BackgroundTickPolicy {
     private static final int VISIBLE_IDLE_MS = 5000;
     private BackgroundTickPolicy(){}
 
+    /** A delayed cleanup must not announce a visible UI after it was hidden again. */
+    public static boolean showForegroundState(boolean stopping, boolean uiVisible){
+        return !stopping && uiVisible;
+    }
+
     /** -1 means no Handler tick should be scheduled (a busy worker owns the next cycle). */
     public static int nextDelay(boolean stopping, boolean workerBusy, boolean uiVisible, int requestedMs){
         if(stopping || workerBusy)return -1;
