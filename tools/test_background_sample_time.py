@@ -33,5 +33,11 @@ class BackgroundSampleTimeTest(unittest.TestCase):
         self.assertNotIn("blockedAt==ts", main)
         self.assertIn('.remove("bg_sms_cycle_at").commit()', service)
 
+    def test_blocklist_failure_is_reported_and_affects_adaptive_poll(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("try{blockState=router.blockState();}catch(Exception e){blockedIssue=", source)
+        self.assertIn('(!blockedIssue.isEmpty()?"Блокировки: "+blockedIssue+"; ":"")', source)
+        self.assertIn("cycleSucceeded=radio!=null && issues.isEmpty();", source)
+
 if __name__ == "__main__":
     unittest.main()

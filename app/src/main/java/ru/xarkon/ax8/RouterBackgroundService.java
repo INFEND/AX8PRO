@@ -301,7 +301,7 @@ public final class RouterBackgroundService extends Service {
         List<RouterClient.Device> devices=null;
         List<RouterClient.Sms> smsList=null;
         RouterClient.BlockState blockState=null;
-        String statusIssue="",deviceIssue="",smsIssue="",qosIssue="";
+        String statusIssue="",deviceIssue="",smsIssue="",blockedIssue="",qosIssue="";
         long smsAt=System.currentTimeMillis();
         // SMS is polled first; a Telnet/QoS or Wi-Fi-client error must never suppress SMS alerts.
         try{smsList=router.sms();}catch(Exception e){smsIssue=e.getMessage()==null?e.toString():e.getMessage();}
@@ -370,7 +370,7 @@ public final class RouterBackgroundService extends Service {
         try{devices=router.devices();}catch(Exception e){deviceIssue=e.getMessage()==null?e.toString():e.getMessage();}
         if(!ownsBackgroundCycle()){releaseLocks();return;}
         long blockedAt=System.currentTimeMillis();
-        try{blockState=router.blockState();}catch(Exception ignored){}
+        try{blockState=router.blockState();}catch(Exception e){blockedIssue=e.getMessage()==null?e.toString():e.getMessage();}
         // No QoS write may target an endpoint whose settings changed mid-poll.
         if(!ownsBackgroundCycle()){releaseLocks();return;}
         if(devices!=null){
@@ -426,7 +426,8 @@ public final class RouterBackgroundService extends Service {
         String issues=(!rebindWarning.isEmpty()?"Подключение: "+rebindWarning+"; ":"")+
             (!statusIssue.isEmpty()?"LTE: "+statusIssue+"; ":"")+
             (!smsIssue.isEmpty()?"SMS: "+smsIssue+"; ":"")+
-            (!deviceIssue.isEmpty()?"Клиенты: "+deviceIssue+"; ":"")+qosIssue;
+            (!deviceIssue.isEmpty()?"Клиенты: "+deviceIssue+"; ":"")+
+            (!blockedIssue.isEmpty()?"Блокировки: "+blockedIssue+"; ":"")+qosIssue;
         // Building a snapshot can take time (JSON/history serialization). Recheck
         // ownership immediately before publishing it to shared preferences.
         if(!ownsBackgroundCycle()){releaseLocks();return;}
