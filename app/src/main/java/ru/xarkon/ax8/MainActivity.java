@@ -550,9 +550,13 @@ public final class MainActivity extends Activity {
                 expireStaleSections(System.currentTimeMillis());
                 if(status2!=null){
                     double rx=num(status2,"realtime_rx_bytes"),tx=num(status2,"realtime_tx_bytes");
-                    long sampleTime=System.currentTimeMillis();double sec=(sampleTime-lastBytesAt)/1000.0;
-                    if(lastBytesAt>0&&sec>.3&&rx>=lastRx&&tx>=lastTx){fallbackDl=(rx-lastRx)/sec;fallbackUl=(tx-lastTx)/sec;}
-                    lastRx=rx;lastTx=tx;lastBytesAt=sampleTime;
+                    long sampleTime=System.currentTimeMillis();
+                    long counterTime=android.os.SystemClock.elapsedRealtime();
+                    double sec=(counterTime-lastBytesAt)/1000.0;
+                    // Never reuse a previous rate after missing/reset counters or an invalid interval.
+                    fallbackDl=counterRate(rx,lastRx,sec,lastBytesAt>0);
+                    fallbackUl=counterRate(tx,lastTx,sec,lastBytesAt>0);
+                    lastRx=rx;lastTx=tx;lastBytesAt=counterTime;
                     invalidateInternetOnPppChange(status2);
                     status=status2;statusAt=sampleTime;
                     prefs.edit().putString("last_router_status",status2.toString())
@@ -829,6 +833,13 @@ public final class MainActivity extends Activity {
         if(x>=1_000_000)return String.format(Locale.US,"%.2f MB/s",x/1_000_000);
         if(x>=1_000)return String.format(Locale.US,"%.1f KB/s",x/1_000);
         return String.format(Locale.US,"%.0f B/s",x);
+    }
+    static double counterRate(double current,double previous,double seconds,boolean hasBaseline){
+        if(!hasBaseline||!Double.isFinite(current)||!Double.isFinite(previous)
+                ||current<0||previous<0||current<previous||!Double.isFinite(seconds)||seconds<=.3)
+            return Double.NaN;
+        double rate=(current-previous)/seconds;
+        return Double.isFinite(rate)?rate:Double.NaN;
     }
     private double rateValue(JSONObject from,String key,double fallback){
         double x=num(from,key);return Double.isNaN(x)?(Double.isNaN(fallback)?0d:fallback):x;
