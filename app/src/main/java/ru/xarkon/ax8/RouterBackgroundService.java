@@ -56,7 +56,8 @@ public final class RouterBackgroundService extends Service {
                 cycleSucceeded=false;
                 try{backgroundCycle();}
                 catch(Exception e){
-                    String reason=e.getMessage()==null?e.toString():e.getMessage();
+                    cycleSucceeded=false;
+                    String reason=readFailure(e);
                     // A late failure must not overwrite status or notify after
                     // the UI takes ownership, the endpoint changes, or shutdown.
                     if(ownsBackgroundCycle()){

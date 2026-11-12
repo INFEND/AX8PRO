@@ -21,6 +21,8 @@ class BackgroundShutdownErrorTest(unittest.TestCase):
         start = source.index('catch(Exception e){', source.index('backgroundCycle();'))
         end = source.index('}finally{', start)
         catch_body = source[start:end]
+        self.assertIn("String reason=readFailure(e);", catch_body)
+        self.assertIn("cycleSucceeded=false;", catch_body)
         guard = catch_body.index('if(ownsBackgroundCycle()){')
         self.assertLess(guard, catch_body.index('putString("bg_error",reason)'))
         self.assertLess(guard, catch_body.index('notifyState("Фоновый опрос AX8: "+reason)'))
