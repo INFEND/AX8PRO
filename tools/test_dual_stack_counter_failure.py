@@ -9,7 +9,7 @@ class DualStackCounterFailureTest(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn("boolean ipv6ReadFailed=false;", source)
         self.assertIn("ipv6ReadFailed=true;", source)
-        condition = "if(ipv6ReadFailed && d.ipv6!=null && !d.ipv6.isEmpty())"
+        condition = "if((ipv6ReadFailed || active6==null) && hasValidIpv6(d.ipv6))"
         self.assertIn(condition, source)
         body = source.split(condition, 1)[1].split("}", 1)[0]
         self.assertIn("prior.remove(d.mac)", body)
