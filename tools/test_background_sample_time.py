@@ -39,5 +39,12 @@ class BackgroundSampleTimeTest(unittest.TestCase):
         self.assertIn('(!blockedIssue.isEmpty()?"Блокировки: "+blockedIssue+"; ":"")', source)
         self.assertIn("cycleSucceeded=radio!=null && issues.isEmpty();", source)
 
+    def test_empty_read_errors_are_not_treated_as_success(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("message==null || message.trim().isEmpty()", source)
+        self.assertIn("error.getClass().getName() : message", source)
+        for issue in ("smsIssue", "statusIssue", "deviceIssue", "blockedIssue"):
+            self.assertIn(issue+"=readFailure(e)", source)
+
 if __name__ == "__main__":
     unittest.main()

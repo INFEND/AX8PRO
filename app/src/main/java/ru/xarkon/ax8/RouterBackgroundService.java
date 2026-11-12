@@ -287,6 +287,11 @@ public final class RouterBackgroundService extends Service {
     private static double parseNum(String raw){
         try{return Double.parseDouble(String.valueOf(raw).replace("%","").trim());}catch(Exception e){return Double.NaN;}
     }
+    private static String readFailure(Exception error){
+        String message=error.getMessage();
+        return message==null || message.trim().isEmpty()
+            ? error.getClass().getName() : message;
+    }
     private void backgroundCycle(){
         // A queued worker can start after the service has been destroyed.
         if(stopping||ForegroundHandoff.pending())return;
@@ -304,7 +309,7 @@ public final class RouterBackgroundService extends Service {
         String statusIssue="",deviceIssue="",smsIssue="",blockedIssue="",qosIssue="";
         long smsAt=System.currentTimeMillis();
         // SMS is polled first; a Telnet/QoS or Wi-Fi-client error must never suppress SMS alerts.
-        try{smsList=router.sms();}catch(Exception e){smsIssue=e.getMessage()==null?e.toString():e.getMessage();}
+        try{smsList=router.sms();}catch(Exception e){smsIssue=readFailure(e);}
         if(!ownsBackgroundCycle()){releaseLocks();return;}
         if(smsList!=null){
             int unread=0;
@@ -362,15 +367,15 @@ public final class RouterBackgroundService extends Service {
             prefs.edit().remove("bg_sms_persistence_error").apply();
         }
         long radioAt=System.currentTimeMillis();
-        try{radio=router.status();}catch(Exception e){statusIssue=e.getMessage()==null?e.toString():e.getMessage();}
+        try{radio=router.status();}catch(Exception e){statusIssue=readFailure(e);}
         // A slow LTE request can finish after the UI takes ownership or the
         // router endpoint changes. Do not start more requests in that case.
         if(!ownsBackgroundCycle()){releaseLocks();return;}
         long devicesAt=System.currentTimeMillis();
-        try{devices=router.devices();}catch(Exception e){deviceIssue=e.getMessage()==null?e.toString():e.getMessage();}
+        try{devices=router.devices();}catch(Exception e){deviceIssue=readFailure(e);}
         if(!ownsBackgroundCycle()){releaseLocks();return;}
         long blockedAt=System.currentTimeMillis();
-        try{blockState=router.blockState();}catch(Exception e){blockedIssue=e.getMessage()==null?e.toString():e.getMessage();}
+        try{blockState=router.blockState();}catch(Exception e){blockedIssue=readFailure(e);}
         // No QoS write may target an endpoint whose settings changed mid-poll.
         if(!ownsBackgroundCycle()){releaseLocks();return;}
         if(devices!=null){
