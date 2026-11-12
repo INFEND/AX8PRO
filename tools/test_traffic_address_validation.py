@@ -60,7 +60,7 @@ public static void main(String[] args) {
     check(false, validIp6("192.168.8.1"), "IPv4 passed as IPv6");
     check(false, validIp6("2001:db8:0:0:0:0:0:0:1"), "nine hextets");
     check(false, validIp6("2001:db8::gg"), "invalid hex digits");
-    check(false, validIp6("fe80::1%eth0"), "interface scope injection");
+    check(false, validIp6("fe80::1%%eth0"), "interface scope injection");
     check(false, validIp6("2001:db8::1\\nreboot"), "newline injection v6");
 }
 }
