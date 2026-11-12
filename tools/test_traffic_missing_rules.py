@@ -77,7 +77,7 @@ class MissingRulesTest(unittest.TestCase):
         self.assertIn("if(!upload.add(src))throw new IOException", block)
         self.assertIn("if(!download.add(dst))throw new IOException", block)
         self.assertIn("Map<String,long[]> parsed=new HashMap<>();", block)
-        self.assertLess(block.index("if(!upload.equals(expected)||!download.equals(expected))",
+        self.assertLess(block.index("if(!upload.equals(expected)||!download.equals(expected))"),
                         block.index("for(Map.Entry<String,long[]> entry:parsed.entrySet())"))
 
 if __name__ == "__main__":
