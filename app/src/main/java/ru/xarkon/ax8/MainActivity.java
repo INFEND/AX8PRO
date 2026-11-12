@@ -362,7 +362,7 @@ public final class MainActivity extends Activity {
             if(rawStatus!=null&&!rawStatus.trim().isEmpty())status=new JSONObject(rawStatus);
             // Do not give stale clients, SMS or ACL data a newer LTE timestamp.
             long deviceAt=prefs.getLong("bg_devices_at",0L);
-            if(deviceAt==ts && BackgroundSummary.isFresh(deviceAt,now,limit)){
+            if(prefs.getLong("bg_devices_cycle_at",0L)==ts && BackgroundSummary.isFresh(deviceAt,now,limit)){
                 String rawDevices=prefs.getString("bg_devices_json","");
                 devices=rawDevices==null||rawDevices.trim().isEmpty()
                     ?new ArrayList<>():parseDevices(new JSONArray(rawDevices));
@@ -377,7 +377,7 @@ public final class MainActivity extends Activity {
                 smsAt=smsTime;
             }else{messages=new ArrayList<>();smsAt=0;}
             long blockedAt=prefs.getLong("bg_blocked_at",0L);
-            if(blockedAt==ts && BackgroundSummary.isFresh(blockedAt,now,limit)){
+            if(prefs.getLong("bg_blocked_cycle_at",0L)==ts && BackgroundSummary.isFresh(blockedAt,now,limit)){
                 String rawBlocked=prefs.getString("bg_blocked_json","");
                 blocked=rawBlocked==null||rawBlocked.trim().isEmpty()
                     ?null:parseBlocked(new JSONObject(rawBlocked));

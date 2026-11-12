@@ -127,6 +127,7 @@ public final class RouterBackgroundService extends Service {
         android.content.SharedPreferences.Editor edit=preferences.edit();
         for(String key:new String[]{
             "bg_status_json","bg_snapshot_at","bg_wan","bg_devices_json","bg_devices_at","bg_clients",
+            "bg_devices_cycle_at","bg_blocked_cycle_at",
             "bg_sms_json","bg_sms_at","bg_sms_cycle_at","bg_sms","bg_sms_unread",
             "bg_sms_seen_ids","bg_sms_seen_initialized","bg_blocked_json","bg_blocked_at","bg_blocked",
             "bg_history_dl","bg_history_ul","bg_fallback_dl_bits","bg_fallback_ul_bits",
@@ -300,6 +301,7 @@ public final class RouterBackgroundService extends Service {
         List<RouterClient.Sms> smsList=null;
         RouterClient.BlockState blockState=null;
         String statusIssue="",deviceIssue="",smsIssue="",qosIssue="";
+        long smsAt=System.currentTimeMillis();
         // SMS is polled first; a Telnet/QoS or Wi-Fi-client error must never suppress SMS alerts.
         try{smsList=router.sms();}catch(Exception e){smsIssue=e.getMessage()==null?e.toString():e.getMessage();}
         if(!ownsBackgroundCycle()){releaseLocks();return;}
@@ -348,7 +350,7 @@ public final class RouterBackgroundService extends Service {
                 .putString("bg_sms_seen_ids",mergedIds).putBoolean("bg_sms_seen_initialized",true)
                 // Persist delivered SMS IDs before continuing with LTE/network work.
                 // apply() can lose the deduplication record on process death.
-                .putString("bg_sms_json",smsJson(smsList).toString()).putLong("bg_sms_at",System.currentTimeMillis()).commit();
+                .putString("bg_sms_json",smsJson(smsList).toString()).putLong("bg_sms_at",smsAt).remove("bg_sms_cycle_at").commit();
             if(!smsPersisted){
                 // A failed durable write must not be silently treated as success.
                 // Stop this cycle rather than publishing a misleading SMS snapshot.
@@ -411,14 +413,14 @@ public final class RouterBackgroundService extends Service {
             editor.putLong("bg_fallback_dl_bits",Double.doubleToRawLongBits(rx));
             editor.putLong("bg_fallback_ul_bits",Double.doubleToRawLongBits(tx));
         }
-        if(devices!=null){int validClients=0;for(RouterClient.Device device:devices)if(device!=null)validClients++;editor.putInt("bg_clients",validClients)
+        if(devices!=null){int validClients=0;for(RouterClient.Device device:devices)if(device!=null)validClients++;editor.putInt("bg_clients",validClients).putLong("bg_devices_cycle_at",radio!=null?radioAt:0L)
             .putString("bg_devices_json",devicesJson(devices).toString())
             .putLong("bg_devices_at",devicesAt);}
-        if(blockState!=null){editor.putInt("bg_blocked",blockState.black.size())
+        if(blockState!=null){editor.putInt("bg_blocked",blockState.black.size()).putLong("bg_blocked_cycle_at",radio!=null?radioAt:0L)
             .putString("bg_blocked_json",blockedJson(blockState).toString())
             .putLong("bg_blocked_at",blockedAt);}
         // Link SMS to this completed cycle, not merely to a previous successful read.
-        if(smsList!=null)editor.putLong("bg_sms_cycle_at",now);
+        if(smsList!=null)editor.putLong("bg_sms_cycle_at",radio!=null?radioAt:0L);
         String rebindWarning=prefs.getString("bg_rebind_warning","");
         String issues=(!rebindWarning.isEmpty()?"Подключение: "+rebindWarning+"; ":"")+
             (!statusIssue.isEmpty()?"LTE: "+statusIssue+"; ":"")+

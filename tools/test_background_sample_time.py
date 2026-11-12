@@ -10,6 +10,7 @@ class BackgroundSampleTimeTest(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
         body = source.split("private void backgroundCycle(){", 1)[1]
         for stamp, request, key in (
+            ("smsAt", "smsList=router.sms()", "bg_sms_at"),
             ("radioAt", "radio=router.status()", "bg_snapshot_at"),
             ("devicesAt", "devices=router.devices()", "bg_devices_at"),
             ("blockedAt", "blockState=router.blockState()", "bg_blocked_at"),
@@ -18,6 +19,19 @@ class BackgroundSampleTimeTest(unittest.TestCase):
                             body.index(request))
             self.assertIn('putLong("'+key+'",'+stamp+')', body)
             self.assertNotIn('putLong("'+key+'",now)', body)
+
+    def test_handoff_uses_cycle_identity_not_sample_time(self):
+        service = SOURCE.read_text(encoding="utf-8")
+        main = SOURCE.with_name("MainActivity.java").read_text(encoding="utf-8")
+        for key, stamp in (("bg_devices_cycle_at", "deviceAt"),
+                           ("bg_blocked_cycle_at", "blockedAt"),
+                           ("bg_sms_cycle_at", "smsTime")):
+            self.assertIn('putLong("'+key+'",radio!=null?radioAt:0L)', service)
+            self.assertIn('prefs.getLong("'+key+'",0L)==ts', main)
+            self.assertIn('BackgroundSummary.isFresh('+stamp+',now,limit)', main)
+        self.assertNotIn("deviceAt==ts", main)
+        self.assertNotIn("blockedAt==ts", main)
+        self.assertIn('.remove("bg_sms_cycle_at").commit()', service)
 
 if __name__ == "__main__":
     unittest.main()
