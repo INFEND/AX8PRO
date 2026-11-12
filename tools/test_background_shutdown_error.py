@@ -7,6 +7,15 @@ SOURCE = (Path(__file__).resolve().parents[1] /
 
 
 class BackgroundShutdownErrorTest(unittest.TestCase):
+    def test_adaptive_cadence_uses_current_cycle_result(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertLess(source.index("cycleSucceeded=false;"), source.index("try{backgroundCycle();"))
+        self.assertIn("boolean ok=cycleSucceeded;", source)
+        self.assertNotIn("startedWall", source)
+        self.assertIn("cycleSucceeded=radio!=null && issues.isEmpty();", source)
+        self.assertLess(source.index('editor.putString("bg_error",issues)'),
+                        source.index("cycleSucceeded=radio!=null && issues.isEmpty();"))
+
     def test_late_poll_failure_does_not_publish_error_or_notification(self):
         source = SOURCE.read_text(encoding="utf-8")
         start = source.index('catch(Exception e){', source.index('backgroundCycle();'))

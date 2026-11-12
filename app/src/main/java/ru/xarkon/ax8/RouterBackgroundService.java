@@ -34,6 +34,8 @@ public final class RouterBackgroundService extends Service {
     private PowerManager.WakeLock cpu;
     private WifiManager.WifiLock wifi;
     private volatile boolean busy=false,stopping=false,backgroundActive=false;
+    // Accessed only by the single background worker; never infer success from cached wall time.
+    private boolean cycleSucceeded;
     private final Runnable tick=new Runnable(){public void run(){
         if(stopping)return;
         boolean visible=prefs.getBoolean("ui_visible",true);
@@ -51,7 +53,7 @@ public final class RouterBackgroundService extends Service {
             if(ForegroundHandoff.pending()){scheduleNextTick();return;}
             busy=true;worker.execute(()->{
                 long started=android.os.SystemClock.elapsedRealtime();
-                long startedWall=System.currentTimeMillis();
+                cycleSucceeded=false;
                 try{backgroundCycle();}
                 catch(Exception e){
                     String reason=e.getMessage()==null?e.toString():e.getMessage();
@@ -71,8 +73,7 @@ public final class RouterBackgroundService extends Service {
                         long elapsed=android.os.SystemClock.elapsedRealtime()-started;
                         int old=prefs.getInt("auto_poll_ms",500);
                         // A current successful radio sample confirms that AX8 has answered.
-                        boolean ok=prefs.getLong("bg_snapshot_at",0L)>=startedWall
-                            && prefs.getString("bg_error","").isEmpty();
+                        boolean ok=cycleSucceeded;
                         int adjusted=AutoPollController.next(old,elapsed,ok);
                         if(adjusted!=old)prefs.edit().putInt("auto_poll_ms",adjusted).apply();
                     }
@@ -434,6 +435,7 @@ public final class RouterBackgroundService extends Service {
         // The UI may become visible after the snapshot was assembled.
         // Do not overwrite its foreground notification with a stale background result.
         if(!ownsBackgroundCycle())return;
+        cycleSucceeded=radio!=null && issues.isEmpty();
         if(!issues.isEmpty())notifyState("AX8: "+issues);
         else notifyState("Клиентов: "+BackgroundSummary.clientCount(devices)+" · SMS: "+(smsList==null?"?":smsList.size())+
             " · "+(radio!=null&&"ppp_connected".equals(radio.optString("ppp_status"))?"LTE online":"LTE проверяется"));
