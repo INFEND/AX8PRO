@@ -172,6 +172,9 @@ public final class MainActivity extends Activity {
         // A foreground poll may complete after the Activity is paused or resumed.
         // Reject its queued UI callbacks without allowing overlapping WebUI requests.
         refreshSession.invalidate();
+        // Do not average counters across an unobserved background interval.
+        lastBytesAt=0;lastRx=Double.NaN;lastTx=Double.NaN;
+        fallbackDl=Double.NaN;fallbackUl=Double.NaN;
         running=false;handler.removeCallbacks(ticker);
         stopWatchingRouterNetwork();resetInternetResult();
         ForegroundHandoff.begin(); // Block background QoS until queued UI cleanup finishes.
@@ -488,6 +491,9 @@ public final class MainActivity extends Activity {
                     handler.post(()->{
                         if(!refreshSession.accepts(cycleGeneration,running))return;
                         invalidateInternetOnPppChange(early);
+                        // This snapshot has not reached the counter calculation yet.
+                        // Never pair it with a fallback from a different snapshot.
+                        fallbackDl=Double.NaN;fallbackUl=Double.NaN;
                         status=early;statusAt=System.currentTimeMillis();error="";
                         updateConnection();
                         maybeProbeInternet(true);

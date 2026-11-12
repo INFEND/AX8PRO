@@ -34,5 +34,14 @@ class OverviewCounterRateTest(unittest.TestCase):
         self.assertIn("fallbackUl=counterRate(tx,lastTx,sec,lastBytesAt>0);", MAIN)
         self.assertIn("lastRx=rx;lastTx=tx;lastBytesAt=counterTime;", MAIN)
 
+    def test_pause_discards_counter_baseline(self):
+        pause = MAIN.split("protected void onPause(){", 1)[1].split("super.onPause();", 1)[0]
+        self.assertIn("lastBytesAt=0;lastRx=Double.NaN;lastTx=Double.NaN;", pause)
+        self.assertIn("fallbackDl=Double.NaN;fallbackUl=Double.NaN;", pause)
+
+    def test_early_snapshot_cannot_reuse_previous_rate(self):
+        early = MAIN.split("final JSONObject early=next;", 1)[1].split("if(tab==0)draw(true);", 1)[0]
+        self.assertLess(early.index("fallbackDl=Double.NaN;fallbackUl=Double.NaN;"), early.index("status=early;"))
+
 if __name__ == "__main__":
     unittest.main()
