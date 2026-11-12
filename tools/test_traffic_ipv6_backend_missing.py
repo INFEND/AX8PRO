@@ -11,7 +11,7 @@ class MissingIpv6BackendTest(unittest.TestCase):
         source = SOURCE.read_text(encoding="utf-8")
         self.assertRegex(
             source,
-            r"if\s*\(\s*\(ipv6ReadFailed\s*\|\|\s*active6\s*==\s*null\)\s*&&\s*d\.ipv6\s*!=\s*null\s*&&\s*!d\.ipv6\.isEmpty\(\)\s*\)\s*\{\s*prior\.remove\(d\.mac\);\s*rates\.remove\(d\.mac\);\s*continue;",
+            r"if\s*\(\s*\(ipv6ReadFailed\s*\|\|\s*active6\s*==\s*null\)\s*&&\s*hasValidIpv6\(d\.ipv6\)\s*\)\s*\{\s*prior\.remove\(d\.mac\);\s*rates\.remove\(d\.mac\);\s*continue;",
         )
         self.assertIn("if(active4==null && active6==null)", source)
 
