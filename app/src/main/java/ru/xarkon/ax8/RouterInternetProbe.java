@@ -80,6 +80,8 @@ public final class RouterInternetProbe {
                                 && networkStillPresent(context,candidate))
                             return new Result(InternetStatusPolicy.ONLINE,candidate);
                     }
+                    // The candidate scan may have outlived the current physical link.
+                    if(!networkStillPresent(context,network))break;
                     if(reachesInternet(network,endpoint) && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
                     // Android may validate this same physical link during a slow probe.

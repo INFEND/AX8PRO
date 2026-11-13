@@ -69,12 +69,17 @@ class InternetBadgeSourceTests(unittest.TestCase):
     def test_reuses_validation_acquired_during_external_probe(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         loop=source.split("for(String endpoint:ENDPOINTS)",1)[1].split("offlineCandidates.add(network)",1)[0]
-        self.assertLess(loop.index("reachesInternet(network,endpoint)"),
-                        loop.index("caps=cm.getNetworkCapabilities(network);"))
-        self.assertLess(loop.index("if(!isRouterLink(caps))break;"),
-                        loop.index("NET_CAPABILITY_VALIDATED"))
-        self.assertIn("&& networkStillPresent(context,network)",loop)
-        self.assertIn("return new Result(InternetStatusPolicy.ONLINE,network);",loop)
+        # The pre-request scan also checks VALIDATED; inspect the post-request path separately.
+        before, after=loop.split("reachesInternet(network,endpoint)",1)
+        self.assertLess(before.index("for(Network candidate:routerCandidates)"),
+                        before.rindex("if(!networkStillPresent(context,network))break;"))
+        self.assertLess(after.index("caps=cm.getNetworkCapabilities(network);"),
+                        after.index("if(!isRouterLink(caps))break;"))
+        self.assertLess(after.index("if(!isRouterLink(caps))break;"),
+                        after.index("NET_CAPABILITY_VALIDATED"))
+        self.assertLess(after.index("NET_CAPABILITY_VALIDATED"),
+                        after.rindex("&& networkStillPresent(context,network)"))
+        self.assertIn("return new Result(InternetStatusPolicy.ONLINE,network);",after)
 
     def test_physical_router_gateway_fallback(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
