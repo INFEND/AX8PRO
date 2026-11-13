@@ -74,8 +74,16 @@ public final class RouterInternetProbe {
                 }
                 if(offlineCandidate==null && networkStillPresent(context,network))offlineCandidate=network;
             }
-            if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))
-                return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
+            if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate)){
+                // Another physical link may have taken time to probe. Do not publish
+                // an old negative verdict if Android validated the first link meanwhile.
+                NetworkCapabilities latest=cm.getNetworkCapabilities(offlineCandidate);
+                if(isRouterLink(latest)){
+                    if(latest.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+                        return new Result(InternetStatusPolicy.ONLINE,offlineCandidate);
+                    return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
+                }
+            }
         }catch(Exception ignored){}
         return new Result(InternetStatusPolicy.UNAVAILABLE,null);
     }
