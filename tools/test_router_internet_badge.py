@@ -37,6 +37,14 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertLess(probes.index("NET_CAPABILITY_VALIDATED"),
                         probes.index("for(String endpoint:ENDPOINTS)"))
 
+    def test_rechecks_other_links_before_each_external_request(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        loop=source.split("for(String endpoint:ENDPOINTS)",1)[1]
+        self.assertLess(loop.index("for(Network candidate:routerCandidates)"),
+                        loop.index("reachesInternet(network,endpoint)"))
+        self.assertIn("networkStillPresent(context,candidate)",loop)
+        self.assertIn("return new Result(InternetStatusPolicy.ONLINE,candidate);",loop)
+
     def test_rechecks_all_offline_candidates_after_other_links(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         final=source.split("for(Network candidate:offlineCandidates)",1)[1]

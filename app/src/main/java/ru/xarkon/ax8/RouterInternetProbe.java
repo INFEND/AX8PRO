@@ -73,6 +73,13 @@ public final class RouterInternetProbe {
                 // probe; a working WebUI alone is not proof of Internet access.
                 for(String endpoint:ENDPOINTS){
                     if(!networkStillPresent(context,network))break;
+                    // Another proven link may have recovered while a previous request ran.
+                    for(Network candidate:routerCandidates){
+                        NetworkCapabilities current=cm.getNetworkCapabilities(candidate);
+                        if(current!=null && current.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                                && networkStillPresent(context,candidate))
+                            return new Result(InternetStatusPolicy.ONLINE,candidate);
+                    }
                     if(reachesInternet(network,endpoint) && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
                     // Android may validate this same physical link during a slow probe.
