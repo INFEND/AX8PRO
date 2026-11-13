@@ -10,7 +10,7 @@ import java.util.*;
 /** Stores desired rules separately from the router's reported applied status. */
 final class ServiceRestrictions {
     private static final String ROOT="/tmp/ax8pro-services";
-    private static final String AGENT_VERSION="2";
+    private static final String AGENT_VERSION="3";
     private final Context context;
     private final SharedPreferences prefs;
     private final RouterClient router;
@@ -76,6 +76,36 @@ final class ServiceRestrictions {
         return "p=$(cat "+ROOT+"/pid 2>/dev/null); case \"$p\" in ''|*[!0-9]*) false;; *) "+
             "test -r /proc/$p/cmdline && tr '\\000' '\\n' </proc/$p/cmdline | grep -Fx "+quote(ROOT+"/agent.sh")+" >/dev/null;; esac";
     }
+    // Only used if no router DNS resolver executable is available. The plan
+    // remains autonomous for enforcement, but these addresses are a snapshot.
+    private String phoneSeeds(String rev,Map<String,Set<String>> rules)throws Exception{
+        TreeSet<String> hosts=new TreeSet<>();
+        for(Set<String> ids:rules.values())for(String id:ids)
+            Collections.addAll(hosts,ServiceCatalog.get(id).hosts.split(" "));
+        StringBuilder out=new StringBuilder(rev).append('\n');
+        java.util.concurrent.ExecutorService pool=java.util.concurrent.Executors.newFixedThreadPool(4,r->{
+            Thread t=new Thread(r,"AX8-DNS");t.setDaemon(true);return t;
+        });
+        try{
+            Map<String,java.util.concurrent.Future<java.net.InetAddress[]>> jobs=new TreeMap<>();
+            for(String host:hosts)jobs.put(host,pool.submit(()->java.net.InetAddress.getAllByName(host)));
+            long deadline=android.os.SystemClock.elapsedRealtime()+20000;
+            for(Map.Entry<String,java.util.concurrent.Future<java.net.InetAddress[]>> e:jobs.entrySet()){
+                try{
+                    long left=deadline-android.os.SystemClock.elapsedRealtime();
+                    if(left<=0&&!e.getValue().isDone())continue;
+                    for(java.net.InetAddress ip:e.getValue().get(Math.max(1,left),java.util.concurrent.TimeUnit.MILLISECONDS)){
+                        if(ip.isAnyLocalAddress()||ip.isLoopbackAddress()||ip.isLinkLocalAddress()||ip.isSiteLocalAddress()||ip.isMulticastAddress())continue;
+                        String value=ip.getHostAddress();
+                        if(value!=null&&value.matches("[0-9a-fA-F:.]+"))out.append(e.getKey()).append(' ').append(value).append('\n');
+                    }
+                }catch(java.util.concurrent.ExecutionException|java.util.concurrent.TimeoutException ignored){}
+            }
+        }finally{pool.shutdownNow();}
+        if(!hosts.isEmpty()&&out.toString().equals(rev+"\n"))
+            throw new IOException("Нет DNS-ответов ни на AX8, ни на телефоне. Проверьте интернет и DNS телефона.");
+        return out.toString();
+    }
     void deploy(RouterClient.Progress progress)throws Exception{
         String rev=revision();if(rev.isEmpty()){save(rules());rev=revision();}
         String plan=ServiceCatalog.plan(rev,rules());
@@ -86,8 +116,7 @@ final class ServiceRestrictions {
             require(sh,"command -v iptables >/dev/null && iptables -L FORWARD -n >/dev/null 2>&1",
                 "iptables: таблица filter/FORWARD недоступна");
             require(sh,"test -d /sys/class/net/br0","Не найден LAN-интерфейс br0; автоматическая установка отменена");
-            require(sh,"command -v nslookup >/dev/null || (command -v busybox >/dev/null && busybox --list | grep -x nslookup >/dev/null)",
-                "На AX8 нет nslookup (включая BusyBox), DNS-адреса сервисов получить нельзя");
+
             require(sh,"(for c in awk grep sort head wc cp mv rm chmod date sleep tr; do command -v \"$c\" >/dev/null || exit 1; done)",
                 "В прошивке отсутствуют необходимые базовые утилиты shell");
             String alive=aliveCommand();
@@ -105,6 +134,14 @@ final class ServiceRestrictions {
                 }
                 checked(sh,"mv "+ROOT+"/agent.new "+ROOT+"/agent.sh && chmod 700 "+ROOT+"/agent.sh && printf %s "+AGENT_VERSION+" > "+ROOT+"/agent.version");
             }
+            boolean localResolver=sh.exec("(command -v nslookup || command -v getent || command -v ping || command -v ping6 || "+
+                "(command -v busybox && busybox --list | grep -Ex 'nslookup|getent|ping|ping6')) >/dev/null 2>&1").code==0;
+            // Revision-tagged seed files cannot be applied to an older plan.
+            if(!localResolver&&!rules().isEmpty()){
+                progress.note("DNS на телефоне: резервный снимок IP");
+                upload(sh,ROOT+"/seeds.new",phoneSeeds(rev,rules()).getBytes(StandardCharsets.UTF_8));
+                checked(sh,"mv "+ROOT+"/seeds.new "+ROOT+"/seeds");
+            }else checked(sh,"rm -f "+ROOT+"/seeds");
             upload(sh,ROOT+"/plan.new",plan.getBytes(StandardCharsets.UTF_8));
             checked(sh,"mv "+ROOT+"/plan.new "+ROOT+"/plan");
             if(!running){
@@ -138,6 +175,8 @@ final class ServiceRestrictions {
                             health+="\nАктивная цепочка не обнаружена.";
                         }
                     }
+                    if(parts[3].contains("DNS=phone_snapshot"))
+                        health+="\nDNS: снимок адресов с телефона. Автоматического обновления IP нет; передайте правила повторно после смены адресов.";
                     return state+"\nПравил: "+parts[2]+"\n"+parts[3]+health+
                         (parts[1].equals(revision())?"":"\nНа AX8 другая версия правил; локальные изменения не подтверждены.");
                 }

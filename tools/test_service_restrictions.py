@@ -55,9 +55,19 @@ name=Path(sys.argv[0]).name
 a=sys.argv[1:]
 rc=0
 if name=="nslookup":
-    if os.environ.get("FAIL_DNS")=="1": sys.exit(1)
+    if os.environ.get("FAIL_DNS")=="1" or os.environ.get("NO_NSLOOKUP")=="1": sys.exit(1)
     print("Server: 192.168.150.1\\nAddress: 192.168.150.1\\n\\nName: "+a[-1])
     print("Address: "+("2001:db8::123" if "-type=AAAA" in a else "203.0.113.42"))
+elif name in ("getent","ping","ping6","busybox"):
+    if os.environ.get("FAIL_DNS")=="1" or name=="busybox":sys.exit(1)
+    if name=="getent" and os.environ.get("GETENT_DNS")=="1":
+        if a[0]=="ahostsv4":print("203.0.113.43 STREAM "+a[-1])
+        elif a[0]=="ahostsv6":print("2001:db8::124 STREAM "+a[-1])
+        else:sys.exit(1)
+    elif name in ("ping","ping6") and os.environ.get("PING_DNS")=="1":
+        print("PING "+a[-1]+" ("+("2001:db8::125" if name=="ping6" or "-6" in a else "203.0.113.44")+") 56 data bytes")
+        sys.exit(1) # ICMP reply not needed for hostname resolution.
+    else:sys.exit(1)
 elif name=="ipset":
     if os.environ.get("NO_IPSET")=="1": sys.exit(127)
     if os.environ.get("FAIL_IPSET_CREATE")=="1" and a[0]=="create": sys.exit(1)
@@ -101,7 +111,7 @@ state.write_text(json.dumps(d));sys.exit(rc)
         with tempfile.TemporaryDirectory() as tmp:
             p=pathlib.Path(tmp);bin=p/"bin";bin.mkdir()
             fake=bin/"fake";fake.write_text(mock,encoding="utf-8");fake.chmod(0o755)
-            for name in ("ipset","iptables","ip6tables","nslookup"):(bin/name).symlink_to(fake)
+            for name in ("ipset","iptables","ip6tables","nslookup","getent","ping","ping6","busybox"):(bin/name).symlink_to(fake)
             env=dict(os.environ,PATH=str(bin)+os.pathsep+os.environ["PATH"],MOCK_STATE=str(p/"state.json"))
             rev="12345678-1234-1234-1234-123456789abc"
             (p/"plan").write_text(rev+"\nALL play play.google.com\nAA:BB:CC:DD:EE:FF drive drive.google.com\n")
@@ -147,6 +157,24 @@ state.write_text(json.dumps(d));sys.exit(rc)
             (p/"plan").write_text(rev+"\n")
             r=run(NO_IPSET="1");self.assertEqual(r.returncode,0,r.stdout+r.stderr)
             self.assertEqual(json.loads((p/"state.json").read_text())["jumps"]["iptables"],[])
+
+            (p/"plan").write_text(rev+"\nALL play play.google.com\n")
+            r=run(NO_NSLOOKUP="1",GETENT_DNS="1");self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            d=json.loads((p/"state.json").read_text())
+            self.assertEqual(d["sets"]["ax8svc_A_4_play"],["203.0.113.43"])
+            self.assertEqual(d["sets"]["ax8svc_A_6_play"],["2001:db8::124"])
+            r=run(NO_NSLOOKUP="1",PING_DNS="1");self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            d=json.loads((p/"state.json").read_text())
+            self.assertEqual(d["sets"]["ax8svc_B_4_play"],["203.0.113.44"])
+            self.assertEqual(d["sets"]["ax8svc_B_6_play"],["2001:db8::125"])
+            (p/"seeds").write_text(rev+"\nplay.google.com 203.0.113.45\nplay.google.com 192.168.150.1\n")
+            r=run(True);self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            d=json.loads((p/"state.json").read_text())
+            self.assertEqual(d["sets"]["ax8svc_A_4_play"],["203.0.113.45"])
+            self.assertIn("DNS=phone_snapshot",(p/"status").read_text())
+            (p/"plan").write_text("12345678-1234-1234-1234-123456789abd\nALL play play.google.com\n")
+            r=run(True);self.assertNotEqual(r.returncode,0)
+            self.assertEqual(json.loads((p/"state.json").read_text())["jumps"]["iptables"],["AX8SVCA"])
 
     def test_legacy_firmware_dependencies(self):
         java=(SRC/"ServiceRestrictions.java").read_text(encoding="utf-8")

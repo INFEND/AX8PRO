@@ -25,43 +25,73 @@ cleanup() {
     fi
     (set +f; rm -f "$slot".addr.*)
 }
-# Only DNS answers after Name: (never the resolver address).
+# Accept only numeric public destinations from known resolver output formats.
+# Never use the resolver address or arbitrary text in the firewall.
 answers() {
-    awk -v family="$1" '
-      /^Name:[ \t]/ { seen=1; next }
-      seen && /^[ \t]*Address([ \t]+[0-9]+)?:[ \t]/ {
-        for(i=1;i<=NF;i++){
-          s=$i
-          if(family==4 && s ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/){
+    awk -v family="$1" -v mode="$2" '
+      function emit(s, a,j,ok){
+        if(family==4 && s ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/){
             split(s,a,".");ok=1
             for(j=1;j<=4;j++)if(a[j]>255)ok=0
             if(a[1]==0||a[1]==10||a[1]==127||a[1]>=224||
                (a[1]==169&&a[2]==254)||(a[1]==172&&a[2]>=16&&a[2]<=31)||
                (a[1]==192&&a[2]==168)||(a[1]==100&&a[2]>=64&&a[2]<=127))ok=0
             if(ok)print s
-          }
-          if(family==6 && s ~ /^[23][0-9a-fA-F:]+$/ && s ~ /:/)print s
         }
+        if(family==6 && s ~ /^[23][0-9a-fA-F:]+$/ && s ~ /:/)print s
+      }
+      mode=="getent" { emit($1);next }
+      mode=="ping" && /^PING[ \t]/ {
+        if(match($0,/\([0-9a-fA-F:.]+\)/))emit(substr($0,RSTART+1,RLENGTH-2))
+        next
+      }
+      mode=="nslookup" && /^Name:[ \t]/ { seen=1;next }
+      mode=="nslookup" && seen && /^[ \t]*Address([ \t]+[0-9]+)?:[ \t]/ {
+        for(i=1;i<=NF;i++)emit($i)
       }' | sort -u
 }
 same_revision() { [ "$(head -n 1 plan 2>/dev/null)" = "$rev" ]; }
-# DNS lookup bounded even on firmware without timeout or standalone nslookup.
-lookup() {
-    if command -v nslookup >/dev/null 2>&1; then
-        set -- nslookup "$@"
-    else
-        set -- busybox nslookup "$@"
-    fi
+# BusyBox applets can exist without standalone symlinks.
+has_tool() {
+    command -v "$1" >/dev/null 2>&1 ||
+        { command -v busybox >/dev/null 2>&1 && busybox --list 2>/dev/null | grep -Fx "$1" >/dev/null; }
+}
+bounded() {
     if command -v timeout >/dev/null 2>&1; then
         timeout 5 "$@"
     else
         "$@" & query=$!
-        (sleep 5; kill "$query" 2>/dev/null) & timer=$!
+        (sleep 5; kill "$query" 2>/dev/null) </dev/null >/dev/null 2>&1 & timer=$!
         wait "$query"; result=$?
         kill "$timer" 2>/dev/null
         wait "$timer" 2>/dev/null
         return "$result"
     fi
+}
+call_tool() {
+    toolname="$1";shift
+    if command -v "$toolname" >/dev/null 2>&1; then bounded "$toolname" "$@"
+    else bounded busybox "$toolname" "$@"; fi
+}
+resolve_host() {
+    family="$1"; domain="$2"; result=
+    if has_tool nslookup; then
+        if [ "$family" = 4 ]; then result=$(call_tool nslookup "$domain" 2>/dev/null | answers 4 nslookup)
+        else result=$(call_tool nslookup -type=AAAA "$domain" 2>/dev/null | answers 6 nslookup);fi
+    fi
+    if [ -z "$result" ] && has_tool getent; then
+        result=$(call_tool getent "ahostsv$family" "$domain" 2>/dev/null | answers "$family" getent)
+        [ -n "$result" ] || result=$(call_tool getent hosts "$domain" 2>/dev/null | answers "$family" getent)
+    fi
+    if [ -z "$result" ]; then
+        if [ "$family" = 4 ] && has_tool ping; then
+            result=$(call_tool ping -c 1 "$domain" 2>/dev/null | answers 4 ping)
+        elif [ "$family" = 6 ]; then
+            if has_tool ping6; then result=$(call_tool ping6 -c 1 "$domain" 2>/dev/null | answers 6 ping)
+            elif has_tool ping; then result=$(call_tool ping -6 -c 1 "$domain" 2>/dev/null | answers 6 ping);fi
+        fi
+    fi
+    printf '%s\n' "$result"
 }
 build_service() {
     id="$1"; shift
@@ -74,9 +104,15 @@ build_service() {
     for host in "$@"; do
         same_revision || return 1
         echo "$host" | grep -Eq '^[a-z0-9][a-z0-9.-]*\.[a-z0-9]+$' || return 1
-        ips4=$(lookup "$host" 2>/dev/null | answers 4)
-        ips6=
-        if [ "$v6" = 1 ]; then ips6=$(lookup -type=AAAA "$host" 2>/dev/null | answers 6); fi
+        if [ "$seed_mode" = 1 ]; then
+            ips4=$(awk -v h="$host" '$1==h {print $2}' seeds | answers 4 getent)
+            ips6=
+            if [ "$v6" = 1 ]; then ips6=$(awk -v h="$host" '$1==h {print $2}' seeds | answers 6 getent);fi
+        else
+            ips4=$(resolve_host 4 "$host")
+            ips6=
+            if [ "$v6" = 1 ]; then ips6=$(resolve_host 6 "$host");fi
+        fi
         [ -n "$ips4$ips6" ] || missing=$((missing+1))
         for addr in $ips4; do printf '%s\n' "$addr" >> "$file4"; done
         for addr in $ips6; do printf '%s\n' "$addr" >> "$file6"; done
@@ -132,6 +168,8 @@ reconcile_backend() {
     v6=0
     if command -v ip6tables >/dev/null 2>&1 && ip6tables -L FORWARD -n >/dev/null 2>&1; then v6=1; fi
     missing=0;count=0
+    seed_mode=0;dns_mode=router
+    if [ -f seeds ] && [ "$(head -n 1 seeds)" = "$rev" ]; then seed_mode=1;dns_mode=phone_snapshot;fi
     if ! cleanup "$new"; then write_status "ERROR|$rev|0|Не удалось очистить резервную цепочку";return 1;fi
     if ! iptables -N "AX8SVC$new"; then return 1;fi
     if [ "$v6" = 1 ] && ! ip6tables -N "AX8SVC$new"; then cleanup "$new";return 1;fi
@@ -156,7 +194,7 @@ reconcile_backend() {
     # Commit the new slot before removing the old one, allowing safe restart.
     if ! printf '%s\n' "$new" > active.new || ! mv active.new active; then cleanup "$new";return 1;fi
     if [ -n "$old" ] && ! cleanup "$old"; then write_status "ERROR|$rev|$count|Новые правила записаны, не снята старая цепочка";return 2;fi
-    write_status "INSTALLED|$rev|$count|IPv4=1 IPv6=$v6; режим=$backend; неразрешённых имён=$missing; IP-фильтр, не проверка реального трафика"
+    write_status "INSTALLED|$rev|$count|IPv4=1 IPv6=$v6; режим=$backend; DNS=$dns_mode; неразрешённых имён=$missing; IP-фильтр, не проверка реального трафика"
 }
 reconcile() {
     # ipset is optional. The direct backend works with ordinary iptables -d.
