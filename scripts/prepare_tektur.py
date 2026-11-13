@@ -35,6 +35,15 @@ def reconstruct(raw):
         raise ValueError("Unexpected Tektur upstream Git blob: "+blob)
     src = table_dir(raw)
     target = table_dir(HEADER)
+    differences = []
+    for tag, (checksum, off, size) in target.items():
+        if tag in PATCH:
+            continue
+        old_sum, old_off, old_size = src[tag]
+        if old_sum != checksum or old_size != size:
+            differences.append(f"{tag.decode()}: {old_size}/{size}, {old_sum:08x}/{checksum:08x}")
+    if differences:
+        raise ValueError("Archive/upstream table differences: " + "; ".join(differences))
     out = bytearray(162656)
     out[:len(HEADER)] = HEADER
     for tag, (checksum, off, size) in target.items():
