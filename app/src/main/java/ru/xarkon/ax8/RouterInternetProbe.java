@@ -40,6 +40,7 @@ public final class RouterInternetProbe {
             if(host==null||host.isEmpty())return new Result(InternetStatusPolicy.UNAVAILABLE,null);
             // Never test through the default/mobile/VPN network: only AX8's Wi-Fi or wired LAN.
             // A VPN may advertise its underlying Wi-Fi transport as well: reject it explicitly.
+            List<Network> routerCandidates=new ArrayList<>();
             List<Network> offlineCandidates=new ArrayList<>();
             for(Network network:cm.getAllNetworks()){
                 NetworkCapabilities caps=cm.getNetworkCapabilities(network);
@@ -59,6 +60,14 @@ public final class RouterInternetProbe {
                 // verdict instead of waiting up to 15 seconds for three serial HTTPS
                 // probes. The cellular default network and VPN are excluded above.
                 if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+                    return new Result(InternetStatusPolicy.ONLINE,network);
+                routerCandidates.add(network);
+            }
+            // Prefer system-validated links before any slow external HTTPS request.
+            for(Network network:routerCandidates){
+                if(!networkStillPresent(context,network))continue;
+                NetworkCapabilities caps=cm.getNetworkCapabilities(network);
+                if(caps!=null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
                     return new Result(InternetStatusPolicy.ONLINE,network);
                 // Without Android validation, require a successful router-bound HTTPS
                 // probe; a working WebUI alone is not proof of Internet access.

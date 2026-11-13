@@ -27,6 +27,16 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);",source)
         self.assertNotIn("return new Result(InternetStatusPolicy.OFFLINE,network);",source)
 
+    def test_validated_links_are_selected_before_external_requests(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        discovery, probes=source.split("for(Network network:routerCandidates)",1)
+        self.assertIn("routerCandidates.add(network);",discovery)
+        self.assertNotIn("reachesInternet(network,endpoint)",discovery)
+        self.assertLess(discovery.index("NET_CAPABILITY_VALIDATED"),
+                        discovery.index("routerCandidates.add(network);"))
+        self.assertLess(probes.index("NET_CAPABILITY_VALIDATED"),
+                        probes.index("for(String endpoint:ENDPOINTS)"))
+
     def test_rechecks_all_offline_candidates_after_other_links(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         final=source.split("for(Network candidate:offlineCandidates)",1)[1]
