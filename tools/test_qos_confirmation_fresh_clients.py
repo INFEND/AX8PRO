@@ -15,7 +15,7 @@ class QosConfirmationTest(unittest.TestCase):
         self.assertLess(section.index("if(!found)throw"),section.index("qos.setLimit(mac,kb,current,p)"))
     def test_offline_policy_stays_local(self):
         section=SOURCE.split("if(!live||!present){",1)[1].split("return;",1)[0]
-        self.assertIn("qos.persist(saved)",section)
+        self.assertIn("qos.persist(saved,mac)",section)
         self.assertNotIn("qos.setLimit(",section)
 if __name__=="__main__":
     unittest.main()

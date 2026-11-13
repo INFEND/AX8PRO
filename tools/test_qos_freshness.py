@@ -9,7 +9,7 @@ class QosFreshnessTest(unittest.TestCase):
         self.assertIn("&&sectionError.isEmpty()",part)
         self.assertIn("if(!live||!present)",part)
         local=part.split("if(!live||!present)",1)[1].split("return;",1)[0]
-        self.assertIn("qos.persist(saved)",local)
+        self.assertIn("qos.persist(saved,mac)",local)
         self.assertNotIn("qos.setLimit(",local)
     def test_stale_client_warning(self):
         self.assertIn('rowCard("Список клиентов устарел"',SOURCE)
