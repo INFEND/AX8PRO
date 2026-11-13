@@ -20,7 +20,7 @@ android {
 // Generate a verified local font resource before aapt runs; the APK itself
 // contains the font and never needs internet to render the interface.
 def tekturOutput = layout.buildDirectory.file("generated/tektur/res/font/tektur_variable.ttf")
-android.sourceSets.main.res.srcDir(layout.buildDirectory.dir("generated/tektur/res"))
+android.sourceSets.main.res.srcDir(layout.buildDirectory.dir("generated/tektur/res").get().asFile)
 def prepareTektur = tasks.register("prepareTektur", Exec) {
     inputs.file(rootProject.file("scripts/prepare_tektur.py"))
     outputs.file(tekturOutput)
