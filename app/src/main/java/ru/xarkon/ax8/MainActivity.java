@@ -1252,6 +1252,8 @@ public final class MainActivity extends Activity {
             sheet[0].dismiss();chooseLimit(dev);
         }));
         Ui.addSpace(body,this,9);
+        body.addView(Ui.button(this,"Ограничение сервисов",Ui.CARD2,Ui.CYAN,()->{sheet[0].dismiss();serviceEditor(dev.mac);}));
+        Ui.addSpace(body,this,9);
         LinearLayout pair=Ui.horizontal(this);
         TextView rename=Ui.button(this,"✎  Имя",Ui.CARD2,Ui.TEXT,()->{sheet[0].dismiss();editAlias(dev);});
         TextView copy=Ui.button(this,"⧉  MAC",Ui.CARD2,Ui.TEXT,()->{
@@ -1648,6 +1650,88 @@ public final class MainActivity extends Activity {
                 }if(!failures.isEmpty())throw new IllegalStateException("Не удалены SMS: "+failures);
             }));
     }
+    private ServiceRestrictions services(){return new ServiceRestrictions(this,prefs,api);}
+    private void serviceScopes(){
+        ServiceRestrictions controller=services();
+        LinearLayout body=Ui.vertical(this);
+        body.addView(Ui.text(this,"Правила хранятся на телефоне и передаются на AX8 отдельно. Общие правила действуют дополнительно к индивидуальным.",12,Ui.MUTED,false));
+        Ui.addSpace(body,this,10);
+        final Dialog[] sheet={null};
+        body.addView(Ui.button(this,"Все устройства",Ui.CARD2,Ui.CYAN,()->{sheet[0].dismiss();serviceEditor("ALL");}));
+        Ui.addSpace(body,this,8);
+        body.addView(Ui.text(this,"КОНКРЕТНОЕ УСТРОЙСТВО",12,Ui.MUTED,true));
+        TreeSet<String> macs=new TreeSet<>();
+        for(RouterClient.Device d:devices){String m=RouterClient.normalizeMac(d.mac);if(!m.isEmpty())macs.add(m);}
+        for(String key:prefs.getAll().keySet()){
+            String raw=key.startsWith("cached_client_name_")?key.substring(19):key.startsWith("alias_")?key.substring(6):"";
+            String m=RouterClient.normalizeMac(raw);if(!m.isEmpty())macs.add(m);
+        }
+        for(String scope:controller.rules().keySet())if(!"ALL".equals(scope))macs.add(scope);
+        for(String mac:macs){
+            Ui.addSpace(body,this,6);
+            body.addView(Ui.button(this,savedLimitDeviceName(mac)+" · "+mac,Ui.CARD2,Ui.TEXT,()->{sheet[0].dismiss();serviceEditor(mac);}));
+        }
+        Ui.addSpace(body,this,12);
+        body.addView(Ui.button(this,"↻  Проверить статус на AX8",Ui.CARD2,Ui.CYAN,()->{
+            sheet[0].dismiss();
+            workers.execute(()->{String result;try{result=controller.status();}catch(Exception e){result="AX8 недоступен: "+e.getMessage();}
+                final String report=result;handler.post(()->alert("Ограничение сервисов",report));});
+        }));
+        Ui.addSpace(body,this,8);
+        body.addView(Ui.button(this,"✓  Передать сохранённые правила на AX8",Ui.CARD2,Ui.CYAN,()->{
+            sheet[0].dismiss();confirmServiceDeploy(controller);
+        }));
+        Ui.addSpace(body,this,8);
+        body.addView(Ui.button(this,"⊘  Снять все ограничения сервисов",Ui.CARD2,Ui.RED,()->{
+            sheet[0].dismiss();
+            confirm("Снять ограничения сервисов?","Удалить только правила этого раздела, не меняя QoS и список блокировок?",()->{
+                controller.save(new TreeMap<>());action("Передача пустого плана сервисов",controller::deploy);
+            });
+        }));
+        sheet[0]=Ui.sheet(this,"Ограничение сервисов","Локальных правил: "+controller.count(),body);
+    }
+    private void confirmServiceDeploy(ServiceRestrictions controller){
+        confirm("Передать правила на AX8?","IP-фильтр может затронуть другие сервисы с общими IP. Блокируются и ручные загрузки, и обновления. VPN/новые адреса могут обходить правила. Модуль работает без телефона до перезагрузки AX8; после неё требуется повторная передача. Продолжить?",
+            ()->action("Передача плана сервисов",controller::deploy));
+    }
+    private void serviceEditor(String scope){
+        ServiceRestrictions controller=services();
+        Map<String,Set<String>> desired=controller.rules();
+        Set<String> selected=new TreeSet<>(desired.getOrDefault(scope,Collections.emptySet()));
+        LinearLayout body=Ui.vertical(this);final Dialog[] sheet={null};
+        body.addView(Ui.text(this,"Выбранные сервисы ограничиваются целиком по известным IP. Не является гарантированной блокировкой всех доменов или только автообновлений.",12,Ui.MUTED,false));
+        Ui.addSpace(body,this,10);
+        String previous="";
+        for(ServiceCatalog.Item item:ServiceCatalog.ITEMS){
+            if(!previous.equals(item.category)){
+                previous=item.category;Ui.addSpace(body,this,9);
+                body.addView(Ui.text(this,previous.toUpperCase(Locale.ROOT),12,Ui.MUTED,true));Ui.addSpace(body,this,6);
+            }
+            final TextView[] btn={null};boolean on=selected.contains(item.id);
+            btn[0]=Ui.button(this,(on?"✓  ":"○  ")+item.name,Ui.CARD2,on?Ui.RED:Ui.TEXT,()->{
+                if(!selected.add(item.id))selected.remove(item.id);
+                boolean enabled=selected.contains(item.id);
+                btn[0].setText((enabled?"✓  ":"○  ")+item.name);btn[0].setTextColor(enabled?Ui.RED:Ui.TEXT);
+            });
+            body.addView(btn[0]);Ui.addSpace(body,this,5);
+        }
+        Ui.addSpace(body,this,12);
+        Runnable save=()->{
+            Map<String,Set<String>> latest=controller.rules();
+            if(selected.isEmpty())latest.remove(scope);else latest.put(scope,new TreeSet<>(selected));
+            controller.save(latest);
+        };
+        body.addView(Ui.button(this,"Сохранить локально",Ui.CARD2,Ui.TEXT,()->{
+            try{save.run();sheet[0].dismiss();toast("Сохранено на телефоне. На AX8 ещё не применено.");}
+            catch(Exception e){alert("Ошибка",e.getMessage());}
+        }));
+        Ui.addSpace(body,this,8);
+        body.addView(Ui.button(this,"✓  Сохранить и передать на AX8",Ui.CARD2,Ui.CYAN,()->{
+            try{save.run();sheet[0].dismiss();confirmServiceDeploy(controller);}
+            catch(Exception e){alert("Ошибка",e.getMessage());}
+        }));
+        sheet[0]=Ui.sheet(this,"Ограничение сервисов","ALL".equals(scope)?"Все устройства":savedLimitDeviceName(scope)+" · "+scope,body);
+    }
     private void network(){
         networkValues.clear();networkSignature=networkSkeletonSignature();
         addTitle("Сеть и радиомодуль","Настройки подключения, Band Lock и диагностика");
@@ -1701,6 +1785,10 @@ public final class MainActivity extends Activity {
         Ui.addSpace(q,this,11);
         q.addView(Ui.button(this,"⚡  Массовые лимиты и приоритет",Ui.CARD2,Ui.CYAN,()->bulkControls()));
         addCard(q);
+        LinearLayout filters=Ui.card(this);Ui.title(filters,this,"Ограничение сервисов","Автономные правила AX8 · IPv4/IPv6");
+        Ui.addSpace(filters,this,10);
+        filters.addView(Ui.button(this,"Настроить сервисы",Ui.CARD2,Ui.CYAN,()->serviceScopes()));
+        addCard(filters);
     }
     private String rssi(){
         double v=Double.NaN;for(String key:new String[]{"nv_rssi","lte_rssi"}){v=num(status,key);if(!Double.isNaN(v))break;}
