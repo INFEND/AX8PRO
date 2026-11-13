@@ -59,6 +59,8 @@ if name=="nslookup":
     print("Server: 192.168.150.1\\nAddress: 192.168.150.1\\n\\nName: "+a[-1])
     print("Address: "+("2001:db8::123" if "-type=AAAA" in a else "203.0.113.42"))
 elif name=="ipset":
+    if os.environ.get("NO_IPSET")=="1": sys.exit(127)
+    if os.environ.get("FAIL_IPSET_CREATE")=="1" and a[0]=="create": sys.exit(1)
     if a[0]=="-exist":a=a[1:]
     op=a[0]
     if op=="list":
@@ -103,8 +105,8 @@ state.write_text(json.dumps(d));sys.exit(rc)
             env=dict(os.environ,PATH=str(bin)+os.pathsep+os.environ["PATH"],MOCK_STATE=str(p/"state.json"))
             rev="12345678-1234-1234-1234-123456789abc"
             (p/"plan").write_text(rev+"\nALL play play.google.com\nAA:BB:CC:DD:EE:FF drive drive.google.com\n")
-            def run(fail=False):
-                return subprocess.run(["sh",str(AGENT),"--test-root",str(p),"--once"],env=dict(env,FAIL_DNS="1" if fail else "0"),capture_output=True,text=True)
+            def run(fail=False,**extra):
+                return subprocess.run(["sh",str(AGENT),"--test-root",str(p),"--once"],env=dict(env,FAIL_DNS="1" if fail else "0",**extra),capture_output=True,text=True)
             r=run();self.assertEqual(r.returncode,0,r.stdout+r.stderr)
             d=json.loads((p/"state.json").read_text())
             self.assertEqual(d["jumps"]["iptables"],["AX8SVCA"])
@@ -128,3 +130,29 @@ state.write_text(json.dumps(d));sys.exit(rc)
             self.assertEqual(d["jumps"]["ip6tables"],[])
             self.assertEqual(d["sets"],{})
             self.assertIn("OFF|"+rev+"|0|",(p/"status").read_text())
+
+            # No ipset: plain destination-IP rules, still MAC-specific.
+            (p/"plan").write_text(rev+"\nALL play play.google.com\nAA:BB:CC:DD:EE:FF drive drive.google.com\n")
+            r=run(NO_IPSET="1");self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            d=json.loads((p/"state.json").read_text())
+            self.assertEqual(d["jumps"]["iptables"],["AX8SVCA"])
+            self.assertEqual(d["sets"],{})
+            self.assertIn("-d",d["iptables"]["AX8SVCA"][0])
+            self.assertIn("--mac-source",d["iptables"]["AX8SVCA"][1])
+            self.assertIn("режим=direct",(p/"status").read_text())
+            r=run(True,NO_IPSET="1");self.assertNotEqual(r.returncode,0)
+            self.assertEqual(json.loads((p/"state.json").read_text())["jumps"]["iptables"],["AX8SVCA"])
+            r=run(FAIL_IPSET_CREATE="1");self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            self.assertEqual(json.loads((p/"state.json").read_text())["jumps"]["iptables"],["AX8SVCB"])
+            (p/"plan").write_text(rev+"\n")
+            r=run(NO_IPSET="1");self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            self.assertEqual(json.loads((p/"state.json").read_text())["jumps"]["iptables"],[])
+
+    def test_legacy_firmware_dependencies(self):
+        java=(SRC/"ServiceRestrictions.java").read_text(encoding="utf-8")
+        self.assertIn("printf '%b'",java)
+        self.assertNotIn("command -v base64",java)
+        self.assertNotIn("command -v nohup",java)
+        self.assertNotIn("command -v ipset",java)
+        self.assertIn("agent.version",java)
+        self.assertIn("iptables: таблица filter/FORWARD недоступна",java)

@@ -10,6 +10,7 @@ import java.util.*;
 /** Stores desired rules separately from the router's reported applied status. */
 final class ServiceRestrictions {
     private static final String ROOT="/tmp/ax8pro-services";
+    private static final String AGENT_VERSION="2";
     private final Context context;
     private final SharedPreferences prefs;
     private final RouterClient router;
@@ -43,16 +44,28 @@ final class ServiceRestrictions {
     String revision(){return prefs.getString(key+"_rev","");}
     private static String quote(String s){return "'"+s.replace("'","'\\''")+"'";}
     private TelnetShell open(){return new TelnetShell(router,prefs.getString("telnet_user","admin"),prefs.getString("telnet_pass","admin"));}
-    private static void checked(TelnetShell sh,String cmd)throws Exception{
+    private static void require(TelnetShell sh,String cmd,String failure)throws Exception{
         TelnetShell.Result r=sh.exec(cmd,10000);
-        if(r.code!=0)throw new IOException("AX8: "+r.output);
+        if(r.code!=0)throw new IOException(failure+" (код "+r.code+")");
     }
+    private static void checked(TelnetShell sh,String cmd)throws Exception{
+        require(sh,cmd,"Не удалось записать или запустить модуль сервисов на AX8");
+    }
+    // POSIX printf is a shell builtin. Octal encoding avoids base64 dependency,
+    // preserves UTF-8 bytes and keeps all commands below typical Telnet line limits.
     private static void upload(TelnetShell sh,String path,byte[] content)throws Exception{
-        String base64=java.util.Base64.getEncoder().encodeToString(content);
-        checked(sh,": > "+quote(path+".b64"));
-        for(int i=0;i<base64.length();i+=720)
-            checked(sh,"printf %s "+quote(base64.substring(i,Math.min(i+720,base64.length())))+" >> "+quote(path+".b64"));
-        checked(sh,"base64 -d "+quote(path+".b64")+" > "+quote(path)+" && rm -f "+quote(path+".b64"));
+        checked(sh,": > "+quote(path));
+        for(int i=0;i<content.length;i+=120){
+            StringBuilder escaped=new StringBuilder();
+            for(int j=i;j<Math.min(i+120,content.length);j++){
+                int n=content[j]&255;
+                escaped.append("\\0").append((char)('0'+(n>>6)))
+                    .append((char)('0'+((n>>3)&7))).append((char)('0'+(n&7)));
+            }
+            checked(sh,"printf '%b' "+quote(escaped.toString())+" >> "+quote(path));
+        }
+        require(sh,"test \"$(wc -c < "+quote(path)+")\" -eq "+content.length,
+            "Передача файла завершилась не полностью");
     }
     private byte[] agent()throws IOException{
         try(InputStream in=context.getAssets().open("ax8_service_agent.sh");ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -61,28 +74,41 @@ final class ServiceRestrictions {
     }
     private static String aliveCommand(){
         return "p=$(cat "+ROOT+"/pid 2>/dev/null); case \"$p\" in ''|*[!0-9]*) false;; *) "+
-            "test -r /proc/$p/cmdline && tr '\\000' ' ' </proc/$p/cmdline | grep -F "+quote(ROOT+"/agent.sh")+" >/dev/null;; esac";
+            "test -r /proc/$p/cmdline && tr '\\000' '\\n' </proc/$p/cmdline | grep -Fx "+quote(ROOT+"/agent.sh")+" >/dev/null;; esac";
     }
     void deploy(RouterClient.Progress progress)throws Exception{
         String rev=revision();if(rev.isEmpty()){save(rules());rev=revision();}
         String plan=ServiceCatalog.plan(rev,rules());
         try(RouterOperationGate.Lease ignored=RouterOperationGate.enter();TelnetShell sh=open()){
             progress.note("Проверка возможностей AX8");
-            checked(sh,"test ! -L "+ROOT+" && mkdir -p "+ROOT+" && chmod 700 "+ROOT+
-                " && command -v iptables >/dev/null && command -v ipset >/dev/null && command -v nslookup >/dev/null"+
-                " && command -v timeout >/dev/null && command -v base64 >/dev/null && command -v nohup >/dev/null"+
-                " && test -d /sys/class/net/br0 && iptables -L FORWARD -n >/dev/null");
+            require(sh,"test ! -L "+ROOT+" && mkdir -p "+ROOT+" && chmod 700 "+ROOT+" && test -w "+ROOT,
+                "Нет доступа к рабочей папке /tmp/ax8pro-services");
+            require(sh,"command -v iptables >/dev/null && iptables -L FORWARD -n >/dev/null 2>&1",
+                "iptables: таблица filter/FORWARD недоступна");
+            require(sh,"test -d /sys/class/net/br0","Не найден LAN-интерфейс br0; автоматическая установка отменена");
+            require(sh,"command -v nslookup >/dev/null || (command -v busybox >/dev/null && busybox --list | grep -x nslookup >/dev/null)",
+                "На AX8 нет nslookup (включая BusyBox), DNS-адреса сервисов получить нельзя");
+            require(sh,"(for c in awk grep sort head wc cp mv rm chmod date sleep tr; do command -v \"$c\" >/dev/null || exit 1; done)",
+                "В прошивке отсутствуют необходимые базовые утилиты shell");
             String alive=aliveCommand();
             boolean running=sh.exec(alive).code==0;
-            if(!running){
-                progress.note("Установка автономного модуля");
+            boolean current=sh.exec("test \"$(cat "+ROOT+"/agent.version 2>/dev/null)\" = "+AGENT_VERSION).code==0;
+            if(!running||!current){
+                progress.note("Установка совместимого модуля (ipset необязателен)");
                 upload(sh,ROOT+"/agent.new",agent());
-                checked(sh,"sh -n "+ROOT+"/agent.new && mv "+ROOT+"/agent.new "+ROOT+"/agent.sh && chmod 700 "+ROOT+"/agent.sh");
+                require(sh,"sh -n "+ROOT+"/agent.new","Прошивка не поддерживает синтаксис автономного модуля");
+                if(running){
+                    require(sh,alive+" && kill -TERM \"$p\"","Не удалось остановить прежний модуль");
+                    for(int i=0;i<12&&sh.exec(alive).code==0;i++)Thread.sleep(500);
+                    if(sh.exec(alive).code==0)throw new IOException("Прежний модуль ещё завершает работу; повторите передачу");
+                    running=false;
+                }
+                checked(sh,"mv "+ROOT+"/agent.new "+ROOT+"/agent.sh && chmod 700 "+ROOT+"/agent.sh && printf %s "+AGENT_VERSION+" > "+ROOT+"/agent.version");
             }
             upload(sh,ROOT+"/plan.new",plan.getBytes(StandardCharsets.UTF_8));
             checked(sh,"mv "+ROOT+"/plan.new "+ROOT+"/plan");
             if(!running){
-                checked(sh,"rm -f "+ROOT+"/pid; nohup sh "+ROOT+"/agent.sh </dev/null >"+ROOT+"/agent.log 2>&1 &");
+                checked(sh,"rm -f "+ROOT+"/pid; (trap '' HUP; exec sh "+ROOT+"/agent.sh) </dev/null >"+ROOT+"/agent.log 2>&1 &");
                 Thread.sleep(400);
                 if(sh.exec(alive).code!=0)throw new IOException("Автономный модуль не запустился; проверьте прошивку AX8");
             }
