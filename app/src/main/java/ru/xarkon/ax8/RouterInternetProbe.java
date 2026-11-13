@@ -48,6 +48,10 @@ public final class RouterInternetProbe {
                 // Gateway proof is sufficient: avoid waiting for a TCP timeout first.
                 if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port))
                     continue;
+                // Router reachability may have blocked while the network changed.
+                // Read current capabilities rather than trusting the pre-socket snapshot.
+                caps=cm.getNetworkCapabilities(network);
+                if(!isRouterLink(caps))continue;
                 // Android has already independently checked Internet access on this
                 // exact router-reachable physical network. Reuse that fresh platform
                 // verdict instead of waiting up to 15 seconds for three serial HTTPS
@@ -56,11 +60,14 @@ public final class RouterInternetProbe {
                     return new Result(InternetStatusPolicy.ONLINE,network);
                 // Without Android validation, require a successful router-bound HTTPS
                 // probe; a working WebUI alone is not proof of Internet access.
-                for(String endpoint:ENDPOINTS)if(reachesInternet(network,endpoint))
-                    return new Result(InternetStatusPolicy.ONLINE,network);
-                if(offlineCandidate==null)offlineCandidate=network;
+                for(String endpoint:ENDPOINTS){
+                    if(!networkStillPresent(context,network))break;
+                    if(reachesInternet(network,endpoint) && networkStillPresent(context,network))
+                        return new Result(InternetStatusPolicy.ONLINE,network);
+                }
+                if(offlineCandidate==null && networkStillPresent(context,network))offlineCandidate=network;
             }
-            if(offlineCandidate!=null)
+            if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))
                 return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
         }catch(Exception ignored){}
         return new Result(InternetStatusPolicy.UNAVAILABLE,null);

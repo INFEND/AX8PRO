@@ -17,15 +17,24 @@ class InternetBadgeSourceTests(unittest.TestCase):
     def test_excludes_vpn_even_when_it_advertises_wifi(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
-        self.assertEqual(source.count("isRouterLink("),3,
+        self.assertEqual(source.count("isRouterLink("),4,
                          "Both initial selection and revalidation must reject VPN")
     def test_checks_all_reachable_router_links_before_declaring_offline(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("Network offlineCandidate=null;",source)
-        self.assertIn("if(offlineCandidate==null)offlineCandidate=network;",source)
-        self.assertIn("if(offlineCandidate!=null)",source)
+        self.assertIn("if(offlineCandidate==null && networkStillPresent(context,network))offlineCandidate=network;",source)
+        self.assertIn("if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))",source)
         self.assertIn("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);",source)
         self.assertNotIn("return new Result(InternetStatusPolicy.OFFLINE,network);",source)
+    def test_rechecks_link_after_blocking_operations(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        after_socket=source.split("!canReachRouter(network,host,port))",1)[1]
+        self.assertLess(after_socket.index("caps=cm.getNetworkCapabilities(network);"),
+                        after_socket.index("NET_CAPABILITY_VALIDATED"))
+        self.assertIn("if(!isRouterLink(caps))continue;",after_socket)
+        self.assertIn("if(!networkStillPresent(context,network))break;",source)
+        self.assertIn("reachesInternet(network,endpoint) && networkStillPresent(context,network)",source)
+
     def test_physical_router_gateway_fallback(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("isRouterGateway(cm,network,host)",source)
