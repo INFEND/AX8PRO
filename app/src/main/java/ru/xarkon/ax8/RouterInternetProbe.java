@@ -64,6 +64,13 @@ public final class RouterInternetProbe {
                     if(!networkStillPresent(context,network))break;
                     if(reachesInternet(network,endpoint) && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
+                    // Android may validate this same physical link during a slow probe.
+                    // Reuse that verdict before starting another external request.
+                    caps=cm.getNetworkCapabilities(network);
+                    if(!isRouterLink(caps))break;
+                    if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                            && networkStillPresent(context,network))
+                        return new Result(InternetStatusPolicy.ONLINE,network);
                 }
                 if(offlineCandidate==null && networkStillPresent(context,network))offlineCandidate=network;
             }

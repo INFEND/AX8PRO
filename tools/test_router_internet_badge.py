@@ -17,7 +17,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
     def test_excludes_vpn_even_when_it_advertises_wifi(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
-        self.assertEqual(source.count("isRouterLink("),4,
+        self.assertEqual(source.count("isRouterLink("),5,
                          "Both initial selection and revalidation must reject VPN")
     def test_checks_all_reachable_router_links_before_declaring_offline(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
@@ -34,6 +34,16 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("if(!isRouterLink(caps))continue;",after_socket)
         self.assertIn("if(!networkStillPresent(context,network))break;",source)
         self.assertIn("reachesInternet(network,endpoint) && networkStillPresent(context,network)",source)
+
+    def test_reuses_validation_acquired_during_external_probe(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        loop=source.split("for(String endpoint:ENDPOINTS)",1)[1].split("if(offlineCandidate==null",1)[0]
+        self.assertLess(loop.index("reachesInternet(network,endpoint)"),
+                        loop.index("caps=cm.getNetworkCapabilities(network);"))
+        self.assertLess(loop.index("if(!isRouterLink(caps))break;"),
+                        loop.index("NET_CAPABILITY_VALIDATED"))
+        self.assertIn("&& networkStillPresent(context,network)",loop)
+        self.assertIn("return new Result(InternetStatusPolicy.ONLINE,network);",loop)
 
     def test_physical_router_gateway_fallback(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
