@@ -13,6 +13,4 @@ spec.loader.exec_module(font)
 
 class TekturArchiveTest(unittest.TestCase):
     def test_exact_font_reconstruction(self):
-        with urllib.request.urlopen(font.URL, timeout=45) as response:
-            raw=response.read(300001)
-        self.assertEqual(hashlib.sha256(font.reconstruct(raw)).hexdigest(),font.EXPECTED)
+        self.assertEqual(hashlib.sha256(font.load_exact_font()).hexdigest(),font.EXPECTED)

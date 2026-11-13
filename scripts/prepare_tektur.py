@@ -8,6 +8,7 @@ No runtime font downloads, and no substitution of a different font.
 import argparse
 import base64
 import hashlib
+import json
 import struct
 import urllib.request
 import zlib
@@ -62,6 +63,42 @@ def reconstruct(raw):
         raise ValueError("Exact archive font checksum failed: "+actual)
     return bytes(out)
 
+def exact_download():
+    # Google Fonts' downloadable archive uses repacked desktop tables rather
+    # than the raw source repository bytes. Accept only the user's digest.
+    endpoint = "https://fonts.google.com/download/list?family=Tektur"
+    req = urllib.request.Request(endpoint, headers={"User-Agent":"Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=20) as response:
+        raw = response.read(1000000).decode("utf-8")
+    manifest = json.loads(raw[raw.index("{"):])["manifest"]
+    candidates = []
+    for item in manifest.get("fileRefs", []):
+        filename = item.get("filename","")
+        url = item.get("url","")
+        if filename.lower().endswith(".ttf") and ("variable" in filename.lower() or "[" in filename):
+            candidates.append((filename,url))
+    for filename,url in candidates:
+        if not url.startswith("https://fonts.gstatic.com/"):
+            continue
+        with urllib.request.urlopen(url, timeout=20) as response:
+            font = response.read(300001)
+        digest = hashlib.sha256(font).hexdigest()
+        print("Desktop download candidate:", filename, digest, flush=True)
+        if digest == EXPECTED:
+            return font
+    raise ValueError("Desktop download did not match the archive: "+str([n for n,u in candidates]))
+
+def load_exact_font():
+    try:
+        return exact_download()
+    except Exception as exc:
+        print("Desktop manifest unavailable or different:", str(exc), flush=True)
+    with urllib.request.urlopen(URL, timeout=45) as response:
+        raw = response.read(300001)
+    if len(raw)>300000:
+        raise ValueError("Oversized upstream font")
+    return reconstruct(raw)
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--output", required=True, type=Path)
@@ -70,14 +107,7 @@ def main():
     if args.output.is_file() and hashlib.sha256(args.output.read_bytes()).hexdigest() == EXPECTED:
         print("Tektur archive SHA-256 verified:", EXPECTED)
         return
-    if args.source:
-        raw = args.source.read_bytes()
-    else:
-        with urllib.request.urlopen(URL, timeout=45) as response:
-            raw = response.read(300001)
-        if len(raw)>300000:
-            raise ValueError("Oversized upstream font")
-    font = reconstruct(raw)
+    font = reconstruct(args.source.read_bytes()) if args.source else load_exact_font()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temp = args.output.with_suffix(".tmp")
     temp.write_bytes(font)
