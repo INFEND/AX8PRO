@@ -381,14 +381,14 @@ public final class RouterBackgroundService extends Service {
         if(!ownsBackgroundCycle()){releaseLocks();return;}
         if(devices!=null){
             if(!ownsBackgroundCycle()){releaseLocks();return;}
-            try{qos.resyncAddresses(devices,note->{});}catch(Exception e){qosIssue="QoS: "+e.getMessage();}
+            try{qos.resyncAddresses(devices,note->{});}catch(Exception e){qosIssue="QoS: "+readFailure(e);}
             if(!ownsBackgroundCycle()){releaseLocks();return;}
             try{
                 if(prefs.getBoolean("traffic_monitor",false)){
                     if(!ownsBackgroundCycle()){releaseLocks();return;}
                     traffic.sample(devices);
                     if(!ownsBackgroundCycle()){releaseLocks();return;}
-                    if(!traffic.error().isEmpty())qosIssue="Монитор: "+traffic.error();
+                    if(!traffic.error().isEmpty())qosIssue+=(qosIssue.isEmpty()?"":"; ")+"Монитор: "+traffic.error();
                     boolean prioritize=prefs.getBoolean("background_priority",false)&&traffic.error().isEmpty();
                     String owner=prefs.getString("owner_mac","");
                     if(prioritize&&!owner.isEmpty()){
@@ -400,7 +400,7 @@ public final class RouterBackgroundService extends Service {
                     if(traffic.error().isEmpty()&&prefs.getBoolean("background_qos_watch",true))
                         watchdog.check(devices,traffic,qos);
                 }else if(priority.enabled&&ownsBackgroundCycle()){qos.applyPriority("",null,devices,msg->{});priority.disable();}
-            }catch(Exception e){qosIssue="QoS: "+(e.getMessage()==null?e.toString():e.getMessage());}
+            }catch(Exception e){qosIssue+=(qosIssue.isEmpty()?"":"; ")+"QoS: "+readFailure(e);}
         }
         // Never publish a completed snapshot from a poll whose service was stopped.
         if(!ownsBackgroundCycle()){releaseLocks();return;}

@@ -46,5 +46,12 @@ class BackgroundSampleTimeTest(unittest.TestCase):
         for issue in ("smsIssue", "statusIssue", "deviceIssue", "blockedIssue"):
             self.assertIn(issue+"=readFailure(e)", source)
 
+    def test_qos_errors_preserve_reason_and_prior_failure(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn('catch(Exception e){qosIssue="QoS: "+readFailure(e);}', source)
+        self.assertIn('qosIssue+=(qosIssue.isEmpty()?"":"; ")+"Монитор: "+traffic.error();', source)
+        self.assertIn('qosIssue+=(qosIssue.isEmpty()?"":"; ")+"QoS: "+readFailure(e);', source)
+        self.assertNotIn('qosIssue="QoS: "+e.getMessage()', source)
+
 if __name__ == "__main__":
     unittest.main()
