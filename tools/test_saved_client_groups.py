@@ -32,6 +32,21 @@ public class GroupTest {
     limits.remove("B");revisions.put("B",3L);
     x=SavedClientGroups.build(macs,names::get,limits,k->revisions.getOrDefault(k,0L)).stream().filter(a->a.macs.size()==3).findFirst().orElseThrow();
     check(x.primary.equals("C")&&x.limit==807,"remaining actual limit preserved");
+    // Regression: connected MAC was excluded from the saved group, leaving 807
+    // in the group header while the active card displayed 622.
+    Map<String,Integer> live=new HashMap<>();live.put("A",622);
+    x=SavedClientGroups.build(Arrays.asList("B","C"),names::get,limits,k->revisions.getOrDefault(k,0L),live).get(0);
+    check(x.primary.equals("A")&&x.limit==622&&x.live&&x.macs.size()==3&&!x.conflicting,"active MAC controls current group cap");
+    check(limits.get("C")==807&&!limits.containsKey("A"),"historical and actual rules not modified");
+    live.put("A",null);
+    x=SavedClientGroups.build(Arrays.asList("B","C"),names::get,limits,k->0L,live).get(0);
+    check(x.primary.equals("A")&&x.limit==null&&x.live&&!x.conflicting,"active unlimited beats old finite cap");
+    live.put("B",250);
+    x=SavedClientGroups.build(Arrays.asList("B","C"),names::get,limits,k->0L,live).get(0);
+    check(x.conflicting,"two connected MACs with different caps are not conflated");
+    live.clear();live.put("D",999);
+    x=SavedClientGroups.build(Arrays.asList("B","C"),names::get,limits,k->0L,live).get(0);
+    check(!x.live&&!x.macs.contains("D")&&x.limit==807,"unrelated active MAC not added");
     limits.clear();
     x=SavedClientGroups.build(macs,names::get,limits,k->revisions.getOrDefault(k,0L)).stream().filter(a->a.macs.size()==3).findFirst().orElseThrow();
     check(x.limit==null&&!x.conflicting,"all unlimited");

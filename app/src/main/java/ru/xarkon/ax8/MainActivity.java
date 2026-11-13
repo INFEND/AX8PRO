@@ -1098,6 +1098,24 @@ public final class MainActivity extends Activity {
         }
         showRememberedClients();
     }
+    private Map<String,Integer> activeGroupLimits(){
+        Map<String,Integer> active=new TreeMap<>();
+        for(RouterClient.Device dev:devices){
+            if(dev==null)continue;
+            String mac=RouterClient.normalizeMac(dev.mac);
+            if(!mac.isEmpty())active.put(mac,qos.effectiveLimit(mac));
+        }
+        return active;
+    }
+    private String savedGroupSignature(){
+        Map<String,Integer> saved=new TreeMap<>(qos.limits());
+        StringBuilder signature=new StringBuilder(saved.toString());
+        for(String mac:saved.keySet())signature.append('|').append(mac).append(':').append(qos.limitRevision(mac));
+        for(Map.Entry<String,Integer> live:activeGroupLimits().entrySet())
+            signature.append('|').append(live.getKey()).append(':').append(live.getValue())
+                .append(':').append(savedLimitDeviceName(live.getKey()));
+        return signature.toString();
+    }
     private void showRememberedClients(){
         TreeSet<String> known=new TreeSet<>();
         for(String key:prefs.getAll().keySet()){
@@ -1120,17 +1138,18 @@ public final class MainActivity extends Activity {
         for(RouterClient.Device active:devices)if(active!=null)known.remove(RouterClient.normalizeMac(active.mac));
         if(known.isEmpty())return;
         Map<String,Integer> limits=qos.limits();
-        List<SavedClientGroups.Group> groups=SavedClientGroups.build(known,this::savedLimitDeviceName,limits,qos::limitRevision);
+        Map<String,Integer> liveLimits=activeGroupLimits();
+        List<SavedClientGroups.Group> groups=SavedClientGroups.build(known,this::savedLimitDeviceName,limits,qos::limitRevision,liveLimits);
         LinearLayout saved=Ui.card(this);
         saved.addView(Ui.button(this,(knownClientsExpanded?"⌃  ":"⌄  ")+"Сохранённые устройства ("+groups.size()+")",
             Ui.CARD2,Ui.TEXT,()->{knownClientsExpanded=!knownClientsExpanded;
                 if(!knownClientsExpanded)expandedRememberedGroups.clear();draw(true);}));
         if(knownClientsExpanded){
             Ui.addSpace(saved,this,9);
-            saved.addView(Ui.text(this,"Одинаковые имена сгруппированы. Лимиты сохранены отдельно для каждого MAC; изменяйте нужный адрес в раскрывающемся списке.",12,Ui.MUTED,false));
+            saved.addView(Ui.text(this,"Группа показывает текущий лимит подключённого MAC, а без подключения — последнее сохранённое ограничение. Правила каждого MAC независимы.",12,Ui.MUTED,false));
             Ui.addSpace(saved,this,9);
             for(SavedClientGroups.Group group:groups)
-                addSavedClientGroup(saved,group,limits,expandedRememberedGroups);
+                addSavedClientGroup(saved,group,limits,liveLimits,expandedRememberedGroups);
         }
         addCard(saved);
     }
@@ -1140,7 +1159,7 @@ public final class MainActivity extends Activity {
         chooseLimit(remembered);
     }
     private void addSavedClientGroup(LinearLayout target,SavedClientGroups.Group group,
-                                     Map<String,Integer> limits,Set<String> expanded){
+                                     Map<String,Integer> limits,Map<String,Integer> liveLimits,Set<String> expanded){
         boolean multiple=group.macs.size()>1;
         boolean open=multiple&&expanded.contains(group.key);
         LinearLayout header=Ui.horizontal(this);
@@ -1150,11 +1169,11 @@ public final class MainActivity extends Activity {
         identity.addView(Ui.text(this,group.name,14,Ui.TEXT,true));
         if(multiple){
             Ui.addSpace(identity,this,4);
-            identity.addView(Ui.text(this,group.macs.size()+" MAC"+(group.limit!=null&&!group.conflicting?" · сохранённый лимит":""),10,Ui.MUTED,false));
+            identity.addView(Ui.text(this,group.macs.size()+" MAC"+(group.live?" · текущий лимит":group.limit!=null&&!group.conflicting?" · сохранённый лимит":""),10,Ui.MUTED,false));
         }
         header.addView(identity,new LinearLayout.LayoutParams(0,-2,1));
         String caption=group.conflicting?"Разные лимиты":limitName(group.limit);
-        TextView value=Ui.text(this,caption,14,group.limit==null?Ui.GREEN:Ui.RED,true);
+        TextView value=Ui.text(this,caption,14,group.conflicting?Ui.ORANGE:group.limit==null?Ui.GREEN:Ui.RED,true);
         value.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         value.setPadding(d(8),0,0,0);header.addView(value);
         if(multiple){
@@ -1171,10 +1190,18 @@ public final class MainActivity extends Activity {
         Ui.animateTouch(header);target.addView(header);Ui.addSpace(target,this,5);
         if(open){
             for(String mac:group.macs){
-                Integer cap=limits.get(mac);
+                boolean live=liveLimits.containsKey(mac);
+                Integer savedCap=limits.get(mac);
+                Integer cap=live?liveLimits.get(mac):savedCap;
                 LinearLayout row=Ui.horizontal(this);
                 row.setPadding(d(14),d(7),d(4),d(7));
-                TextView address=Ui.text(this,mac,12,Ui.TEXT,true);
+                LinearLayout address=Ui.vertical(this);
+                address.addView(Ui.text(this,mac,12,Ui.TEXT,true));
+                if(live){
+                    String state="● Подключён";
+                    if(!Objects.equals(cap,savedCap))state+=" · сохранено "+limitName(savedCap);
+                    address.addView(Ui.text(this,state,10,Ui.MUTED,false));
+                }
                 row.addView(address,new LinearLayout.LayoutParams(0,-2,1));
                 TextView speed=Ui.text(this,limitName(cap),13,cap==null?Ui.GREEN:Ui.RED,true);
                 speed.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);row.addView(speed);
@@ -1630,8 +1657,9 @@ public final class MainActivity extends Activity {
                 Ui.CARD2,Ui.TEXT,()->{savedLimitsExpanded=!savedLimitsExpanded;if(!savedLimitsExpanded)expandedRuleGroups.clear();draw(true);}));
             if(savedLimitsExpanded){
                 Ui.addSpace(q,this,8);
-                List<SavedClientGroups.Group> groups=SavedClientGroups.build(savedLimits.keySet(),this::savedLimitDeviceName,savedLimits,qos::limitRevision);
-                for(SavedClientGroups.Group group:groups)addSavedClientGroup(q,group,savedLimits,expandedRuleGroups);
+                Map<String,Integer> liveLimits=activeGroupLimits();
+                List<SavedClientGroups.Group> groups=SavedClientGroups.build(savedLimits.keySet(),this::savedLimitDeviceName,savedLimits,qos::limitRevision,liveLimits);
+                for(SavedClientGroups.Group group:groups)addSavedClientGroup(q,group,savedLimits,liveLimits,expandedRuleGroups);
                 Ui.addSpace(q,this,8);
                 q.addView(Ui.button(this,"↻  Применить сохранённые лимиты",Ui.CARD2,Ui.TEXT,
                     ()->confirm("Восстановить QoS","Пересобрать правила IPv4/IPv6 на роутере?",()->action("Применение QoS",p->{
@@ -1686,6 +1714,7 @@ public final class MainActivity extends Activity {
                 .append(blocked!=null&&blocked.black.contains(d.mac)).append('|')
                 .append(qos.limits().get(d.mac)).append(';');
         }
+        if(knownClientsExpanded)b.append(savedGroupSignature());
         return b.toString();
     }
     private void updateClientsLive(){
@@ -1712,7 +1741,8 @@ public final class MainActivity extends Activity {
     }
     private void updateSmsLive(){if(!smsSignature.equals(smsFingerprint()))draw(true);}
     private String networkSkeletonSignature(){
-        return band()+"/"+stat("ppp_status")+"/"+qos.limits().size();
+        return band()+"/"+stat("ppp_status")+"/"+qos.limits().size()+
+            (savedLimitsExpanded?"/"+savedGroupSignature():"");
     }
     private void setNetwork(String key,String text){
         TextView label=networkValues.get(key);

@@ -29,6 +29,10 @@ class Ax8DocumentUiTest(unittest.TestCase):
         self.assertIn("known.remove(RouterClient.normalizeMac(active.mac))", body)
         self.assertIn("chooseLimit(remembered)", body)
         self.assertIn("SavedClientGroups.build(known", body)
+        self.assertIn("qos::limitRevision,liveLimits", body)
+        self.assertIn("live?liveLimits.get(mac):savedCap", body)
+        self.assertIn("if(knownClientsExpanded)b.append(savedGroupSignature())", MAIN)
+        self.assertIn("savedLimitsExpanded?\"/\"+savedGroupSignature()", MAIN)
 
     def test_band_command_not_changed(self):
         self.assertIn('"AUTO"', MAIN)
