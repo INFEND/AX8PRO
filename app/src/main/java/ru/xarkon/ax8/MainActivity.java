@@ -1417,13 +1417,15 @@ public final class MainActivity extends Activity {
             ()->applyLimitFromSheet(dialog,dev,0));
         body.addView(off);Ui.addSpace(body,this,15);
         body.addView(Ui.text(this,"БЫСТРЫЕ ПРЕСЕТЫ · DL + UL",12,Ui.MUTED,true));Ui.addSpace(body,this,10);
-        int[] presets={15,20,30,50,100,250,300,500,750,1000};
+        int[] presets={15,20,30,50,100,150,250,300,500,750,1000,-1};
         for(int i=0;i<presets.length;i+=3){
             LinearLayout row=Ui.horizontal(this);
             for(int j=i;j<Math.min(i+3,presets.length);j++){
                 final int kb=presets[j];boolean selected=Integer.valueOf(kb).equals(current);
-                TextView x=Ui.button(this,limitName(kb),selected?0xFF15504D:Ui.CARD2,selected?Ui.CYAN:Ui.TEXT,
-                    ()->applyLimitFromSheet(dialog,dev,kb));
+                TextView x=Ui.button(this,kb==-1?"✎":limitName(kb),selected?0xFF15504D:Ui.CARD2,selected?Ui.CYAN:Ui.TEXT,
+                    ()->{if(kb==-1)showManualLimit(current,value->applyLimitFromSheet(dialog,dev,value));
+                        else applyLimitFromSheet(dialog,dev,kb);});
+                if(kb==-1)x.setContentDescription("Ввести собственный лимит");
                 x.setTextSize(12);
                 LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,d(45),1);lp.rightMargin=d(6);row.addView(x,lp);
             }
@@ -1434,10 +1436,10 @@ public final class MainActivity extends Activity {
         }
         Ui.addSpace(body,this,12);
         body.addView(Ui.text(this,"ПОЛЬЗОВАТЕЛЬСКИЙ ЛИМИТ",12,Ui.MUTED,true));Ui.addSpace(body,this,8);
-        int initial=current==null?500:Math.max(0,Math.min(20000,current));
+        int initial=current==null?500:Math.max(0,Math.min(1000,current));
         TextView amount=Ui.text(this,limitName(initial),22,Ui.CYAN,true);amount.setGravity(Gravity.CENTER);
         body.addView(amount);Ui.addSpace(body,this,6);
-        SeekBar seek=new SeekBar(this);seek.setMax(20000);seek.setProgress(initial);
+        SeekBar seek=new SeekBar(this);seek.setMax(1000);seek.setProgress(initial);
         seek.setProgressTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));
         seek.setThumbTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));body.addView(seek);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
@@ -1448,8 +1450,32 @@ public final class MainActivity extends Activity {
         body.addView(Ui.button(this,"✓  Применить выбранную скорость",0xFF15504D,Ui.CYAN,
             ()->applyLimitFromSheet(dialog,dev,seek.getProgress())));
         Ui.addSpace(body,this,7);
-        body.addView(Ui.text(this,"Значения указаны в KB/s, одновременно для входящего и исходящего трафика. Диапазон ползунка: 0–20000 KB/s. Требуется Telnet на роутере.",12,Ui.MUTED,false));
+        body.addView(Ui.text(this,"Значения указаны в KB/s, одновременно для входящего и исходящего трафика. Диапазон ползунка: 0–1000 KB/s. Для других значений используйте ручной ввод. Требуется Telnet на роутере.",12,Ui.MUTED,false));
         dialog[0]=Ui.sheet(this,"Лимит скорости",name+" · IPv4/IPv6 · DL + UL",body);
+    }
+    private void showManualLimit(Integer current,java.util.function.IntConsumer apply){
+        LinearLayout body=Ui.vertical(this);
+        body.addView(Ui.text(this,"СКОРОСТЬ · KB/s",12,Ui.MUTED,true));
+        Ui.addSpace(body,this,8);
+        EditText input=themedField(current==null?"":String.valueOf(current),"Введите целое число",false);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setTypeface(Ui.typeface(this,false));
+        input.setSelectAllOnFocus(true);
+        body.addView(input);
+        Ui.addSpace(body,this,8);
+        body.addView(Ui.text(this,"0–125000 KB/s. Ноль блокирует трафик; для безлимита используйте ∞.",12,Ui.MUTED,false));
+        Ui.addSpace(body,this,12);
+        final Dialog[] manual={null};
+        body.addView(Ui.button(this,"✓  Применить",0xFF15504D,Ui.CYAN,()->{
+            String raw=input.getText().toString().trim();
+            int value;
+            try{value=Integer.parseInt(raw);}
+            catch(NumberFormatException e){input.setError("Введите целое число от 0 до 125000");return;}
+            if(value<0||value>125000){input.setError("Допустимо от 0 до 125000 KB/s");return;}
+            if(manual[0]!=null)manual[0].dismiss();
+            apply.accept(value);
+        }));
+        manual[0]=Ui.sheet(this,"Собственный лимит","Точный ручной ввод · DL + UL",body);
     }
     private void applyLimitFromSheet(Dialog[] sheet,RouterClient.Device dev,Integer kb){
         if(sheet[0]!=null)sheet[0].dismiss();
@@ -2367,30 +2393,38 @@ public final class MainActivity extends Activity {
     }
 
     private void chooseBulkLimit(){
-        Integer[] values={null,0,15,20,30,50,100,250,300,500,750,1000,2000,5000,10000};
+        Integer[] values={null,0,15,20,30,50,100,150,250,300,500,750,1000,-1,2000,5000,10000};
         LinearLayout body=Ui.vertical(this);final Dialog[] sheet={null};
         for(int i=0;i<values.length;i+=3){LinearLayout line=Ui.horizontal(this);
             for(int j=i;j<Math.min(i+3,values.length);j++){
-                Integer limit=values[j];TextView b=Ui.button(this,limit==null?"∞":limitName(limit),Ui.CARD2,Ui.CYAN,()->{
-                    sheet[0].dismiss();confirm("Массовый лимит","Применить "+limitName(limit)+" ко всем кроме "+ownerMac+"?",
-                        ()->action("Массовый QoS",pr->qos.limitEveryoneExcept(ownerMac,limit,api.devices(),pr)));
-                });LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,d(54),1);lp.rightMargin=d(6);line.addView(b,lp);
-            }body.addView(line);Ui.addSpace(body,this,8);
+                Integer limit=values[j];boolean manual=Integer.valueOf(-1).equals(limit);
+                TextView b=Ui.button(this,manual?"✎":limitName(limit),Ui.CARD2,Ui.CYAN,()->{
+                    if(manual){showManualLimit(null,value->applyBulkLimit(sheet,value));return;}
+                    applyBulkLimit(sheet,limit);
+                });
+                if(manual)b.setContentDescription("Ввести собственный массовый лимит");
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,d(54),1);lp.rightMargin=d(6);line.addView(b,lp);
+            }
+            for(int j=Math.min(3,values.length-i);j<3;j++)line.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
+            body.addView(line);Ui.addSpace(body,this,8);
         }
-        Ui.addSpace(body,this,8);body.addView(Ui.text(this,"Свой лимит · ползунок 0–20000 KB/s",13,Ui.MUTED,true));
+        Ui.addSpace(body,this,8);body.addView(Ui.text(this,"Свой лимит · ползунок 0–1000 KB/s",13,Ui.MUTED,true));
         TextView customText=Ui.text(this,"500 KB/s",17,Ui.CYAN,true);body.addView(customText);
-        SeekBar custom=new SeekBar(this);custom.setMax(20000);custom.setProgress(500);
+        SeekBar custom=new SeekBar(this);custom.setMax(1000);custom.setProgress(500);
         custom.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onProgressChanged(SeekBar bar,int v,boolean user){customText.setText(limitName(v));}
             public void onStartTrackingTouch(SeekBar bar){}
             public void onStopTrackingTouch(SeekBar bar){}
         });body.addView(custom);Ui.addSpace(body,this,8);
         body.addView(Ui.button(this,"✓  Применить свой лимит",Ui.CARD2,Ui.CYAN,()->{
-            int limit=custom.getProgress();sheet[0].dismiss();
-            confirm("Массовый QoS","Установить "+limitName(limit)+" для всех кроме "+ownerMac+"?",
-                ()->action("Массовый QoS",pr->qos.limitEveryoneExcept(ownerMac,limit,api.devices(),pr)));
+            applyBulkLimit(sheet,custom.getProgress());
         }));
         sheet[0]=Ui.sheet(this,"Лимит для остальных","Загрузка и отдача · IPv4/IPv6",body);
+    }
+    private void applyBulkLimit(Dialog[] sheet,Integer limit){
+        if(sheet[0]!=null)sheet[0].dismiss();
+        confirm("Массовый QoS","Установить "+limitName(limit)+" для всех кроме "+ownerMac+"?",
+            ()->action("Массовый QoS",pr->qos.limitEveryoneExcept(ownerMac,limit,api.devices(),pr)));
     }
     private void exportDiagnostic(){
         try {JSONObject j=new JSONObject();j.put("time",System.currentTimeMillis());j.put("host",api.host());
