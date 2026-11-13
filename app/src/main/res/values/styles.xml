@@ -3,12 +3,13 @@
     <item name="android:windowLightStatusBar">false</item>
     <item name="android:statusBarColor">#080D18</item>
     <item name="android:navigationBarColor">#080D18</item>
-    <item name="android:fontFamily">sans</item>
+    <item name="android:fontFamily">@font/tektur_family</item>
     <item name="android:colorAccent">#38D8CD</item>
     <item name="android:alertDialogTheme">@style/AppDialogTheme</item>
     <item name="android:windowActionModeOverlay">true</item>
   </style>
   <style name="AppDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
+    <item name="android:fontFamily">@font/tektur_family</item>
     <item name="android:colorBackground">#111B2B</item>
     <item name="android:windowBackground">@drawable/dialog_background</item>
     <item name="android:textColorPrimary">#EFF7FD</item>

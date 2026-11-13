@@ -74,7 +74,7 @@ public final class OtaProgressDialog {
     private TextView text(String s,int size,int color,boolean bold){
         TextView v=new TextView(activity);v.setText(s);v.setTextColor(color);v.setTextSize(size);
         v.setIncludeFontPadding(false);
-        if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
+        v.setTypeface(Ui.typeface(activity,bold));
         return v;
     }
     private static String size(long value){

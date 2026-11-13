@@ -22,7 +22,25 @@ final class QosController implements AutoCloseable {
     }
     /** Actual per-MAC cap: the stricter of saved manual QoS and temporary priority. */
     synchronized Integer effectiveLimit(String mac){return merge(limits()).get(mac);}
-    void persist(Map<String,Integer> limits) {prefs.edit().putString("limits",new JSONObject(limits).toString()).apply();}
+    private static final Object LIMIT_REVISION_LOCK=new Object();
+    long limitRevision(String mac){return prefs.getLong("limit_revision_"+mac,0L);}
+    void persist(Map<String,Integer> next){persist(next,null);}
+    void persist(Map<String,Integer> next,String touched){
+        synchronized(LIMIT_REVISION_LOCK){
+            Map<String,Integer> old=limits();
+            Set<String> changed=new HashSet<>(old.keySet());changed.addAll(next.keySet());
+            changed.removeIf(mac->Objects.equals(old.get(mac),next.get(mac)));
+            if(touched!=null&&!touched.isEmpty())changed.add(touched);
+            SharedPreferences.Editor e=prefs.edit().putString("limits",new JSONObject(next).toString());
+            if(!changed.isEmpty()){
+                long previous=prefs.getLong("limit_revision_counter",0L);
+                long revision=previous==Long.MAX_VALUE?previous:Math.max(0L,previous)+1L;
+                e.putLong("limit_revision_counter",revision);
+                for(String mac:changed)e.putLong("limit_revision_"+mac,revision);
+            }
+            e.apply();
+        }
+    }
     String diagnostics(){return diagnostics;}
     private TelnetShell.Result exec(String cmd)throws Exception{try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){return shell.exec(cmd);}}
     private void checked(String cmd)throws Exception {TelnetShell.Result r=exec(cmd);if(r.code!=0)throw new IOException("Команда tc/iptables отклонена: "+r.output+" / "+cmd);}
@@ -51,7 +69,7 @@ final class QosController implements AutoCloseable {
         String normalized=RouterClient.normalizeMac(mac);if(normalized.isEmpty())throw new IOException("Некорректный MAC");
         Map<String,Integer> old=limits();Map<String,Integer> next=new HashMap<>(old);
         if(kb==null)next.remove(normalized);else next.put(normalized,kb);
-        try {Map<String,Integer> applied=merge(next);apply(devices,applied,progress);persist(next);rememberApplied(devices,applied);}
+        try {Map<String,Integer> applied=merge(next);apply(devices,applied,progress);persist(next,normalized);rememberApplied(devices,applied);}
         catch(Exception e){
             resyncPolicy.invalidate();
             try{apply(devices,merge(old),m->{});rememberApplied(devices,merge(old));}catch(Exception ignored){}

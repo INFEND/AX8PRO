@@ -17,7 +17,8 @@ final class Ui {
     static int TEXT=0xFFF1F6FB,MUTED=0xFF9CAEBd,CYAN=0xFF55DFCB;
     static int BLUE=0xFF5B9AF9,GREEN=0xFF50DA9E,ORANGE=0xFFFFB765,RED=0xFFFB6A7B,YELLOW=0xFFFFD166;
     static int BORDER=0xFF283947;
-    static float FONT_SCALE=1f; static int CORNER=22; static String FONT="sans-serif";
+    static float FONT_SCALE=1f; static int CORNER=22;
+    private static volatile Typeface regularFont,boldFont;
     static boolean MOTION=true, COMPACT=false;
     static void load(android.content.SharedPreferences pref){
         String theme=pref.getString("theme","dark");
@@ -41,7 +42,6 @@ final class Ui {
         // Prevent invisible text on pale or custom backgrounds: base text is theme-appropriate.
         FONT_SCALE=Math.max(.8f,Math.min(1.35f,pref.getInt("font_scale",100)/100f));
         CORNER=pref.getInt("corner",22);
-        FONT="sans-serif-condensed";
         MOTION=pref.getBoolean("motion",true);COMPACT=pref.getBoolean("compact",false);
     }
     static boolean isLight(){return (Color.red(BG)*299+Color.green(BG)*587+Color.blue(BG)*114)/1000>155;}
@@ -55,9 +55,21 @@ final class Ui {
     static GradientDrawable gradient(Context c,int radius,int... color){
         GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TL_BR,color);d.setCornerRadius(dp(c,radius));return d;
     }
+    static Typeface typeface(Context c,boolean strong){
+        Typeface current=strong?boldFont:regularFont;
+        if(current!=null)return current;
+        synchronized(Ui.class){
+            if(regularFont==null||boldFont==null){
+                Typeface family=c.getResources().getFont(R.font.tektur_family);
+                regularFont=Typeface.create(family,Typeface.NORMAL);
+                boldFont=Typeface.create(family,Typeface.BOLD);
+            }
+            return strong?boldFont:regularFont;
+        }
+    }
     static TextView text(Context c,String value,int sp,int color,boolean strong){
         TextView t=new TextView(c);t.setText(value);t.setTextSize(sp*FONT_SCALE);t.setTextColor(color);
-        t.setTypeface(Typeface.create(FONT,strong?Typeface.BOLD:Typeface.NORMAL));
+        t.setTypeface(typeface(c,strong));
         t.setFontFeatureSettings("kern");t.setGravity(Gravity.CENTER_VERTICAL);
         t.setIncludeFontPadding(false);return t;
     }
@@ -273,9 +285,9 @@ final class Ui {
                 c.drawArc(cx-r,cy-r,cx+r,cy+r,145,250*level,false,p);
             }
             p.setStyle(Paint.Style.FILL);p.setColor(state);p.setTextAlign(Paint.Align.CENTER);
-            p.setTypeface(Typeface.create(FONT,Typeface.BOLD));p.setTextSize(dp(getContext(),29));
+            p.setTypeface(typeface(getContext(),true));p.setTextSize(dp(getContext(),29));
             c.drawText(Float.isNaN(level)?"—":Math.round(level*100)+"%",cx,cy+dp(getContext(),9),p);
-            p.setTextSize(dp(getContext(),10));p.setTypeface(Typeface.create(FONT,Typeface.NORMAL));p.setColor(MUTED);
+            p.setTextSize(dp(getContext(),10));p.setTypeface(typeface(getContext(),false));p.setColor(MUTED);
             c.drawText("ОЦЕНКА",cx,cy+dp(getContext(),29),p);
         }
     }
@@ -316,7 +328,7 @@ final class Ui {
                 float y=top+plotH-(plotH*ratio);
                 c.drawLine(left,y,left+plotW,y,p);
             }
-            p.setStyle(Paint.Style.FILL);p.setTextAlign(Paint.Align.RIGHT);p.setTypeface(Typeface.create(FONT,Typeface.NORMAL));
+            p.setStyle(Paint.Style.FILL);p.setTextAlign(Paint.Align.RIGHT);p.setTypeface(typeface(getContext(),false));
             p.setTextSize(dp(getContext(),9));p.setColor(MUTED);
             for(int mark=0;mark<=4;mark++){
                 float ratio=mark/4f;

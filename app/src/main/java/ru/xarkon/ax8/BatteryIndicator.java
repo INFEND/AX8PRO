@@ -124,7 +124,7 @@ final class BatteryIndicator extends LinearLayout {
         BatteryText(Context context){
             super(context);
             setTextSize(14*Ui.FONT_SCALE);
-            setTypeface(android.graphics.Typeface.create(Ui.FONT,android.graphics.Typeface.BOLD));
+            setTypeface(Ui.typeface(getContext(),true));
             setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
             setSingleLine(true);
             setIncludeFontPadding(false);

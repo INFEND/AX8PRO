@@ -19,7 +19,7 @@ class Ax8DocumentUiTest(unittest.TestCase):
     def test_offline_limit_is_local_only(self):
         body = MAIN.split("private void applyLimitFromSheet(", 1)[1].split("private void sms()", 1)[0]
         local = body.split("if(!live||!present){", 1)[1].split("return;", 1)[0]
-        self.assertIn("qos.persist(saved)", local)
+        self.assertIn("qos.persist(saved,mac)", local)
         self.assertNotIn("qos.setLimit(", local)
         self.assertIn("Применение на AX8 не подтверждено", local)
 
@@ -28,6 +28,7 @@ class Ax8DocumentUiTest(unittest.TestCase):
         self.assertIn("knownClientsExpanded=false", MAIN)
         self.assertIn("known.remove(RouterClient.normalizeMac(active.mac))", body)
         self.assertIn("chooseLimit(remembered)", body)
+        self.assertIn("SavedClientGroups.build(known", body)
 
     def test_band_command_not_changed(self):
         self.assertIn('"AUTO"', MAIN)
@@ -39,7 +40,8 @@ class Ax8DocumentUiTest(unittest.TestCase):
 
     def test_font_picker_is_removed(self):
         self.assertNotIn("theme.addView(Ui.button(this,\"Aa  Шрифт", MAIN)
-        self.assertIn('FONT="sans-serif-condensed"', UI)
+        self.assertIn('getFont(R.font.tektur_family)', UI)
+        self.assertNotIn('sans-serif-condensed', UI)
 
 if __name__ == "__main__":
     unittest.main()

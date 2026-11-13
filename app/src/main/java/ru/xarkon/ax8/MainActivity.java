@@ -99,6 +99,8 @@ public final class MainActivity extends Activity {
     private Ui.SpeedGraph overviewGraph;
     private String sectionError="";
     private boolean knownClientsExpanded=false,savedLimitsExpanded=false;
+    private final Set<String> expandedRememberedGroups=new HashSet<>();
+    private final Set<String> expandedRuleGroups=new HashSet<>();
     private List<RouterClient.Device> devices=new ArrayList<>();
     private List<RouterClient.Sms> messages=new ArrayList<>();
     private RouterClient.BlockState blocked;
@@ -1117,26 +1119,71 @@ public final class MainActivity extends Activity {
         }
         for(RouterClient.Device active:devices)if(active!=null)known.remove(RouterClient.normalizeMac(active.mac));
         if(known.isEmpty())return;
+        Map<String,Integer> limits=qos.limits();
+        List<SavedClientGroups.Group> groups=SavedClientGroups.build(known,this::savedLimitDeviceName,limits,qos::limitRevision);
         LinearLayout saved=Ui.card(this);
-        saved.addView(Ui.button(this,(knownClientsExpanded?"⌃  ":"⌄  ")+"Сохранённые устройства ("+known.size()+")",
-            Ui.CARD2,Ui.TEXT,()->{knownClientsExpanded=!knownClientsExpanded;draw(true);}));
+        saved.addView(Ui.button(this,(knownClientsExpanded?"⌃  ":"⌄  ")+"Сохранённые устройства ("+groups.size()+")",
+            Ui.CARD2,Ui.TEXT,()->{knownClientsExpanded=!knownClientsExpanded;
+                if(!knownClientsExpanded)expandedRememberedGroups.clear();draw(true);}));
         if(knownClientsExpanded){
             Ui.addSpace(saved,this,9);
-            saved.addView(Ui.text(this,"Устройства отсутствуют в текущем списке. Можно изменить локально сохранённый лимит; применение на AX8 требует повторного подключения и активного мониторинга.",12,Ui.MUTED,false));
+            saved.addView(Ui.text(this,"Одинаковые имена сгруппированы. Лимиты сохранены отдельно для каждого MAC; изменяйте нужный адрес в раскрывающемся списке.",12,Ui.MUTED,false));
             Ui.addSpace(saved,this,9);
-            int shown=0;
-            for(String mac:known){
-                if(shown++>=100){saved.addView(Ui.text(this,"Показаны первые 100 устройств",11,Ui.MUTED,false));break;}
-                String label=savedLimitDeviceName(mac)+" · "+mac+" · "+limitName(qos.limits().get(mac));
-                saved.addView(Ui.button(this,label,Ui.CARD2,Ui.CYAN,()->{
-                    RouterClient.Device remembered=new RouterClient.Device();
-                    remembered.mac=mac;remembered.name=savedLimitDeviceName(mac);
-                    chooseLimit(remembered);
-                }));
-                Ui.addSpace(saved,this,5);
-            }
+            for(SavedClientGroups.Group group:groups)
+                addSavedClientGroup(saved,group,limits,expandedRememberedGroups);
         }
         addCard(saved);
+    }
+    private void editRememberedLimit(String mac){
+        RouterClient.Device remembered=new RouterClient.Device();
+        remembered.mac=mac;remembered.name=savedLimitDeviceName(mac);
+        chooseLimit(remembered);
+    }
+    private void addSavedClientGroup(LinearLayout target,SavedClientGroups.Group group,
+                                     Map<String,Integer> limits,Set<String> expanded){
+        boolean multiple=group.macs.size()>1;
+        boolean open=multiple&&expanded.contains(group.key);
+        LinearLayout header=Ui.horizontal(this);
+        header.setBackground(Ui.shape(this,Ui.CARD2,0,Math.max(4,Ui.CORNER-7)));
+        header.setMinimumHeight(d(48));header.setPadding(d(12),d(12),d(12),d(12));
+        LinearLayout identity=Ui.vertical(this);
+        identity.addView(Ui.text(this,group.name,14,Ui.TEXT,true));
+        if(multiple){
+            Ui.addSpace(identity,this,4);
+            identity.addView(Ui.text(this,group.macs.size()+" MAC"+(group.limit!=null&&!group.conflicting?" · сохранённый лимит":""),10,Ui.MUTED,false));
+        }
+        header.addView(identity,new LinearLayout.LayoutParams(0,-2,1));
+        String caption=group.conflicting?"Разные лимиты":limitName(group.limit);
+        TextView value=Ui.text(this,caption,14,group.limit==null?Ui.GREEN:Ui.RED,true);
+        value.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+        value.setPadding(d(8),0,0,0);header.addView(value);
+        if(multiple){
+            TextView arrow=Ui.text(this,open?"⌃":"⌄",18,Ui.MUTED,true);
+            arrow.setPadding(d(10),0,0,0);header.addView(arrow);
+        }
+        header.setClickable(true);header.setFocusable(true);
+        header.setOnClickListener(v->{
+            if(!multiple){editRememberedLimit(group.primary);return;}
+            if(!expanded.add(group.key))expanded.remove(group.key);
+            draw(true);
+        });
+        header.setContentDescription(group.name+", "+caption+(multiple?", "+(open?"свернуть":"раскрыть")+" MAC-адреса":""));
+        Ui.animateTouch(header);target.addView(header);Ui.addSpace(target,this,5);
+        if(open){
+            for(String mac:group.macs){
+                Integer cap=limits.get(mac);
+                LinearLayout row=Ui.horizontal(this);
+                row.setPadding(d(14),d(7),d(4),d(7));
+                TextView address=Ui.text(this,mac,12,Ui.TEXT,true);
+                row.addView(address,new LinearLayout.LayoutParams(0,-2,1));
+                TextView speed=Ui.text(this,limitName(cap),13,cap==null?Ui.GREEN:Ui.RED,true);
+                speed.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);row.addView(speed);
+                row.setClickable(true);row.setFocusable(true);
+                row.setOnClickListener(v->editRememberedLimit(mac));Ui.animateTouch(row);
+                target.addView(row);
+            }
+            Ui.addSpace(target,this,8);
+        }
     }
     private static String humanRate(double bps){
         if(Double.isNaN(bps))return "—";
@@ -1395,7 +1442,7 @@ public final class MainActivity extends Activity {
                 ()->{
                     Map<String,Integer> saved=qos.limits();
                     if(kb==null)saved.remove(mac);else saved.put(mac,kb);
-                    qos.persist(saved);
+                    qos.persist(saved,mac);
                     toast("Лимит сохранён локально. Применение на AX8 не подтверждено.");
                     draw(true);
                 });
@@ -1473,7 +1520,7 @@ public final class MainActivity extends Activity {
         }catch(Exception e){alert("Не удалось получить номер",e.getMessage()==null?e.toString():e.getMessage());}
     }
     private EditText themedField(String value,String hint,boolean multiLine){
-        EditText x=new EditText(this);x.setText(value);x.setHint(hint);x.setHintTextColor(Ui.MUTED);
+        EditText x=new EditText(this);x.setTypeface(Ui.typeface(this,false));x.setText(value);x.setHint(hint);x.setHintTextColor(Ui.MUTED);
         x.setTextSize(15*Ui.FONT_SCALE);x.setTextColor(Ui.TEXT);
         x.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));
         if(multiLine){x.setSingleLine(false);x.setMinLines(4);x.setMaxLines(7);x.setGravity(Gravity.TOP);}
@@ -1486,7 +1533,7 @@ public final class MainActivity extends Activity {
         body.addView(Ui.text(this,"ПОЛУЧАТЕЛЬ",11,Ui.MUTED,true));Ui.addSpace(body,this,6);
         LinearLayout recipient=Ui.horizontal(this);
         smsRecipientInput=themedField(prefillNumber,"+7… или другой номер",false);
-        smsRecipientInput.setInputType(InputType.TYPE_CLASS_PHONE);
+        smsRecipientInput.setInputType(InputType.TYPE_CLASS_PHONE);smsRecipientInput.setTypeface(Ui.typeface(this,false));
         recipient.addView(smsRecipientInput,new LinearLayout.LayoutParams(0,-2,1));
         TextView pick=Ui.button(this,"◉",Ui.CARD2,Ui.CYAN,()->pickPhoneContact());
         pick.setContentDescription("Выбрать номер из контактов");
@@ -1494,7 +1541,7 @@ public final class MainActivity extends Activity {
         recipient.addView(pick,pickParams);body.addView(recipient);Ui.addSpace(body,this,17);
         body.addView(Ui.text(this,"СООБЩЕНИЕ",11,Ui.MUTED,true));Ui.addSpace(body,this,7);
         smsMessageInput=themedField(prefillMessage,"Текст SMS",true);
-        smsMessageInput.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        smsMessageInput.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_FLAG_MULTI_LINE|InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);smsMessageInput.setTypeface(Ui.typeface(this,false));
         body.addView(smsMessageInput);Ui.addSpace(body,this,9);
         TextView chars=Ui.text(this,"SMS с кириллицей: обычно 70 символов на одно сообщение (части могут тарифицироваться отдельно).",11,Ui.MUTED,false);
         body.addView(chars);Ui.addSpace(body,this,18);
@@ -1580,12 +1627,11 @@ public final class MainActivity extends Activity {
         else {
             Ui.addSpace(q,this,8);
             q.addView(Ui.button(this,(savedLimitsExpanded?"⌃  ":"⌄  ")+"Сохранённые ограничения ("+savedLimits.size()+")",
-                Ui.CARD2,Ui.TEXT,()->{savedLimitsExpanded=!savedLimitsExpanded;draw(true);}));
+                Ui.CARD2,Ui.TEXT,()->{savedLimitsExpanded=!savedLimitsExpanded;if(!savedLimitsExpanded)expandedRuleGroups.clear();draw(true);}));
             if(savedLimitsExpanded){
                 Ui.addSpace(q,this,8);
-                ArrayList<String> macs=new ArrayList<>(savedLimits.keySet());
-                macs.sort((a,b)->savedLimitDeviceName(a).compareToIgnoreCase(savedLimitDeviceName(b)));
-                for(String mac:macs)savedLimitRow(q,mac,savedLimits.get(mac));
+                List<SavedClientGroups.Group> groups=SavedClientGroups.build(savedLimits.keySet(),this::savedLimitDeviceName,savedLimits,qos::limitRevision);
+                for(SavedClientGroups.Group group:groups)addSavedClientGroup(q,group,savedLimits,expandedRuleGroups);
                 Ui.addSpace(q,this,8);
                 q.addView(Ui.button(this,"↻  Применить сохранённые лимиты",Ui.CARD2,Ui.TEXT,
                     ()->confirm("Восстановить QoS","Пересобрать правила IPv4/IPv6 на роутере?",()->action("Применение QoS",p->{
@@ -1987,6 +2033,7 @@ public final class MainActivity extends Activity {
         EditText e=new EditText(this);e.setSingleLine(true);e.setText(value);e.setTextSize(15);e.setTextColor(Ui.TEXT);
         e.setHintTextColor(Ui.MUTED);e.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));
         if(secret)e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        e.setTypeface(Ui.typeface(this,false));
         parent.addView(e);Ui.addSpace(parent,this,10);return e;
     }
     private void addTrafficSettings(){
