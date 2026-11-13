@@ -12,6 +12,8 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 
 /** One bounded, read-only external connectivity probe on the actual AX8 Wi-Fi/LAN network. */
 public final class RouterInternetProbe {
@@ -38,7 +40,7 @@ public final class RouterInternetProbe {
             if(host==null||host.isEmpty())return new Result(InternetStatusPolicy.UNAVAILABLE,null);
             // Never test through the default/mobile/VPN network: only AX8's Wi-Fi or wired LAN.
             // A VPN may advertise its underlying Wi-Fi transport as well: reject it explicitly.
-            Network offlineCandidate=null;
+            List<Network> offlineCandidates=new ArrayList<>();
             for(Network network:cm.getAllNetworks()){
                 NetworkCapabilities caps=cm.getNetworkCapabilities(network);
                 if(!isRouterLink(caps))continue;
@@ -72,18 +74,21 @@ public final class RouterInternetProbe {
                             && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
                 }
-                if(offlineCandidate==null && networkStillPresent(context,network))offlineCandidate=network;
+                if(networkStillPresent(context,network))offlineCandidates.add(network);
             }
-            if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate)){
-                // Another physical link may have taken time to probe. Do not publish
-                // an old negative verdict if Android validated the first link meanwhile.
-                NetworkCapabilities latest=cm.getNetworkCapabilities(offlineCandidate);
-                if(isRouterLink(latest)){
-                    if(latest.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
-                        return new Result(InternetStatusPolicy.ONLINE,offlineCandidate);
-                    return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
-                }
+            // Revalidate every previously proven router link before returning OFFLINE.
+            // A later link may recover or the first candidate may disappear.
+            Network offlineCandidate=null;
+            for(Network candidate:offlineCandidates){
+                if(!networkStillPresent(context,candidate))continue;
+                NetworkCapabilities latest=cm.getNetworkCapabilities(candidate);
+                if(!isRouterLink(latest))continue;
+                if(latest.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+                    return new Result(InternetStatusPolicy.ONLINE,candidate);
+                if(offlineCandidate==null)offlineCandidate=candidate;
             }
+            if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))
+                return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
         }catch(Exception ignored){}
         return new Result(InternetStatusPolicy.UNAVAILABLE,null);
     }

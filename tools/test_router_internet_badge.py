@@ -21,19 +21,23 @@ class InternetBadgeSourceTests(unittest.TestCase):
                          "Both initial selection and revalidation must reject VPN")
     def test_checks_all_reachable_router_links_before_declaring_offline(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
-        self.assertIn("Network offlineCandidate=null;",source)
-        self.assertIn("if(offlineCandidate==null && networkStillPresent(context,network))offlineCandidate=network;",source)
+        self.assertIn("List<Network> offlineCandidates=new ArrayList<>();",source)
+        self.assertIn("if(networkStillPresent(context,network))offlineCandidates.add(network);",source)
         self.assertIn("if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))",source)
         self.assertIn("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);",source)
         self.assertNotIn("return new Result(InternetStatusPolicy.OFFLINE,network);",source)
-    def test_rechecks_offline_candidate_after_other_links(self):
+
+    def test_rechecks_all_offline_candidates_after_other_links(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
-        final=source.split("if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))",1)[1]
-        self.assertLess(final.index("cm.getNetworkCapabilities(offlineCandidate)"),
-                        final.index("isRouterLink(latest)"))
-        self.assertLess(final.index("latest.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)"),
+        final=source.split("for(Network candidate:offlineCandidates)",1)[1]
+        self.assertLess(final.index("if(!networkStillPresent(context,candidate))continue;"),
+                        final.index("cm.getNetworkCapabilities(candidate)"))
+        self.assertLess(final.index("if(!isRouterLink(latest))continue;"),
+                        final.index("latest.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)"))
+        self.assertLess(final.index("return new Result(InternetStatusPolicy.ONLINE,candidate);"),
+                        final.index("if(offlineCandidate==null)offlineCandidate=candidate;"))
+        self.assertLess(final.index("if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))"),
                         final.index("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);"))
-        self.assertIn("return new Result(InternetStatusPolicy.ONLINE,offlineCandidate);",final)
 
     def test_rechecks_link_after_blocking_operations(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
@@ -46,7 +50,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
 
     def test_reuses_validation_acquired_during_external_probe(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
-        loop=source.split("for(String endpoint:ENDPOINTS)",1)[1].split("if(offlineCandidate==null",1)[0]
+        loop=source.split("for(String endpoint:ENDPOINTS)",1)[1].split("offlineCandidates.add(network)",1)[0]
         self.assertLess(loop.index("reachesInternet(network,endpoint)"),
                         loop.index("caps=cm.getNetworkCapabilities(network);"))
         self.assertLess(loop.index("if(!isRouterLink(caps))break;"),
