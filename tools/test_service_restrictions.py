@@ -149,7 +149,7 @@ state.write_text(json.dumps(d));sys.exit(rc)
             self.assertEqual(d["sets"],{})
             self.assertIn("-d",d["iptables"]["AX8SVCA"][0])
             self.assertIn("--mac-source",d["iptables"]["AX8SVCA"][1])
-            self.assertIn("режим=direct",(p/"status").read_text())
+            self.assertIn("backend=direct",(p/"status").read_text())
             r=run(True,NO_IPSET="1");self.assertNotEqual(r.returncode,0)
             self.assertEqual(json.loads((p/"state.json").read_text())["jumps"]["iptables"],["AX8SVCA"])
             r=run(FAIL_IPSET_CREATE="1");self.assertEqual(r.returncode,0,r.stdout+r.stderr)
@@ -178,9 +178,47 @@ state.write_text(json.dumps(d));sys.exit(rc)
 
     def test_legacy_firmware_dependencies(self):
         java=(SRC/"ServiceRestrictions.java").read_text(encoding="utf-8")
-        self.assertIn("printf '%b'",java)
+        self.assertIn("ServiceScriptTransfer.commands(path,content)",java)
+        self.assertIn("ServiceScriptTransfer.mismatch(content,readback.output)",java)
+        self.assertIn("shellForAgent(sh)",java)
         self.assertNotIn("command -v base64",java)
         self.assertNotIn("command -v nohup",java)
         self.assertNotIn("command -v ipset",java)
         self.assertIn("agent.version",java)
         self.assertIn("iptables: таблица filter/FORWARD недоступна",java)
+
+    def test_literal_transfer_roundtrip(self):
+        # Exercise the exact Java encoder through /bin/sh, not a reimplementation.
+        driver="""package ru.xarkon.ax8;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
+public class TransferTest {
+    public static void main(String[] args)throws Exception{
+        byte[] data=Files.readAllBytes(Path.of(args[1]));
+        if(args[0].equals("write")){
+            for(String command:ServiceScriptTransfer.commands("/tmp/ax8pro-services/agent.new",data))
+                System.out.println(command);
+        }else{
+            String remote=Files.readString(Path.of(args[2]),StandardCharsets.US_ASCII);
+            System.out.println(ServiceScriptTransfer.mismatch(data,remote));
+        }
+    }
+}"""
+        with tempfile.TemporaryDirectory() as tmp:
+            p=pathlib.Path(tmp)
+            driver_file=p/"TransferTest.java";driver_file.write_text(driver)
+            subprocess.run(["javac","-encoding","UTF-8","-d",tmp,str(SRC/"ServiceScriptTransfer.java"),str(driver_file)],check=True)
+            cmd=["java","-cp",tmp,"ru.xarkon.ax8.TransferTest"]
+            original=AGENT.read_bytes()
+            self.assertTrue(original.isascii())
+            commands=subprocess.check_output(cmd+["write",str(AGENT)],text=True)
+            target=p/"agent.new"
+            self.assertLess(max(map(len,commands.splitlines())),400)
+            subprocess.run(["sh","-e","-c",commands.replace("/tmp/ax8pro-services/agent.new",str(target))],check=True)
+            self.assertEqual(target.read_bytes(),original)
+            subprocess.run(["sh","-n",str(target)],check=True)
+            proof=p/"proof"
+            proof.write_bytes(subprocess.check_output(["awk",'{printf "AX8FILE:%d:%s\\n", NR, $0}',str(target)]))
+            self.assertEqual(subprocess.check_output(cmd+["verify",str(AGENT),str(proof)],text=True).strip(),"0")
+            proof.write_bytes(proof.read_bytes().replace(b"#!/bin/sh",b"#!/bin/xx",1))
+            self.assertEqual(subprocess.check_output(cmd+["verify",str(AGENT),str(proof)],text=True).strip(),"1")

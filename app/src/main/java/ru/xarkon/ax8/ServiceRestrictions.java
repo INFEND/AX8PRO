@@ -10,7 +10,7 @@ import java.util.*;
 /** Stores desired rules separately from the router's reported applied status. */
 final class ServiceRestrictions {
     private static final String ROOT="/tmp/ax8pro-services";
-    private static final String AGENT_VERSION="3";
+    private static final String AGENT_VERSION="4";
     private final Context context;
     private final SharedPreferences prefs;
     private final RouterClient router;
@@ -51,21 +51,34 @@ final class ServiceRestrictions {
     private static void checked(TelnetShell sh,String cmd)throws Exception{
         require(sh,cmd,"Не удалось записать или запустить модуль сервисов на AX8");
     }
-    // POSIX printf is a shell builtin. Octal encoding avoids base64 dependency,
-    // preserves UTF-8 bytes and keeps all commands below typical Telnet line limits.
     private static void upload(TelnetShell sh,String path,byte[] content)throws Exception{
-        checked(sh,": > "+quote(path));
-        for(int i=0;i<content.length;i+=120){
-            StringBuilder escaped=new StringBuilder();
-            for(int j=i;j<Math.min(i+120,content.length);j++){
-                int n=content[j]&255;
-                escaped.append("\\0").append((char)('0'+(n>>6)))
-                    .append((char)('0'+((n>>3)&7))).append((char)('0'+(n&7)));
-            }
-            checked(sh,"printf '%b' "+quote(escaped.toString())+" >> "+quote(path));
-        }
+        for(String command:ServiceScriptTransfer.commands(path,content))checked(sh,command);
         require(sh,"test \"$(wc -c < "+quote(path)+")\" -eq "+content.length,
             "Передача файла завершилась не полностью");
+        TelnetShell.Result readback=sh.exec(ServiceScriptTransfer.readCommand(path),20000);
+        if(readback.code!=0)throw new IOException("Не удалось проверить содержимое переданного файла");
+        int line=ServiceScriptTransfer.mismatch(content,readback.output);
+        if(line!=0)throw new IOException("AX8 исказил переданный файл: "+path+", строка "+line+". Модуль не запущен.");
+    }
+    private static String shellForAgent(TelnetShell sh)throws Exception{
+        StringBuilder diagnostics=new StringBuilder();
+        // Try only known shell implementations, never skip syntax validation.
+        for(String shell:new String[]{"sh","/bin/sh","ash","busybox ash"}){
+            TelnetShell.Result probe=sh.exec(shell+" -n -c ':' 2>/dev/null");
+            if(probe.code!=0)continue;
+            TelnetShell.Result syntax=sh.exec(shell+" -n "+ROOT+"/agent.new 2>&1",10000);
+            if(syntax.code==0)return shell;
+            diagnostics.append(shell).append(": ");
+            for(String row:syntax.output.split("\\r?\\n")){
+                String line=row.trim();
+                String lower=line.toLowerCase(Locale.ROOT);
+                if(lower.contains("syntax")||lower.contains("unexpected")||lower.contains("unterminated")||lower.contains("error"))
+                    diagnostics.append(line).append(' ');
+            }
+            diagnostics.append("(код ").append(syntax.code).append(")\n");
+        }
+        throw new IOException("Файл передан без искажений, но AX8 не прошёл проверку оболочки.\n"+
+            (diagnostics.length()==0?"Ни одна оболочка не поддерживает проверку sh -n.":diagnostics.toString()));
     }
     private byte[] agent()throws IOException{
         try(InputStream in=context.getAssets().open("ax8_service_agent.sh");ByteArrayOutputStream out=new ByteArrayOutputStream()){
@@ -125,14 +138,14 @@ final class ServiceRestrictions {
             if(!running||!current){
                 progress.note("Установка совместимого модуля (ipset необязателен)");
                 upload(sh,ROOT+"/agent.new",agent());
-                require(sh,"sh -n "+ROOT+"/agent.new","Прошивка не поддерживает синтаксис автономного модуля");
+                String interpreter=shellForAgent(sh);
                 if(running){
                     require(sh,alive+" && kill -TERM \"$p\"","Не удалось остановить прежний модуль");
                     for(int i=0;i<12&&sh.exec(alive).code==0;i++)Thread.sleep(500);
                     if(sh.exec(alive).code==0)throw new IOException("Прежний модуль ещё завершает работу; повторите передачу");
                     running=false;
                 }
-                checked(sh,"mv "+ROOT+"/agent.new "+ROOT+"/agent.sh && chmod 700 "+ROOT+"/agent.sh && printf %s "+AGENT_VERSION+" > "+ROOT+"/agent.version");
+                checked(sh,"mv "+ROOT+"/agent.new "+ROOT+"/agent.sh && chmod 700 "+ROOT+"/agent.sh && printf %s "+quote(interpreter)+" > "+ROOT+"/interpreter && printf %s "+AGENT_VERSION+" > "+ROOT+"/agent.version");
             }
             boolean localResolver=sh.exec("(command -v nslookup || command -v getent || command -v ping || command -v ping6 || "+
                 "(command -v busybox && busybox --list | grep -Ex 'nslookup|getent|ping|ping6')) >/dev/null 2>&1").code==0;
@@ -145,7 +158,9 @@ final class ServiceRestrictions {
             upload(sh,ROOT+"/plan.new",plan.getBytes(StandardCharsets.UTF_8));
             checked(sh,"mv "+ROOT+"/plan.new "+ROOT+"/plan");
             if(!running){
-                checked(sh,"rm -f "+ROOT+"/pid; (trap '' HUP; exec sh "+ROOT+"/agent.sh) </dev/null >"+ROOT+"/agent.log 2>&1 &");
+                checked(sh,"rm -f "+ROOT+"/pid; (trap '' HUP; interpreter=$(cat "+ROOT+"/interpreter); "+
+                    "case \"$interpreter\" in sh|/bin/sh|ash|\"busybox ash\") exec $interpreter "+ROOT+"/agent.sh;; *) exit 1;; esac) "+
+                    "</dev/null >"+ROOT+"/agent.log 2>&1 &");
                 Thread.sleep(400);
                 if(sh.exec(alive).code!=0)throw new IOException("Автономный модуль не запустился; проверьте прошивку AX8");
             }
@@ -177,7 +192,16 @@ final class ServiceRestrictions {
                     }
                     if(parts[3].contains("DNS=phone_snapshot"))
                         health+="\nDNS: снимок адресов с телефона. Автоматического обновления IP нет; передайте правила повторно после смены адресов.";
-                    return state+"\nПравил: "+parts[2]+"\n"+parts[3]+health+
+                    String detail=parts[3];
+                    String[][] labels={
+                        {"STAGING_CLEANUP_FAILED","Не удалось очистить резервную цепочку"},{"OLD_CHAIN_CLEANUP_FAILED","Новые правила записаны, не снята старая цепочка"},
+                        {"CLEANUP_FAILED","Не удалось снять цепочки"},{"RULES_REMOVED","Ограничения сняты"},
+                        {"PREPARING","Подготовка DNS и правил"},
+                        {"DNS_OR_FILTER_FAILED_PREVIOUS_RETAINED","DNS или фильтр недоступен, прежние правила сохранены"},
+                        {"IP_FILTER_NOT_TRAFFIC_VERIFIED","IP-фильтр, не проверка реального трафика"},
+                        {"INSTALL_FAILED","Ошибка установки правил"},{"backend=","режим="},{"unresolved=","неразрешённых имён="}};
+                    for(String[] label:labels)detail=detail.replace(label[0],label[1]);
+                    return state+"\nПравил: "+parts[2]+"\n"+detail+health+
                         (parts[1].equals(revision())?"":"\nНа AX8 другая версия правил; локальные изменения не подтверждены.");
                 }
             }

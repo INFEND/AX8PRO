@@ -160,17 +160,17 @@ reconcile_backend() {
     case "$old" in A) new=B;; B) new=A;; *) old=;new=A;; esac
     # Empty desired plan must remove both slots without any DNS dependency.
     if [ "$(wc -l < snapshot)" -le 1 ]; then
-        cleanup A && cleanup B || { write_status "ERROR|$rev|0|Не удалось снять цепочки"; return 1; }
+        cleanup A && cleanup B || { write_status "ERROR|$rev|0|CLEANUP_FAILED"; return 1; }
         rm -f active
-        write_status "OFF|$rev|0|Ограничения сняты"; return 0
+        write_status "OFF|$rev|0|RULES_REMOVED"; return 0
     fi
-    write_status "WORK|$rev|0|Подготовка DNS и правил"
+    write_status "WORK|$rev|0|PREPARING"
     v6=0
     if command -v ip6tables >/dev/null 2>&1 && ip6tables -L FORWARD -n >/dev/null 2>&1; then v6=1; fi
     missing=0;count=0
     seed_mode=0;dns_mode=router
     if [ -f seeds ] && [ "$(head -n 1 seeds)" = "$rev" ]; then seed_mode=1;dns_mode=phone_snapshot;fi
-    if ! cleanup "$new"; then write_status "ERROR|$rev|0|Не удалось очистить резервную цепочку";return 1;fi
+    if ! cleanup "$new"; then write_status "ERROR|$rev|0|STAGING_CLEANUP_FAILED";return 1;fi
     if ! iptables -N "AX8SVC$new"; then return 1;fi
     if [ "$v6" = 1 ] && ! ip6tables -N "AX8SVC$new"; then cleanup "$new";return 1;fi
     bad=0
@@ -187,14 +187,14 @@ reconcile_backend() {
         done
     } < snapshot
     if [ "$bad" = 1 ] || [ "$count" = 0 ] || ! same_revision; then
-        cleanup "$new";write_status "ERROR|$rev|0|DNS или фильтр недоступен, прежние правила сохранены";return 1
+        cleanup "$new";write_status "ERROR|$rev|0|DNS_OR_FILTER_FAILED_PREVIOUS_RETAINED";return 1
     fi
     if ! iptables -I FORWARD 1 -i br0 -j "AX8SVC$new"; then cleanup "$new";return 1;fi
     if [ "$v6" = 1 ] && ! ip6tables -I FORWARD 1 -i br0 -j "AX8SVC$new"; then cleanup "$new";return 1;fi
     # Commit the new slot before removing the old one, allowing safe restart.
     if ! printf '%s\n' "$new" > active.new || ! mv active.new active; then cleanup "$new";return 1;fi
-    if [ -n "$old" ] && ! cleanup "$old"; then write_status "ERROR|$rev|$count|Новые правила записаны, не снята старая цепочка";return 2;fi
-    write_status "INSTALLED|$rev|$count|IPv4=1 IPv6=$v6; режим=$backend; DNS=$dns_mode; неразрешённых имён=$missing; IP-фильтр, не проверка реального трафика"
+    if [ -n "$old" ] && ! cleanup "$old"; then write_status "ERROR|$rev|$count|OLD_CHAIN_CLEANUP_FAILED";return 2;fi
+    write_status "INSTALLED|$rev|$count|IPv4=1 IPv6=$v6; backend=$backend; DNS=$dns_mode; unresolved=$missing; IP_FILTER_NOT_TRAFFIC_VERIFIED"
 }
 reconcile() {
     # ipset is optional. The direct backend works with ordinary iptables -d.
@@ -219,7 +219,7 @@ while :; do
     if [ -n "$wanted" ] && { [ "$wanted" != "$last" ] || [ "$now" -ge "$next" ]; }; then
         if reconcile; then next=$(( $(date +%s) + 120 ));else
             current=$(cat status 2>/dev/null)
-            case "$current" in ERROR*) :;; *) write_status "ERROR|$wanted|0|Ошибка установки правил";; esac
+            case "$current" in ERROR*) :;; *) write_status "ERROR|$wanted|0|INSTALL_FAILED";; esac
             next=$(( $(date +%s) + 30 ))
         fi
         last="$wanted"
