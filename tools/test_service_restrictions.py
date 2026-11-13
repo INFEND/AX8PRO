@@ -1,4 +1,6 @@
 import pathlib
+import os
+import json
 import subprocess
 import tempfile
 import unittest
@@ -40,3 +42,89 @@ public class ServiceTest {
         main=(SRC/"MainActivity.java").read_text()
         self.assertIn('Сохранить локально',main)
         self.assertIn('confirmServiceDeploy(controller)',main)
+
+    def test_router_agent_transaction(self):
+        # Execute the actual POSIX shell agent in an isolated mock firewall.
+        # No root, network, or real iptables operations are used.
+        mock="""#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+state=Path(os.environ["MOCK_STATE"])
+d=json.loads(state.read_text()) if state.exists() else {"sets":{},"iptables":{},"ip6tables":{},"jumps":{"iptables":[],"ip6tables":[]}}
+name=Path(sys.argv[0]).name
+a=sys.argv[1:]
+rc=0
+if name=="nslookup":
+    if os.environ.get("FAIL_DNS")=="1": sys.exit(1)
+    print("Server: 192.168.150.1\\nAddress: 192.168.150.1\\n\\nName: "+a[-1])
+    print("Address: "+("2001:db8::123" if "-type=AAAA" in a else "203.0.113.42"))
+elif name=="ipset":
+    if a[0]=="-exist":a=a[1:]
+    op=a[0]
+    if op=="list":
+        if a[1]=="-n":print("\\n".join(d["sets"]))
+        elif a[1] not in d["sets"]:rc=1
+    elif op=="create":
+        if a[1] in d["sets"]:rc=1
+        else:d["sets"][a[1]]=[]
+    elif op=="add":
+        if a[1] not in d["sets"]:rc=1
+        elif a[2] not in d["sets"][a[1]]:d["sets"][a[1]].append(a[2])
+    elif op=="destroy":
+        if a[1] in d["sets"]:del d["sets"][a[1]]
+        else:rc=1
+else:
+    chains=d[name];jumps=d["jumps"][name];op=a[0];chain=a[1]
+    if op=="-L":
+        if chain=="FORWARD":print("\\n".join(jumps))
+        elif chain not in chains:rc=1
+    elif op=="-N":
+        if chain in chains:rc=1
+        else:chains[chain]=[]
+    elif op=="-A":
+        if chain not in chains:rc=1
+        else:chains[chain].append(a[2:])
+    elif op=="-F":
+        if chain in chains:chains[chain]=[]
+        else:rc=1
+    elif op=="-X":
+        if chain in chains:del chains[chain]
+        else:rc=1
+    elif op=="-I":jumps.insert(0,a[-1])
+    elif op=="-D":
+        if a[-1] in jumps:jumps.remove(a[-1])
+        else:rc=1
+state.write_text(json.dumps(d));sys.exit(rc)
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            p=pathlib.Path(tmp);bin=p/"bin";bin.mkdir()
+            fake=bin/"fake";fake.write_text(mock,encoding="utf-8");fake.chmod(0o755)
+            for name in ("ipset","iptables","ip6tables","nslookup"):(bin/name).symlink_to(fake)
+            env=dict(os.environ,PATH=str(bin)+os.pathsep+os.environ["PATH"],MOCK_STATE=str(p/"state.json"))
+            rev="12345678-1234-1234-1234-123456789abc"
+            (p/"plan").write_text(rev+"\nALL play play.google.com\nAA:BB:CC:DD:EE:FF drive drive.google.com\n")
+            def run(fail=False):
+                return subprocess.run(["sh",str(AGENT),"--test-root",str(p),"--once"],env=dict(env,FAIL_DNS="1" if fail else "0"),capture_output=True,text=True)
+            r=run();self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            d=json.loads((p/"state.json").read_text())
+            self.assertEqual(d["jumps"]["iptables"],["AX8SVCA"])
+            self.assertEqual(d["jumps"]["ip6tables"],["AX8SVCA"])
+            self.assertIn("--mac-source",d["iptables"]["AX8SVCA"][1])
+            self.assertEqual(d["sets"]["ax8svc_A_4_play"],["203.0.113.42"])
+            self.assertEqual(d["sets"]["ax8svc_A_6_play"],["2001:db8::123"])
+            self.assertIn("INSTALLED|"+rev+"|2|",(p/"status").read_text())
+            r=run(True);self.assertNotEqual(r.returncode,0)
+            d=json.loads((p/"state.json").read_text())
+            self.assertEqual(d["jumps"]["iptables"],["AX8SVCA"])
+            self.assertIn("ax8svc_A_4_play",d["sets"])
+            r=run();self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            d=json.loads((p/"state.json").read_text())
+            self.assertEqual(d["jumps"]["iptables"],["AX8SVCB"])
+            self.assertNotIn("ax8svc_A_4_play",d["sets"])
+            (p/"plan").write_text(rev+"\n")
+            r=run(True);self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+            d=json.loads((p/"state.json").read_text())
+            self.assertEqual(d["jumps"]["iptables"],[])
+            self.assertEqual(d["jumps"]["ip6tables"],[])
+            self.assertEqual(d["sets"],{})
+            self.assertIn("OFF|"+rev+"|0|",(p/"status").read_text())

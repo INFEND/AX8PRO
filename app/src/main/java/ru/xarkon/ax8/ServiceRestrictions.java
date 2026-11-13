@@ -59,6 +59,10 @@ final class ServiceRestrictions {
             byte[] buf=new byte[4096];int n;while((n=in.read(buf))!=-1)out.write(buf,0,n);return out.toByteArray();
         }
     }
+    private static String aliveCommand(){
+        return "p=$(cat "+ROOT+"/pid 2>/dev/null); case \"$p\" in ''|*[!0-9]*) false;; *) "+
+            "test -r /proc/$p/cmdline && tr '\\000' ' ' </proc/$p/cmdline | grep -F "+quote(ROOT+"/agent.sh")+" >/dev/null;; esac";
+    }
     void deploy(RouterClient.Progress progress)throws Exception{
         String rev=revision();if(rev.isEmpty()){save(rules());rev=revision();}
         String plan=ServiceCatalog.plan(rev,rules());
@@ -68,8 +72,7 @@ final class ServiceRestrictions {
                 " && command -v iptables >/dev/null && command -v ipset >/dev/null && command -v nslookup >/dev/null"+
                 " && command -v timeout >/dev/null && command -v base64 >/dev/null && command -v nohup >/dev/null"+
                 " && test -d /sys/class/net/br0 && iptables -L FORWARD -n >/dev/null");
-            String alive="p=$(cat "+ROOT+"/pid 2>/dev/null); case \"$p\" in ''|*[!0-9]*) false;; *) "+
-                "test -r /proc/$p/cmdline && tr '\\000' ' ' </proc/$p/cmdline | grep -F "+quote(ROOT+"/agent.sh")+" >/dev/null;; esac";
+            String alive=aliveCommand();
             boolean running=sh.exec(alive).code==0;
             if(!running){
                 progress.note("Установка автономного модуля");
@@ -88,6 +91,7 @@ final class ServiceRestrictions {
     }
     String status()throws Exception{
         try(RouterOperationGate.Lease ignored=RouterOperationGate.enter();TelnetShell sh=open()){
+            boolean running=sh.exec(aliveCommand()).code==0;
             TelnetShell.Result r=sh.exec("if test -f "+ROOT+"/status; then cat "+ROOT+"/status; else echo AX8SVC_NOT_INSTALLED; fi");
             if(r.code!=0)throw new IOException(r.output);
             for(String line:r.output.split("\\r?\\n")){
@@ -95,7 +99,20 @@ final class ServiceRestrictions {
                 if(parts.length==4&&Arrays.asList("OFF","WORK","ERROR","INSTALLED").contains(parts[0])){
                     String state=parts[0].equals("INSTALLED")?"Правила установлены (эффективность не подтверждена)":parts[0].equals("OFF")?"Отключено":
                         parts[0].equals("WORK")?"Установка выполняется":"Ошибка";
-                    return state+"\nПравил: "+parts[2]+"\n"+parts[3]+
+                    String health="";
+                    if(!running&&!parts[0].equals("OFF")){
+                        state="Состояние фильтра не подтверждено";
+                        health+="\nАвтономный процесс не работает; передайте правила заново.";
+                    }
+                    if(parts[0].equals("INSTALLED")){
+                        TelnetShell.Result proof=sh.exec("s=$(cat "+ROOT+"/active 2>/dev/null); case \"$s\" in A|B) "+
+                            "iptables -L FORWARD -n | grep -E \"^[[:space:]]*AX8SVC$s[[:space:]]\" >/dev/null;; *) false;; esac");
+                        if(proof.code!=0){
+                            state="Состояние фильтра не подтверждено";
+                            health+="\nАктивная цепочка не обнаружена.";
+                        }
+                    }
+                    return state+"\nПравил: "+parts[2]+"\n"+parts[3]+health+
                         (parts[1].equals(revision())?"":"\nНа AX8 другая версия правил; локальные изменения не подтверждены.");
                 }
             }
