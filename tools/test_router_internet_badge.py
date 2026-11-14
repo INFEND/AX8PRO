@@ -59,7 +59,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
 
     def test_rechecks_link_after_blocking_operations(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
-        after_socket=source.split("!canReachRouter(network,host,port))",1)[1]
+        after_socket=source.split("!canReachRouter(network,host,port,deadline))",1)[1]
         self.assertLess(after_socket.index("caps=cm.getNetworkCapabilities(network);"),
                         after_socket.index("NET_CAPABILITY_VALIDATED"))
         self.assertIn("if(!isRouterLink(caps))continue;",after_socket)
@@ -86,7 +86,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("isRouterGateway(cm,network,host)",source)
         self.assertIn("route.isDefaultRoute()",source)
         self.assertIn("host.equalsIgnoreCase(gateway.getHostAddress())",source)
-        self.assertIn("if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port))",source)
+        self.assertIn("if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port,deadline))",source)
         self.assertIn("network.openConnection",source)
 
     def test_android_validated_wifi_fallback_never_uses_phone_vpn(self):
@@ -99,7 +99,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
         self.assertIn("TRANSPORT_WIFI",source)
         self.assertNotIn("TRANSPORT_CELLULAR",source)
-        self.assertLess(source.index("if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port))"),
+        self.assertLess(source.index("if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port,deadline))"),
                         source.index("if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)"))
         self.assertIn("connectivitycheck.gstatic.com/generate_204",source)
 
@@ -117,11 +117,22 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn('network.openConnection(new URL(endpoint))',source)
         self.assertIn('finally{if(connection!=null)connection.disconnect();}',source)
 
+    def test_probe_budget_prevents_incomplete_offline_verdict(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        self.assertIn("SystemClock.elapsedRealtime()+PROBE_BUDGET_MS",source)
+        self.assertIn("Thread.currentThread().isInterrupted()",source)
+        guard="if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);"
+        loop=source.split("for(String endpoint:ENDPOINTS)",1)[1]
+        self.assertLess(loop.index(guard),loop.index("reachesInternet(network,endpoint)"))
+        final=source.split("Network offlineCandidate=null;",1)[1]
+        self.assertLess(final.index(guard),final.index("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);"))
+        self.assertIn("if(exhausted(deadline))return false;",source)
+
     def test_gateway_shortcut_precedes_router_socket_probe(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         # A matching AX8 gateway already proves the local link, so avoid a
         # potentially slow TCP timeout before checking Android's verdict.
-        self.assertIn("if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port))",source)
+        self.assertIn("if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port,deadline))",source)
         self.assertLess(source.index("!isRouterGateway(cm,network,host) && !canReachRouter"),
                         source.index("NET_CAPABILITY_VALIDATED"))
 

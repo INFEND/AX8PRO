@@ -6,6 +6,7 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.LinkProperties;
 import android.net.RouteInfo;
+import android.os.SystemClock;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -22,7 +23,12 @@ public final class RouterInternetProbe {
         "https://www.google.com/generate_204",
         "https://connectivitycheck.gstatic.com/generate_204"
     };
+    private static final long PROBE_BUDGET_MS=12000L;
     private RouterInternetProbe(){}
+
+    private static boolean exhausted(long deadline){
+        return Thread.currentThread().isInterrupted() || SystemClock.elapsedRealtime()>=deadline;
+    }
 
     public static final class Result {
         public final int state;
@@ -32,6 +38,7 @@ public final class RouterInternetProbe {
     public static Result check(Context context,String routerBase){
         ConnectivityManager cm=(ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
         if(cm==null)return new Result(InternetStatusPolicy.UNAVAILABLE,null);
+        final long deadline=SystemClock.elapsedRealtime()+PROBE_BUDGET_MS;
         try {
             URI uri=new URI(routerBase);
             String host=uri.getHost();
@@ -43,13 +50,14 @@ public final class RouterInternetProbe {
             List<Network> routerCandidates=new ArrayList<>();
             List<Network> offlineCandidates=new ArrayList<>();
             for(Network network:cm.getAllNetworks()){
+                if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
                 NetworkCapabilities caps=cm.getNetworkCapabilities(network);
                 if(!isRouterLink(caps))continue;
                 // On some Android/VPN configurations the router WebUI is reachable
                 // but a separately network-bound TCP socket to it is not. Accept
                 // the router's *actual default gateway* as alternative link proof.
                 // Gateway proof is sufficient: avoid waiting for a TCP timeout first.
-                if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port))
+                if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port,deadline))
                     continue;
                 // Router reachability may have blocked while the network changed.
                 // Read current capabilities rather than trusting the pre-socket snapshot.
@@ -65,6 +73,7 @@ public final class RouterInternetProbe {
             }
             // Prefer system-validated links before any slow external HTTPS request.
             for(Network network:routerCandidates){
+                if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
                 if(!networkStillPresent(context,network))continue;
                 NetworkCapabilities caps=cm.getNetworkCapabilities(network);
                 if(caps!=null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
@@ -72,6 +81,7 @@ public final class RouterInternetProbe {
                 // Without Android validation, require a successful router-bound HTTPS
                 // probe; a working WebUI alone is not proof of Internet access.
                 for(String endpoint:ENDPOINTS){
+                    if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
                     if(!networkStillPresent(context,network))break;
                     // Another proven link may have recovered while a previous request ran.
                     for(Network candidate:routerCandidates){
@@ -82,6 +92,7 @@ public final class RouterInternetProbe {
                     }
                     // The candidate scan may have outlived the current physical link.
                     if(!networkStillPresent(context,network))break;
+                    if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
                     if(reachesInternet(network,endpoint) && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
                     // Android may validate this same physical link during a slow probe.
@@ -96,6 +107,7 @@ public final class RouterInternetProbe {
             }
             // Revalidate every previously proven router link before returning OFFLINE.
             // A later link may recover or the first candidate may disappear.
+            if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
             Network offlineCandidate=null;
             for(Network candidate:offlineCandidates){
                 if(!networkStillPresent(context,candidate))continue;
@@ -105,6 +117,7 @@ public final class RouterInternetProbe {
                     return new Result(InternetStatusPolicy.ONLINE,candidate);
                 if(offlineCandidate==null)offlineCandidate=candidate;
             }
+            if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
             if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))
                 return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
         }catch(Exception ignored){}
@@ -133,9 +146,10 @@ public final class RouterInternetProbe {
     }
 
     /** Confirm this exact network reaches the configured AX8, without making a router API call. */
-    private static boolean canReachRouter(Network network,String host,int port){
+    private static boolean canReachRouter(Network network,String host,int port,long deadline){
         try {
             for(InetAddress address:network.getAllByName(host)){
+                if(exhausted(deadline))return false;
                 try(Socket socket=network.getSocketFactory().createSocket()){
                     socket.connect(new InetSocketAddress(address,port),1500);
                     return true;
