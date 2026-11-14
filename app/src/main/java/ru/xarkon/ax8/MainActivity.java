@@ -42,9 +42,14 @@ public final class MainActivity extends Activity {
         // Repeated capability callbacks must not invalidate a still-valid probe.
         if(signature.equals(internetNetworkSignature))return;
         internetNetworkSignature=signature;
+        // A WebUI poll may still be running on the previous physical link.
+        refreshSession.invalidate();
+        statusAt=0L;
+        lastBytesAt=0L;lastRx=Double.NaN;lastTx=Double.NaN;
+        fallbackDl=Double.NaN;fallbackUl=Double.NaN;
         resetInternetResult();
-        updateInternetChip();
-        maybeProbeInternet(true);
+        updateConnection();updateInternetChip();
+        refresh(true);
     };
     private final ConnectivityManager.NetworkCallback internetCallback=
         new ConnectivityManager.NetworkCallback(){

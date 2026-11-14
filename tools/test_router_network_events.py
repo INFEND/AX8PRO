@@ -9,6 +9,14 @@ class RouterNetworkEventsTest(unittest.TestCase):
         self.assertIn("if(signature.equals(internetNetworkSignature))return;",MAIN)
         self.assertIn("internetNetworkSignature=signature;",MAIN)
         self.assertLess(MAIN.index("if(signature.equals(internetNetworkSignature))return;"),MAIN.index("internetNetworkSignature=signature;"))
+    def test_changed_link_invalidates_inflight_webui_poll(self):
+        event=MAIN.split("private final Runnable internetChange=",1)[1].split("private final ConnectivityManager.NetworkCallback",1)[0]
+        for marker in ("refreshSession.invalidate();", "statusAt=0L;", "lastBytesAt=0L;",
+                       "fallbackDl=Double.NaN;fallbackUl=Double.NaN;", "refresh(true);"):
+            self.assertIn(marker,event)
+        self.assertLess(event.index("refreshSession.invalidate();"),event.index("refresh(true);"))
+        self.assertLess(event.index("if(signature.equals(internetNetworkSignature))return;"),event.index("refreshSession.invalidate();"))
+        self.assertNotIn("maybeProbeInternet(true)",event)
     def test_callback_storm_is_coalesced(self):
         self.assertIn("if(!running||internetChangeScheduled)return;",MAIN)
         self.assertIn("internetChangeScheduled=true;",MAIN)
