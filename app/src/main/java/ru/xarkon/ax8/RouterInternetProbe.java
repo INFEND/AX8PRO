@@ -84,7 +84,7 @@ public final class RouterInternetProbe {
                 if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
                 if(!networkStillPresent(context,network))continue;
                 NetworkCapabilities caps=cm.getNetworkCapabilities(network);
-                if(caps!=null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+                if(isRouterLink(caps) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
                     return new Result(InternetStatusPolicy.ONLINE,network);
                 // Without Android validation, require a successful router-bound HTTPS
                 // probe; a working WebUI alone is not proof of Internet access.
@@ -94,7 +94,7 @@ public final class RouterInternetProbe {
                     // Another proven link may have recovered while a previous request ran.
                     for(Network candidate:routerCandidates){
                         NetworkCapabilities current=cm.getNetworkCapabilities(candidate);
-                        if(current!=null && current.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                        if(isRouterLink(current) && current.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                                 && networkStillPresent(context,candidate))
                             return new Result(InternetStatusPolicy.ONLINE,candidate);
                     }

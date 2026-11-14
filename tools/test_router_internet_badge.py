@@ -17,8 +17,15 @@ class InternetBadgeSourceTests(unittest.TestCase):
     def test_excludes_vpn_even_when_it_advertises_wifi(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
-        self.assertEqual(source.count("isRouterLink("),6,
+        self.assertEqual(source.count("isRouterLink("),8,
                          "Both initial selection and revalidation must reject VPN")
+    def test_validated_candidates_recheck_physical_transport(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        probes=source.split("for(Network network:routerCandidates)",1)[1]
+        self.assertIn("if(isRouterLink(caps) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))",probes)
+        self.assertIn("if(isRouterLink(current) && current.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)",probes)
+        self.assertNotIn("if(caps!=null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))",probes)
+
     def test_checks_all_reachable_router_links_before_declaring_offline(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("List<Network> offlineCandidates=new ArrayList<>();",source)
