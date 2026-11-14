@@ -17,7 +17,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
     def test_excludes_vpn_even_when_it_advertises_wifi(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
-        self.assertEqual(source.count("isRouterLink("),8,
+        self.assertEqual(source.count("isRouterLink("),9,
                          "Both initial selection and revalidation must reject VPN")
     def test_validated_candidates_recheck_physical_transport(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
