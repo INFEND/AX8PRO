@@ -30,6 +30,13 @@ public final class RouterInternetProbe {
         return Thread.currentThread().isInterrupted() || SystemClock.elapsedRealtime()>=deadline;
     }
 
+    // Zero means do not start I/O, never an infinite Java socket timeout.
+    private static int remainingTimeout(long deadline,int maximum){
+        if(Thread.currentThread().isInterrupted())return 0;
+        long remaining=deadline-SystemClock.elapsedRealtime();
+        return remaining<=0?0:(int)Math.min(remaining,maximum);
+    }
+
     public static final class Result {
         public final int state;
         public final Network network;
@@ -93,7 +100,7 @@ public final class RouterInternetProbe {
                     // The candidate scan may have outlived the current physical link.
                     if(!networkStillPresent(context,network))break;
                     if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
-                    if(reachesInternet(network,endpoint) && networkStillPresent(context,network))
+                    if(reachesInternet(network,endpoint,deadline) && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
                     // Android may validate this same physical link during a slow probe.
                     // Reuse that verdict before starting another external request.
@@ -148,26 +155,33 @@ public final class RouterInternetProbe {
     /** Confirm this exact network reaches the configured AX8, without making a router API call. */
     private static boolean canReachRouter(Network network,String host,int port,long deadline){
         try {
+            if(exhausted(deadline))return false;
             for(InetAddress address:network.getAllByName(host)){
                 if(exhausted(deadline))return false;
                 try(Socket socket=network.getSocketFactory().createSocket()){
-                    socket.connect(new InetSocketAddress(address,port),1500);
+                    int timeout=remainingTimeout(deadline,1500);
+                    if(timeout==0)return false;
+                    socket.connect(new InetSocketAddress(address,port),timeout);
                     return true;
                 }catch(Exception ignored){}
             }
         }catch(Exception ignored){}
         return false;
     }
-    private static boolean reachesInternet(Network network,String endpoint){
+    private static boolean reachesInternet(Network network,String endpoint,long deadline){
         HttpURLConnection connection=null;
         try {
+            if(exhausted(deadline))return false;
             connection=(HttpURLConnection)network.openConnection(new URL(endpoint));
-            connection.setConnectTimeout(2500);
-            connection.setReadTimeout(2500);
+            int timeout=remainingTimeout(deadline,2500);
+            if(timeout==0)return false;
+            connection.setConnectTimeout(timeout);
+            connection.setReadTimeout(timeout);
             connection.setInstanceFollowRedirects(false);
             connection.setUseCaches(false);
             connection.setRequestMethod("GET");
             connection.setRequestProperty("Cache-Control","no-cache");
+            if(exhausted(deadline))return false;
             return connection.getResponseCode()==204;
         }catch(Exception ignored){return false;}
         finally{if(connection!=null)connection.disconnect();}

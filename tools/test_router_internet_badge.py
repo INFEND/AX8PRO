@@ -31,7 +31,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         discovery, probes=source.split("for(Network network:routerCandidates)",1)
         self.assertIn("routerCandidates.add(network);",discovery)
-        self.assertNotIn("reachesInternet(network,endpoint)",discovery)
+        self.assertNotIn("reachesInternet(network,endpoint,deadline)",discovery)
         self.assertLess(discovery.index("NET_CAPABILITY_VALIDATED"),
                         discovery.index("routerCandidates.add(network);"))
         self.assertLess(probes.index("NET_CAPABILITY_VALIDATED"),
@@ -41,7 +41,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         loop=source.split("for(String endpoint:ENDPOINTS)",1)[1]
         self.assertLess(loop.index("for(Network candidate:routerCandidates)"),
-                        loop.index("reachesInternet(network,endpoint)"))
+                        loop.index("reachesInternet(network,endpoint,deadline)"))
         self.assertIn("networkStillPresent(context,candidate)",loop)
         self.assertIn("return new Result(InternetStatusPolicy.ONLINE,candidate);",loop)
 
@@ -64,13 +64,13 @@ class InternetBadgeSourceTests(unittest.TestCase):
                         after_socket.index("NET_CAPABILITY_VALIDATED"))
         self.assertIn("if(!isRouterLink(caps))continue;",after_socket)
         self.assertIn("if(!networkStillPresent(context,network))break;",source)
-        self.assertIn("reachesInternet(network,endpoint) && networkStillPresent(context,network)",source)
+        self.assertIn("reachesInternet(network,endpoint,deadline) && networkStillPresent(context,network)",source)
 
     def test_reuses_validation_acquired_during_external_probe(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         loop=source.split("for(String endpoint:ENDPOINTS)",1)[1].split("offlineCandidates.add(network)",1)[0]
         # The pre-request scan also checks VALIDATED; inspect the post-request path separately.
-        before, after=loop.split("reachesInternet(network,endpoint)",1)
+        before, after=loop.split("reachesInternet(network,endpoint,deadline)",1)
         self.assertLess(before.index("for(Network candidate:routerCandidates)"),
                         before.rindex("if(!networkStillPresent(context,network))break;"))
         self.assertLess(after.index("caps=cm.getNetworkCapabilities(network);"),
@@ -112,10 +112,24 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn('return connection.getResponseCode()==204;',source)
         # Keep requests bounded on poor LTE without silently falling back to
         # the phone's default cellular connection.
-        self.assertIn('connection.setConnectTimeout(2500);',source)
-        self.assertIn('connection.setReadTimeout(2500);',source)
+        self.assertIn('connection.setConnectTimeout(timeout);',source)
+        self.assertIn('connection.setReadTimeout(timeout);',source)
         self.assertIn('network.openConnection(new URL(endpoint))',source)
         self.assertIn('finally{if(connection!=null)connection.disconnect();}',source)
+
+    def test_socket_timeouts_are_capped_by_remaining_budget(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        helper=source.split("private static int remainingTimeout",1)[1].split("public static final class Result",1)[0]
+        self.assertIn("deadline-SystemClock.elapsedRealtime()",helper)
+        self.assertIn("remaining<=0?0:(int)Math.min(remaining,maximum)",helper)
+        self.assertIn("Thread.currentThread().isInterrupted()",helper)
+        tcp=source.split("private static boolean canReachRouter",1)[1].split("private static boolean reachesInternet",1)[0]
+        self.assertLess(tcp.index("if(exhausted(deadline))return false;"),tcp.index("network.getAllByName(host)"))
+        self.assertLess(tcp.index("remainingTimeout(deadline,1500)"),tcp.index("if(timeout==0)return false;"))
+        self.assertLess(tcp.index("if(timeout==0)return false;"),tcp.index("socket.connect("))
+        https=source.split("private static boolean reachesInternet",1)[1]
+        self.assertLess(https.index("remainingTimeout(deadline,2500)"),https.index("if(timeout==0)return false;"))
+        self.assertLess(https.index("if(timeout==0)return false;"),https.index("connection.setConnectTimeout(timeout)"))
 
     def test_probe_budget_prevents_incomplete_offline_verdict(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
@@ -123,7 +137,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("Thread.currentThread().isInterrupted()",source)
         guard="if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);"
         loop=source.split("for(String endpoint:ENDPOINTS)",1)[1]
-        self.assertLess(loop.index(guard),loop.index("reachesInternet(network,endpoint)"))
+        self.assertLess(loop.index(guard),loop.index("reachesInternet(network,endpoint,deadline)"))
         final=source.split("Network offlineCandidate=null;",1)[1]
         self.assertLess(final.index(guard),final.index("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);"))
         self.assertIn("if(exhausted(deadline))return false;",source)
