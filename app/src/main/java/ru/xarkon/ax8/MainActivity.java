@@ -43,7 +43,7 @@ public final class MainActivity extends Activity {
         if(signature.equals(internetNetworkSignature))return;
         internetNetworkSignature=signature;
         // A WebUI poll may still be running on the previous physical link.
-        refreshSession.invalidate();
+        MainActivity.this.refreshSession.invalidate();
         statusAt=0L;
         lastBytesAt=0L;lastRx=Double.NaN;lastTx=Double.NaN;
         fallbackDl=Double.NaN;fallbackUl=Double.NaN;
