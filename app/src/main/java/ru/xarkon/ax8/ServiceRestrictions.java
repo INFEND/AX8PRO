@@ -10,7 +10,7 @@ import java.util.*;
 /** Stores desired rules separately from the router's reported applied status. */
 final class ServiceRestrictions {
     private static final String ROOT="/tmp/ax8pro-services";
-    private static final String AGENT_VERSION="5";
+    private static final String AGENT_VERSION="6";
     private final Context context;
     private final SharedPreferences prefs;
     private final RouterClient router;

@@ -6,6 +6,9 @@ ROOT=/tmp/ax8pro-services
 [ "$1" = "--test-root" ] && ROOT="$2"
 umask 077
 cd "$ROOT" || exit 1
+# BusyBox on AX8 can be compiled without shell arithmetic expansion.
+# awk is already required by the DNS parser. Use fixed decimal output for epoch seconds.
+add_int() { awk -v a="$1" -v b="$2" 'BEGIN {printf "%.0f\n", a+b}'; }
 write_status() { printf '%s\n' "$1" > status.new && mv status.new status; }
 detach() {
     tool="$1"; chain="$2"
@@ -113,7 +116,7 @@ build_service() {
             ips6=
             if [ "$v6" = 1 ]; then ips6=$(resolve_host 6 "$host");fi
         fi
-        [ -n "$ips4$ips6" ] || missing=$((missing+1))
+        [ -n "$ips4$ips6" ] || missing=$(add_int "$missing" 1)
         for addr in $ips4; do printf '%s\n' "$addr" >> "$file4"; done
         for addr in $ips6; do printf '%s\n' "$addr" >> "$file6"; done
     done
@@ -140,7 +143,7 @@ add_rule() {
         return $?
     fi
     for addr in $(cat "$new.addr.$family.$service"); do
-        entries=$((entries+1))
+        entries=$(add_int "$entries" 1)
         [ "$entries" -le 512 ] || return 1
         if [ "$scope" = ALL ]; then
             "$tool" -A "AX8SVC$new" -d "$addr" -j DROP || return 1
@@ -180,7 +183,7 @@ reconcile_backend() {
             [ -n "$scope" ] || continue
             case "$id" in ''|*[!a-z0-9]*) bad=1;break;; esac
             if [ "$scope" != ALL ] && ! echo "$scope" | grep -Eq '^([0-9A-F]{2}:){5}[0-9A-F]{2}$'; then bad=1;break;fi
-            count=$((count+1)); [ "$count" -le 128 ] || { bad=1;break; }
+            count=$(add_int "$count" 1); [ "$count" -le 128 ] || { bad=1;break; }
             # Word splitting here is intentional: validated exact DNS names.
             if ! build_service "$id" $hosts || ! add_rule iptables "$scope" "ax8svc_"$new"_4_"$id 4 "$id"; then bad=1;break;fi
             if [ "$v6" = 1 ] && ! add_rule ip6tables "$scope" "ax8svc_"$new"_6_"$id 6 "$id"; then bad=1;break;fi
@@ -217,10 +220,10 @@ while :; do
     wanted=$(head -n 1 plan 2>/dev/null)
     now=$(date +%s)
     if [ -n "$wanted" ] && { [ "$wanted" != "$last" ] || [ "$now" -ge "$next" ]; }; then
-        if reconcile; then next=$(( $(date +%s) + 120 ));else
+        if reconcile; then next=$(add_int "$(date +%s)" 120);else
             current=$(cat status 2>/dev/null)
             case "$current" in ERROR*) :;; *) write_status "ERROR|$wanted|0|INSTALL_FAILED";; esac
-            next=$(( $(date +%s) + 30 ))
+            next=$(add_int "$(date +%s)" 30)
         fi
         last="$wanted"
     fi

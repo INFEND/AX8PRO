@@ -245,3 +245,19 @@ public class TransferTest {
             self.assertLess(max(map(len,proof.read_text().splitlines())),60)
             proof.write_bytes(proof.read_bytes().replace(b"#!/bin/sh",b"#!/bin/xx",1))
             self.assertEqual(subprocess.check_output(cmd+["verifyChunks",str(data),str(proof)],text=True).strip(),"1")
+
+    def test_reduced_busybox_without_shell_arithmetic(self):
+        source=AGENT.read_text(encoding="ascii")
+        self.assertNotIn("$((",source)
+        self.assertNotRegex(source,r"(?m)^\s*let\s")
+        for fragment in ('missing=$(add_int "$missing" 1)',
+                         'entries=$(add_int "$entries" 1)',
+                         'count=$(add_int "$count" 1)',
+                         'next=$(add_int "$(date +%s)" 120)',
+                         'next=$(add_int "$(date +%s)" 30)'):
+            self.assertIn(fragment,source)
+        helper=next(line for line in source.splitlines() if line.startswith("add_int()"))
+        result=subprocess.check_output(["sh","-c",helper+'\nadd_int 1794679200 120\nadd_int 511 1\nadd_int 0 1'],text=True)
+        self.assertEqual(result.splitlines(),["1794679320","512","1"])
+        self.assertIn('AGENT_VERSION="6"',(SRC/"ServiceRestrictions.java").read_text())
+        self.assertNotIn('"Понятно"',(SRC/"MainActivity.java").read_text(encoding="utf-8"))

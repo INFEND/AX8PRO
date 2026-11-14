@@ -318,7 +318,7 @@ public final class MainActivity extends Activity {
         else{workLabel.setText("◌  "+message);workLabel.setBackgroundColor(Ui.CARD2);workLabel.getLayoutParams().height=d(37);workLabel.setVisibility(View.VISIBLE);}
         workLabel.requestLayout();
     });}
-    private void alert(String title,String text){Ui.modal(this,title,text,null,"Понятно",null);}
+    private void alert(String title,String text){Ui.modal(this,title,text,null,"Закрыть",null);}
     private void confirm(String title,String text,Runnable yes){Ui.modal(this,title,text,null,"Подтвердить",yes);}
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
     private void requestNotificationPermission(){
