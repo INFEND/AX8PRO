@@ -39,6 +39,52 @@ final class ServiceScriptTransfer {
         }
         return commands;
     }
+    /** Quoted here documents do not interpret shell syntax, backslashes or
+     * dollar signs in the data. Keep each batch small for older Telnet daemons. */
+    static List<String> heredocCommands(String destination,byte[] bytes){
+        String p=path(destination),s=ascii(bytes),delimiter="AX8_SERVICE_FILE_END";
+        String[] lines=s.split("\n",-1);
+        Set<String> lineSet=new HashSet<>(Arrays.asList(lines));
+        while(lineSet.contains(delimiter))delimiter+="X";
+        List<String> result=new ArrayList<>();
+        StringBuilder batch=new StringBuilder();
+        for(int i=0;i<lines.length-1;i++){
+            String line=lines[i];
+            if(line.length()>512)throw new IllegalArgumentException("Service file line too long");
+            if(batch.length()>0&&batch.length()+line.length()+1>512){
+                result.add("cat <<'"+delimiter+"' "+(result.isEmpty()?"> ":">> ")+p+"\n"+batch+delimiter);
+                batch.setLength(0);
+            }
+            batch.append(line).append('\n');
+        }
+        if(batch.length()>0)result.add("cat <<'"+delimiter+"' "+(result.isEmpty()?"> ":">> ")+p+"\n"+batch+delimiter);
+        return result;
+    }
+    /** Split readback records below typical terminal width. */
+    static String chunkReadCommand(String destination){
+        return "awk '{if(length($0)==0)printf \"AX8PART:%d:0:\\n\",NR;"+
+            "else for(i=1;i<=length($0);i+=32)printf \"AX8PART:%d:%d:%s\\n\",NR,i-1,substr($0,i,32)}' "+path(destination);
+    }
+    static int chunkMismatch(byte[] bytes,String remote){
+        String[] lines=ascii(bytes).split("\n",-1);
+        List<String> expected=new ArrayList<>();
+        List<Integer> lineNumbers=new ArrayList<>();
+        for(int i=0;i<lines.length-1;i++){
+            String line=lines[i];
+            for(int j=0;j<Math.max(1,line.length());j+=32){
+                expected.add("AX8PART:"+(i+1)+":"+j+":"+line.substring(j,Math.min(j+32,line.length())));
+                lineNumbers.add(i+1);
+            }
+        }
+        int next=0;
+        for(String row:remote.replace("\r","").split("\n",-1)){
+            if(!row.startsWith("AX8PART:"))continue;
+            if(next>=expected.size())return lines.length;
+            if(!expected.get(next).equals(row))return lineNumbers.get(next);
+            next++;
+        }
+        return next==expected.size()?0:lineNumbers.get(next);
+    }
     static String readCommand(String destination){
         return "awk '{printf \"AX8FILE:%d:%s\\n\", NR, $0}' "+path(destination);
     }

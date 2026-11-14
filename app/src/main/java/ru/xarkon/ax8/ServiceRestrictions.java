@@ -10,7 +10,7 @@ import java.util.*;
 /** Stores desired rules separately from the router's reported applied status. */
 final class ServiceRestrictions {
     private static final String ROOT="/tmp/ax8pro-services";
-    private static final String AGENT_VERSION="4";
+    private static final String AGENT_VERSION="5";
     private final Context context;
     private final SharedPreferences prefs;
     private final RouterClient router;
@@ -44,21 +44,56 @@ final class ServiceRestrictions {
     String revision(){return prefs.getString(key+"_rev","");}
     private static String quote(String s){return "'"+s.replace("'","'\\''")+"'";}
     private TelnetShell open(){return new TelnetShell(router,prefs.getString("telnet_user","admin"),prefs.getString("telnet_pass","admin"));}
-    private static void require(TelnetShell sh,String cmd,String failure)throws Exception{
-        TelnetShell.Result r=sh.exec(cmd,10000);
-        if(r.code!=0)throw new IOException(failure+" (код "+r.code+")");
+    private static String failureDetail(String output){
+        if(output==null)return "";
+        StringBuilder detail=new StringBuilder();
+        for(String row:output.split("\\r?\\n")){
+            String line=row.trim(),lower=line.toLowerCase(Locale.ROOT);
+            if(line.startsWith("~ #")||line.startsWith("# ")||line.contains("__AX8M_"))continue;
+            if(lower.contains("not found")||lower.contains("denied")||lower.contains("no space")||
+                lower.contains("read-only")||lower.contains("cannot")||lower.contains("syntax")||
+                lower.contains("invalid")||lower.contains("error")||lower.contains("not permitted")){
+                if(detail.length()>0)detail.append("; ");
+                detail.append(line.substring(0,Math.min(180,line.length())));
+            }
+            if(detail.length()>240)break;
+        }
+        return detail.length()==0?"":"\n"+detail;
     }
-    private static void checked(TelnetShell sh,String cmd)throws Exception{
-        require(sh,cmd,"Не удалось записать или запустить модуль сервисов на AX8");
+    private static void require(TelnetShell sh,String cmd,String failure)throws Exception{
+        TelnetShell.Result r;
+        try{r=sh.exec(cmd,10000);}catch(Exception e){throw new IOException(failure+": "+e.getMessage(),e);}
+        if(r.code!=0)throw new IOException(failure+" (код "+r.code+")"+failureDetail(r.output));
+    }
+    private static void verifyUpload(TelnetShell sh,String path,byte[] content)throws Exception{
+        require(sh,"test \"$(wc -c < "+quote(path)+")\" -eq "+content.length,
+            "Размер файла "+path+" не совпал");
+        TelnetShell.Result readback=sh.exec(ServiceScriptTransfer.chunkReadCommand(path),30000);
+        if(readback.code!=0)throw new IOException("Не удалось прочитать переданный файл "+path+" (код "+readback.code+")"+failureDetail(readback.output));
+        int line=ServiceScriptTransfer.chunkMismatch(content,readback.output);
+        if(line!=0)throw new IOException("AX8 исказил файл "+path+", строка "+line+".");
     }
     private static void upload(TelnetShell sh,String path,byte[] content)throws Exception{
-        for(String command:ServiceScriptTransfer.commands(path,content))checked(sh,command);
-        require(sh,"test \"$(wc -c < "+quote(path)+")\" -eq "+content.length,
-            "Передача файла завершилась не полностью");
-        TelnetShell.Result readback=sh.exec(ServiceScriptTransfer.readCommand(path),20000);
-        if(readback.code!=0)throw new IOException("Не удалось проверить содержимое переданного файла");
-        int line=ServiceScriptTransfer.mismatch(content,readback.output);
-        if(line!=0)throw new IOException("AX8 исказил переданный файл: "+path+", строка "+line+". Модуль не запущен.");
+        List<String> failures=new ArrayList<>();
+        // Each attempt starts from an empty staging file; never append to a
+        // partially transferred file, and never execute an unverified script.
+        for(boolean heredoc:new boolean[]{true,false}){
+            String mode=heredoc?"cat/heredoc":"printf";
+            try{
+                require(sh,"rm -f "+quote(path),"Очистка временного файла "+path);
+                List<String> commands=heredoc?ServiceScriptTransfer.heredocCommands(path,content):ServiceScriptTransfer.commands(path,content);
+                for(int i=0;i<commands.size();i++)
+                    require(sh,commands.get(i),"Запись "+path+" ["+mode+"], блок "+(i+1)+"/"+commands.size());
+                verifyUpload(sh,path,content);
+                return;
+            }catch(Exception e){
+                failures.add(mode+": "+e.getMessage());
+                // An interrupted here document can leave the interactive shell
+                // waiting for input. A fresh session is required before retry.
+                sh.close();
+            }
+        }
+        throw new IOException("Не удалось передать "+path+".\n"+String.join("\n",failures));
     }
     private static String shellForAgent(TelnetShell sh)throws Exception{
         StringBuilder diagnostics=new StringBuilder();
@@ -130,7 +165,7 @@ final class ServiceRestrictions {
                 "iptables: таблица filter/FORWARD недоступна");
             require(sh,"test -d /sys/class/net/br0","Не найден LAN-интерфейс br0; автоматическая установка отменена");
 
-            require(sh,"(for c in awk grep sort head wc cp mv rm chmod date sleep tr; do command -v \"$c\" >/dev/null || exit 1; done)",
+            require(sh,"(for c in awk grep sort head wc cp mv rm chmod date sleep tr cat; do command -v \"$c\" >/dev/null || exit 1; done)",
                 "В прошивке отсутствуют необходимые базовые утилиты shell");
             String alive=aliveCommand();
             boolean running=sh.exec(alive).code==0;
@@ -145,7 +180,11 @@ final class ServiceRestrictions {
                     if(sh.exec(alive).code==0)throw new IOException("Прежний модуль ещё завершает работу; повторите передачу");
                     running=false;
                 }
-                checked(sh,"mv "+ROOT+"/agent.new "+ROOT+"/agent.sh && chmod 700 "+ROOT+"/agent.sh && printf %s "+quote(interpreter)+" > "+ROOT+"/interpreter && printf %s "+AGENT_VERSION+" > "+ROOT+"/agent.version");
+                require(sh,"mv "+ROOT+"/agent.new "+ROOT+"/agent.sh","Установка agent.sh: переименование файла");
+                require(sh,"chmod 700 "+ROOT+"/agent.sh","Установка agent.sh: права доступа");
+                require(sh,"echo "+quote(interpreter)+" > "+ROOT+"/interpreter","Сохранение выбранной оболочки");
+                require(sh,"echo "+AGENT_VERSION+" > "+ROOT+"/agent.version","Сохранение версии модуля");
+                require(sh,"test \"$(cat "+ROOT+"/agent.version)\" = "+AGENT_VERSION,"Проверка установленной версии");
             }
             boolean localResolver=sh.exec("(command -v nslookup || command -v getent || command -v ping || command -v ping6 || "+
                 "(command -v busybox && busybox --list | grep -Ex 'nslookup|getent|ping|ping6')) >/dev/null 2>&1").code==0;
@@ -153,16 +192,25 @@ final class ServiceRestrictions {
             if(!localResolver&&!rules().isEmpty()){
                 progress.note("DNS на телефоне: резервный снимок IP");
                 upload(sh,ROOT+"/seeds.new",phoneSeeds(rev,rules()).getBytes(StandardCharsets.UTF_8));
-                checked(sh,"mv "+ROOT+"/seeds.new "+ROOT+"/seeds");
-            }else checked(sh,"rm -f "+ROOT+"/seeds");
+                require(sh,"mv "+ROOT+"/seeds.new "+ROOT+"/seeds","Установка резервного DNS-снимка");
+            }else require(sh,"rm -f "+ROOT+"/seeds","Удаление прежнего DNS-снимка");
             upload(sh,ROOT+"/plan.new",plan.getBytes(StandardCharsets.UTF_8));
-            checked(sh,"mv "+ROOT+"/plan.new "+ROOT+"/plan");
+            require(sh,"mv "+ROOT+"/plan.new "+ROOT+"/plan","Активация нового плана сервисов");
             if(!running){
-                checked(sh,"rm -f "+ROOT+"/pid; (trap '' HUP; interpreter=$(cat "+ROOT+"/interpreter); "+
+                require(sh,"rm -f "+ROOT+"/pid","Очистка прежнего PID");
+                require(sh,"(trap '' HUP; interpreter=$(cat "+ROOT+"/interpreter); "+
                     "case \"$interpreter\" in sh|/bin/sh|ash|\"busybox ash\") exec $interpreter "+ROOT+"/agent.sh;; *) exit 1;; esac) "+
-                    "</dev/null >"+ROOT+"/agent.log 2>&1 &");
-                Thread.sleep(400);
-                if(sh.exec(alive).code!=0)throw new IOException("Автономный модуль не запустился; проверьте прошивку AX8");
+                    "</dev/null >"+ROOT+"/agent.log 2>&1 &","Запуск автономного процесса");
+                boolean started=false;
+                for(int i=0;i<10;i++){
+                    Thread.sleep(350);
+                    if(sh.exec(alive).code==0){started=true;break;}
+                }
+                if(!started){
+                    TelnetShell.Result log=sh.exec("tail -n 8 "+ROOT+"/agent.log 2>/dev/null || cat "+ROOT+"/agent.log 2>/dev/null");
+                    throw new IOException("Автономный процесс не появился после запуска."+
+                        failureDetail(log.output)+"\nПроверьте журнал установки и совместимость оболочки.");
+                }
             }
             progress.note("План передан AX8. Проверьте статус установки правил.");
         }

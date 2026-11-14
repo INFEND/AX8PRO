@@ -179,7 +179,11 @@ state.write_text(json.dumps(d));sys.exit(rc)
     def test_legacy_firmware_dependencies(self):
         java=(SRC/"ServiceRestrictions.java").read_text(encoding="utf-8")
         self.assertIn("ServiceScriptTransfer.commands(path,content)",java)
-        self.assertIn("ServiceScriptTransfer.mismatch(content,readback.output)",java)
+        self.assertIn("ServiceScriptTransfer.chunkMismatch(content,readback.output)",java)
+        self.assertIn("ServiceScriptTransfer.heredocCommands(path,content)",java)
+        self.assertIn("Запись ",java)
+        self.assertIn("Активация нового плана сервисов",java)
+        self.assertNotIn("Не удалось записать или запустить модуль сервисов на AX8",java)
         self.assertIn("shellForAgent(sh)",java)
         self.assertNotIn("command -v base64",java)
         self.assertNotIn("command -v nohup",java)
@@ -198,9 +202,14 @@ public class TransferTest {
         if(args[0].equals("write")){
             for(String command:ServiceScriptTransfer.commands("/tmp/ax8pro-services/agent.new",data))
                 System.out.println(command);
+        }else if(args[0].equals("heredoc")){
+            for(String command:ServiceScriptTransfer.heredocCommands("/tmp/ax8pro-services/agent.new",data))
+                System.out.println(command);
+        }else if(args[0].equals("chunks")){
+            System.out.println(ServiceScriptTransfer.chunkReadCommand("/tmp/ax8pro-services/agent.new"));
         }else{
             String remote=Files.readString(Path.of(args[2]),StandardCharsets.US_ASCII);
-            System.out.println(ServiceScriptTransfer.mismatch(data,remote));
+            System.out.println(args[0].equals("verifyChunks")?ServiceScriptTransfer.chunkMismatch(data,remote):ServiceScriptTransfer.mismatch(data,remote));
         }
     }
 }"""
@@ -222,3 +231,17 @@ public class TransferTest {
             self.assertEqual(subprocess.check_output(cmd+["verify",str(AGENT),str(proof)],text=True).strip(),"0")
             proof.write_bytes(proof.read_bytes().replace(b"#!/bin/sh",b"#!/bin/xx",1))
             self.assertEqual(subprocess.check_output(cmd+["verify",str(AGENT),str(proof)],text=True).strip(),"1")
+
+            # Alternate transport must preserve every literal byte, including
+            # quotes, backslashes and empty lines, even when printf is absent.
+            data=p/"literal.sh"
+            data.write_bytes(original+b"\n# AX8 literal: $HOME ' \" \\ \nAX8_SERVICE_FILE_END\n")
+            commands=subprocess.check_output(cmd+["heredoc",str(data)],text=True)
+            subprocess.run(["sh","-e","-c",commands.replace("/tmp/ax8pro-services/agent.new",str(target))],check=True)
+            self.assertEqual(target.read_bytes(),data.read_bytes())
+            chunk_cmd=subprocess.check_output(cmd+["chunks",str(data)],text=True)
+            proof.write_bytes(subprocess.check_output(["sh","-c",chunk_cmd.replace("/tmp/ax8pro-services/agent.new",str(target))]))
+            self.assertEqual(subprocess.check_output(cmd+["verifyChunks",str(data),str(proof)],text=True).strip(),"0")
+            self.assertLess(max(map(len,proof.read_text().splitlines())),60)
+            proof.write_bytes(proof.read_bytes().replace(b"#!/bin/sh",b"#!/bin/xx",1))
+            self.assertEqual(subprocess.check_output(cmd+["verifyChunks",str(data),str(proof)],text=True).strip(),"1")
