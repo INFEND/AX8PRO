@@ -128,8 +128,16 @@ public final class RouterInternetProbe {
                 if(offlineCandidate==null)offlineCandidate=candidate;
             }
             if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
-            if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))
-                return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
+            if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate)){
+                // The selected link may have recovered while other candidates were checked.
+                NetworkCapabilities latest=cm.getNetworkCapabilities(offlineCandidate);
+                if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
+                if(isRouterLink(latest)){
+                    if(latest.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
+                        return new Result(InternetStatusPolicy.ONLINE,offlineCandidate);
+                    return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
+                }
+            }
         }catch(Exception ignored){}
         return new Result(InternetStatusPolicy.UNAVAILABLE,null);
     }

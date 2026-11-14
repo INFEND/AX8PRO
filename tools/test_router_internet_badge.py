@@ -149,6 +149,17 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertLess(final.index(guard),final.index("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);"))
         self.assertIn("if(exhausted(deadline))return false;",source)
 
+    def test_final_offline_candidate_rechecks_validation(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        final=source.split("if(offlineCandidate!=null && networkStillPresent(context,offlineCandidate))",1)[1]
+        self.assertLess(final.index("cm.getNetworkCapabilities(offlineCandidate)"),
+                        final.index("if(isRouterLink(latest))"))
+        self.assertLess(final.index("NET_CAPABILITY_VALIDATED"),
+                        final.index("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);"))
+        self.assertIn("return new Result(InternetStatusPolicy.ONLINE,offlineCandidate);",final)
+        self.assertLess(final.index("if(exhausted(deadline))"),
+                        final.index("NET_CAPABILITY_VALIDATED"))
+
     def test_late_probe_results_are_discarded(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         guard="if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);"
