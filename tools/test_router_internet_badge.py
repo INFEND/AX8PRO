@@ -64,7 +64,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
                         after_socket.index("NET_CAPABILITY_VALIDATED"))
         self.assertIn("if(!isRouterLink(caps))continue;",after_socket)
         self.assertIn("if(!networkStillPresent(context,network))break;",source)
-        self.assertIn("reachesInternet(network,endpoint,deadline) && networkStillPresent(context,network)",source)
+        self.assertIn("if(reached && networkStillPresent(context,network))",source)
 
     def test_reuses_validation_acquired_during_external_probe(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
@@ -141,6 +141,15 @@ class InternetBadgeSourceTests(unittest.TestCase):
         final=source.split("Network offlineCandidate=null;",1)[1]
         self.assertLess(final.index(guard),final.index("return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);"))
         self.assertIn("if(exhausted(deadline))return false;",source)
+
+    def test_late_probe_results_are_discarded(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        guard="if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);"
+        after_tcp=source.split("!canReachRouter(network,host,port,deadline))",1)[1]
+        self.assertLess(after_tcp.index(guard),after_tcp.index("NET_CAPABILITY_VALIDATED"))
+        after_https=source.split("boolean reached=reachesInternet(network,endpoint,deadline);",1)[1]
+        self.assertLess(after_https.index(guard),after_https.index("if(reached && networkStillPresent"))
+        self.assertIn("return !exhausted(deadline);",source)
 
     def test_gateway_shortcut_precedes_router_socket_probe(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")

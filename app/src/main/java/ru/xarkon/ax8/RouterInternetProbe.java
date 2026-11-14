@@ -66,6 +66,7 @@ public final class RouterInternetProbe {
                 // Gateway proof is sufficient: avoid waiting for a TCP timeout first.
                 if(!isRouterGateway(cm,network,host) && !canReachRouter(network,host,port,deadline))
                     continue;
+                if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
                 // Router reachability may have blocked while the network changed.
                 // Read current capabilities rather than trusting the pre-socket snapshot.
                 caps=cm.getNetworkCapabilities(network);
@@ -100,7 +101,9 @@ public final class RouterInternetProbe {
                     // The candidate scan may have outlived the current physical link.
                     if(!networkStillPresent(context,network))break;
                     if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
-                    if(reachesInternet(network,endpoint,deadline) && networkStillPresent(context,network))
+                    boolean reached=reachesInternet(network,endpoint,deadline);
+                    if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
+                    if(reached && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
                     // Android may validate this same physical link during a slow probe.
                     // Reuse that verdict before starting another external request.
@@ -162,7 +165,7 @@ public final class RouterInternetProbe {
                     int timeout=remainingTimeout(deadline,1500);
                     if(timeout==0)return false;
                     socket.connect(new InetSocketAddress(address,port),timeout);
-                    return true;
+                    return !exhausted(deadline);
                 }catch(Exception ignored){}
             }
         }catch(Exception ignored){}
