@@ -10,6 +10,12 @@ import subprocess
 from urllib.parse import quote
 
 
+def release_name(code):
+    """Map consecutive release codes to the historical 100-patch series."""
+    minor, patch = divmod(code - 18, 100)
+    return f"1.{5 + minor}.{patch}"
+
+
 def cumulative_history(version, code, entries):
     """Require a gap-free, complete, user-facing changelog through the release being built."""
     if not isinstance(entries, list) or not entries or len(entries) > 500:
@@ -22,7 +28,7 @@ def cumulative_history(version, code, entries):
         n = item.get("versionCode")
         name = item.get("versionName")
         notes = item.get("notes")
-        if type(n) is not int or n != prev + 1 or name != "1.5." + str(n - 18):
+        if type(n) is not int or n != prev + 1 or name != release_name(n):
             raise ValueError("Missing, duplicated or mismatched release history")
         if not isinstance(notes, str) or not (5 <= len(notes) <= 100_000):
             raise ValueError("Missing or oversized user-facing notes")

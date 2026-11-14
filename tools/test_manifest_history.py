@@ -18,6 +18,17 @@ class ManifestHistoryTest(unittest.TestCase):
         history = [self.entry(19), self.entry(20)]
         self.assertEqual(MODULE.cumulative_history("1.5.2", 20, history), history)
 
+    def test_minor_rollover_preserves_history(self):
+        history = [self.entry(code) for code in range(19, 118)]
+        history += [dict(self.entry(118), versionName="1.6.0"),
+                    dict(self.entry(119), versionName="1.6.1")]
+        self.assertEqual(MODULE.cumulative_history("1.5.99", 117, history), history[:-2])
+        self.assertEqual(MODULE.cumulative_history("1.6.0", 118, history), history[:-1])
+        self.assertEqual(MODULE.cumulative_history("1.6.1", 119, history), history)
+        history[-2] = dict(history[-2], versionName="1.5.100")
+        with self.assertRaises(ValueError):
+            MODULE.cumulative_history("1.6.1", 119, history)
+
     def test_rejects_gap_duplicate_and_wrong_version(self):
         for history in (
             [self.entry(19), self.entry(21)],
