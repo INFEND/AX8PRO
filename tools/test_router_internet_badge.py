@@ -131,7 +131,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("remaining<=0?0:(int)Math.min(remaining,maximum)",helper)
         self.assertIn("Thread.currentThread().isInterrupted()",helper)
         tcp=source.split("private static boolean canReachRouter",1)[1].split("private static boolean reachesInternet",1)[0]
-        self.assertLess(tcp.index("if(exhausted(deadline))return false;"),tcp.index("network.getAllByName(host)"))
+        self.assertLess(tcp.index("if(exhausted(deadline))return false;"),tcp.index("BoundedDns.resolve("))
         self.assertLess(tcp.index("remainingTimeout(deadline,1500)"),tcp.index("if(timeout==0)return false;"))
         self.assertLess(tcp.index("if(timeout==0)return false;"),tcp.index("socket.connect("))
         https=source.split("private static boolean reachesInternet",1)[1]
@@ -221,3 +221,13 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("PROBE_INTERVAL_MS=15000L",policy)
 if __name__=="__main__":
     unittest.main()
+
+class BoundedDnsBehaviorTests(unittest.TestCase):
+    def test_bounded_dns_worker_behavior(self):
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as output:
+            subprocess.run(["javac", "-d", output, str(SRC/"BoundedDns.java"),
+                            str(ROOT/"tools/BoundedDnsTest.java")], check=True, timeout=30)
+            subprocess.run(["java", "-cp", output, "ru.xarkon.ax8.BoundedDnsTest"],
+                           check=True, timeout=15)

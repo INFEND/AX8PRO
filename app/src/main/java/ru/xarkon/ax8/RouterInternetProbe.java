@@ -167,7 +167,10 @@ public final class RouterInternetProbe {
     private static boolean canReachRouter(Network network,String host,int port,long deadline){
         try {
             if(exhausted(deadline))return false;
-            for(InetAddress address:network.getAllByName(host)){
+            InetAddress[] addresses=BoundedDns.resolve(() -> network.getAllByName(host),
+                remainingTimeout(deadline,1500));
+            if(addresses==null)return false;
+            for(InetAddress address:addresses){
                 if(exhausted(deadline))return false;
                 try(Socket socket=network.getSocketFactory().createSocket()){
                     int timeout=remainingTimeout(deadline,1500);
