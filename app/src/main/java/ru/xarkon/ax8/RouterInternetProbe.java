@@ -56,6 +56,7 @@ public final class RouterInternetProbe {
             // A VPN may advertise its underlying Wi-Fi transport as well: reject it explicitly.
             List<Network> routerCandidates=new ArrayList<>();
             List<Network> offlineCandidates=new ArrayList<>();
+            boolean inconclusive=false;
             for(Network network:cm.getAllNetworks()){
                 if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
                 NetworkCapabilities caps=cm.getNetworkCapabilities(network);
@@ -112,7 +113,7 @@ public final class RouterInternetProbe {
                     if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                             && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
-                    if(reached==null)return new Result(InternetStatusPolicy.UNAVAILABLE,null);
+                    if(reached==null)inconclusive=true;
                 }
                 if(networkStillPresent(context,network))offlineCandidates.add(network);
             }
@@ -136,6 +137,7 @@ public final class RouterInternetProbe {
                 if(isRouterLink(latest)){
                     if(latest.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
                         return new Result(InternetStatusPolicy.ONLINE,offlineCandidate);
+                    if(inconclusive)return new Result(InternetStatusPolicy.UNAVAILABLE,null);
                     return new Result(InternetStatusPolicy.OFFLINE,offlineCandidate);
                 }
             }
@@ -187,22 +189,22 @@ public final class RouterInternetProbe {
         int budget=remainingTimeout(deadline,2500);
         return BoundedHttps.resolve(() -> performHttps(network,endpoint,deadline),budget);
     }
-    private static boolean performHttps(Network network,String endpoint,long deadline){
+    private static Boolean performHttps(Network network,String endpoint,long deadline){
         HttpURLConnection connection=null;
         try {
-            if(exhausted(deadline))return false;
+            if(exhausted(deadline))return null;
             connection=(HttpURLConnection)network.openConnection(new URL(endpoint));
             int timeout=remainingTimeout(deadline,2500);
-            if(timeout==0)return false;
+            if(timeout==0)return null;
             connection.setConnectTimeout(timeout);
             connection.setReadTimeout(timeout);
             connection.setInstanceFollowRedirects(false);
             connection.setUseCaches(false);
             connection.setRequestMethod("GET");
             connection.setRequestProperty("Cache-Control","no-cache");
-            if(exhausted(deadline))return false;
+            if(exhausted(deadline))return null;
             return connection.getResponseCode()==204;
-        }catch(Exception ignored){return false;}
+        }catch(Exception ignored){return null;}
         finally{if(connection!=null)connection.disconnect();}
     }
     public static boolean networkStillPresent(Context context,Network network){

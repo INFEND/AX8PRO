@@ -135,8 +135,8 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertLess(tcp.index("remainingTimeout(deadline,1500)"),tcp.index("if(timeout==0)return false;"))
         self.assertLess(tcp.index("if(timeout==0)return false;"),tcp.index("socket.connect("))
         https=source.split("private static Boolean reachesInternet",1)[1]
-        self.assertLess(https.index("remainingTimeout(deadline,2500)"),https.index("if(timeout==0)return false;"))
-        self.assertLess(https.index("if(timeout==0)return false;"),https.index("connection.setConnectTimeout(timeout)"))
+        self.assertLess(https.index("remainingTimeout(deadline,2500)"),https.index("if(timeout==0)return null;"))
+        self.assertLess(https.index("if(timeout==0)return null;"),https.index("connection.setConnectTimeout(timeout)"))
 
     def test_probe_budget_prevents_incomplete_offline_verdict(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
@@ -244,4 +244,7 @@ class BoundedHttpsBehaviorTests(unittest.TestCase):
     def test_timeout_is_not_offline(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("return BoundedHttps.resolve(",source)
-        self.assertIn("if(reached==null)return new Result(InternetStatusPolicy.UNAVAILABLE,null);",source)
+        self.assertIn("if(reached==null)inconclusive=true;",source)
+        self.assertIn("if(inconclusive)return new Result(InternetStatusPolicy.UNAVAILABLE,null);",source)
+        self.assertIn("catch(Exception ignored){return null;}",source)
+        self.assertNotIn("if(reached==null)return",source)
