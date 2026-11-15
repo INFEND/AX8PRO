@@ -187,7 +187,10 @@ public final class RouterInternetProbe {
     }
     private static Boolean reachesInternet(Network network,String endpoint,long deadline){
         int budget=remainingTimeout(deadline,2500);
-        return BoundedHttps.resolve(() -> performHttps(network,endpoint,deadline),budget);
+        if(budget==0)return null;
+        // The worker must not inherit the longer overall diagnostic deadline.
+        final long requestDeadline=Math.min(deadline,SystemClock.elapsedRealtime()+budget);
+        return BoundedHttps.resolve(() -> performHttps(network,endpoint,requestDeadline),budget);
     }
     private static Boolean performHttps(Network network,String endpoint,long deadline){
         HttpURLConnection connection=null;
@@ -203,7 +206,8 @@ public final class RouterInternetProbe {
             connection.setRequestMethod("GET");
             connection.setRequestProperty("Cache-Control","no-cache");
             if(exhausted(deadline))return null;
-            return connection.getResponseCode()==204;
+            int response=connection.getResponseCode();
+            return exhausted(deadline)?null:response==204;
         }catch(Exception ignored){return null;}
         finally{if(connection!=null)connection.disconnect();}
     }
