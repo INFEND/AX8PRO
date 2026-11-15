@@ -71,7 +71,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
                         after_socket.index("NET_CAPABILITY_VALIDATED"))
         self.assertIn("if(!isRouterLink(caps))continue;",after_socket)
         self.assertIn("if(!networkStillPresent(context,network))break;",source)
-        self.assertIn("if(reached && networkStillPresent(context,network))",source)
+        self.assertIn("if(Boolean.TRUE.equals(reached) && networkStillPresent(context,network))",source)
 
     def test_reuses_validation_acquired_during_external_probe(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
@@ -130,11 +130,11 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("deadline-SystemClock.elapsedRealtime()",helper)
         self.assertIn("remaining<=0?0:(int)Math.min(remaining,maximum)",helper)
         self.assertIn("Thread.currentThread().isInterrupted()",helper)
-        tcp=source.split("private static boolean canReachRouter",1)[1].split("private static boolean reachesInternet",1)[0]
+        tcp=source.split("private static boolean canReachRouter",1)[1].split("private static Boolean reachesInternet",1)[0]
         self.assertLess(tcp.index("if(exhausted(deadline))return false;"),tcp.index("BoundedDns.resolve("))
         self.assertLess(tcp.index("remainingTimeout(deadline,1500)"),tcp.index("if(timeout==0)return false;"))
         self.assertLess(tcp.index("if(timeout==0)return false;"),tcp.index("socket.connect("))
-        https=source.split("private static boolean reachesInternet",1)[1]
+        https=source.split("private static Boolean reachesInternet",1)[1]
         self.assertLess(https.index("remainingTimeout(deadline,2500)"),https.index("if(timeout==0)return false;"))
         self.assertLess(https.index("if(timeout==0)return false;"),https.index("connection.setConnectTimeout(timeout)"))
 
@@ -165,8 +165,8 @@ class InternetBadgeSourceTests(unittest.TestCase):
         guard="if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);"
         after_tcp=source.split("!canReachRouter(network,host,port,deadline))",1)[1]
         self.assertLess(after_tcp.index(guard),after_tcp.index("NET_CAPABILITY_VALIDATED"))
-        after_https=source.split("boolean reached=reachesInternet(network,endpoint,deadline);",1)[1]
-        self.assertLess(after_https.index(guard),after_https.index("if(reached && networkStillPresent"))
+        after_https=source.split("Boolean reached=reachesInternet(network,endpoint,deadline);",1)[1]
+        self.assertLess(after_https.index(guard),after_https.index("if(Boolean.TRUE.equals(reached) && networkStillPresent"))
         self.assertIn("return !exhausted(deadline);",source)
 
     def test_gateway_shortcut_precedes_router_socket_probe(self):
@@ -231,3 +231,17 @@ class BoundedDnsBehaviorTests(unittest.TestCase):
                             str(ROOT/"tools/BoundedDnsTest.java")], check=True, timeout=30)
             subprocess.run(["java", "-cp", output, "ru.xarkon.ax8.BoundedDnsTest"],
                            check=True, timeout=15)
+
+class BoundedHttpsBehaviorTests(unittest.TestCase):
+    def test_bounded_https_worker_behavior(self):
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as output:
+            subprocess.run(["javac", "-d", output, str(SRC/"BoundedHttps.java"),
+                            str(ROOT/"tools/BoundedHttpsTest.java")], check=True, timeout=30)
+            subprocess.run(["java", "-cp", output, "ru.xarkon.ax8.BoundedHttpsTest"],
+                           check=True, timeout=15)
+    def test_timeout_is_not_offline(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        self.assertIn("return BoundedHttps.resolve(",source)
+        self.assertIn("if(reached==null)return new Result(InternetStatusPolicy.UNAVAILABLE,null);",source)

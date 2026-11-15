@@ -101,9 +101,9 @@ public final class RouterInternetProbe {
                     // The candidate scan may have outlived the current physical link.
                     if(!networkStillPresent(context,network))break;
                     if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
-                    boolean reached=reachesInternet(network,endpoint,deadline);
+                    Boolean reached=reachesInternet(network,endpoint,deadline);
                     if(exhausted(deadline))return new Result(InternetStatusPolicy.UNAVAILABLE,null);
-                    if(reached && networkStillPresent(context,network))
+                    if(Boolean.TRUE.equals(reached) && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
                     // Android may validate this same physical link during a slow probe.
                     // Reuse that verdict before starting another external request.
@@ -112,6 +112,7 @@ public final class RouterInternetProbe {
                     if(caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                             && networkStillPresent(context,network))
                         return new Result(InternetStatusPolicy.ONLINE,network);
+                    if(reached==null)return new Result(InternetStatusPolicy.UNAVAILABLE,null);
                 }
                 if(networkStillPresent(context,network))offlineCandidates.add(network);
             }
@@ -182,7 +183,11 @@ public final class RouterInternetProbe {
         }catch(Exception ignored){}
         return false;
     }
-    private static boolean reachesInternet(Network network,String endpoint,long deadline){
+    private static Boolean reachesInternet(Network network,String endpoint,long deadline){
+        int budget=remainingTimeout(deadline,2500);
+        return BoundedHttps.resolve(() -> performHttps(network,endpoint,deadline),budget);
+    }
+    private static boolean performHttps(Network network,String endpoint,long deadline){
         HttpURLConnection connection=null;
         try {
             if(exhausted(deadline))return false;
