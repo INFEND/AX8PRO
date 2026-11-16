@@ -9,7 +9,7 @@ android {
         minSdk 26
         targetSdk 35
         versionCode 128
-        versionName '1.7.0'
+        versionName '1.6.10'
     }
     // GitHub Actions signs release APK with the permanent AX8PRO key.
     // Debug builds use the normal local debug signer only for development.

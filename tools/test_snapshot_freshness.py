@@ -39,7 +39,8 @@ class SnapshotFreshnessTest(unittest.TestCase):
         self.assertIn("uiQosWatch.check(d,traffic,qos)",worker)
         self.assertNotIn("new ArrayList<>(devices)",worker)
     def test_acl_timestamp_set_from_both_foreground_and_background(self):
-        self.assertIn("blockedAt=System.currentTimeMillis();",MAIN)
+        self.assertIn("b=api.blockState();blockedSampleWall=System.currentTimeMillis();",MAIN)
+        self.assertIn("blockedAt=blockedSample;",MAIN)
         self.assertIn("this.blockedAt=blocked==null?0:blockedAt;",MAIN)
 
 if __name__=="__main__":unittest.main()
