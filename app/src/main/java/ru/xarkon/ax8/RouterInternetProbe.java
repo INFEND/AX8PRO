@@ -221,10 +221,10 @@ public final class RouterInternetProbe {
         try{
             ConnectivityManager cm=(ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
             if(cm==null)return false;
-            for(Network candidate:cm.getAllNetworks())if(network.equals(candidate)){
-                NetworkCapabilities cap=cm.getNetworkCapabilities(candidate);
-                return isRouterLink(cap);
-            }
+            // A lost or inaccessible Network has no current capabilities. Query
+            // the exact handle instead of enumerating every network on each check.
+            NetworkCapabilities cap=cm.getNetworkCapabilities(network);
+            return isRouterLink(cap);
         }catch(Exception ignored){}
         return false;
     }

@@ -20,6 +20,17 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)",source)
         self.assertEqual(source.count("isRouterLink("),9,
                          "Both initial selection and revalidation must reject VPN")
+    def test_revalidation_queries_exact_network_without_enumeration(self):
+        source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
+        helper=source.split("public static boolean networkStillPresent",1)[1]
+        self.assertNotIn("getAllNetworks()",helper)
+        self.assertIn("cm.getNetworkCapabilities(network)",helper)
+        self.assertIn("return isRouterLink(cap);",helper)
+        self.assertIn("if(network==null)return false;",helper)
+        self.assertIn("if(cm==null)return false;",helper)
+        self.assertIn("caps!=null",source)
+        self.assertEqual(source.count("cm.getAllNetworks()"),1)
+
     def test_validated_candidates_recheck_physical_transport(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         probes=source.split("for(Network network:routerCandidates)",1)[1]
