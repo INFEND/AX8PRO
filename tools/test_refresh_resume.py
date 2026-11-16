@@ -44,6 +44,12 @@ class RefreshResumeTest(unittest.TestCase):
             self.assertLess(worker.index(capture),worker.index("qos.resyncAddresses"))
             self.assertIn(assignment,worker)
 
+    def test_action_completion_forces_refresh_after_releasing_busy_gate(self):
+        callback=MAIN.split("actionBusy=false;temporaryAction=false;displayWork",1)[1].split("private RouterClient temporaryRouter()",1)[0]
+        self.assertIn("clientsAt=0;smsAt=0;statusAt=0;",callback)
+        self.assertIn("updateConnection();draw(true);refresh(true);",callback)
+        self.assertLess(callback.index("clientsAt=0;"),callback.index("refresh(true);"))
+
     def test_pause_invalidates_old_generation(self):
         self.assertIn("refreshSession.invalidate();",MAIN)
 
