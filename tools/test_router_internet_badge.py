@@ -12,7 +12,8 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn("network.getSocketFactory()",source)
         self.assertIn("TRANSPORT_WIFI",source)
         self.assertIn("TRANSPORT_ETHERNET",source)
-        self.assertIn("getResponseCode()==204",source)
+        self.assertIn("int response=connection.getResponseCode();",source)
+        self.assertIn("return exhausted(deadline)?null:response==204;",source)
         self.assertNotIn("TRANSPORT_CELLULAR",source)
     def test_excludes_vpn_even_when_it_advertises_wifi(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
@@ -116,7 +117,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn('connection.setInstanceFollowRedirects(false);',source)
         self.assertIn('connection.setUseCaches(false);',source)
         self.assertIn('connection.setRequestProperty("Cache-Control","no-cache");',source)
-        self.assertIn('return connection.getResponseCode()==204;',source)
+        self.assertRegex(source, r'int response=connection\.getResponseCode\(\);\s*return exhausted\(deadline\)\?null:response==204;')
         # Keep requests bounded on poor LTE without silently falling back to
         # the phone's default cellular connection.
         self.assertIn('connection.setConnectTimeout(timeout);',source)
