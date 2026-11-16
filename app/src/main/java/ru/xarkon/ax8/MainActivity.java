@@ -492,6 +492,7 @@ public final class MainActivity extends Activity {
             JSONObject next=null;List<RouterClient.Device> d=null;List<RouterClient.Sms> m=null;RouterClient.BlockState b=null;
             String failure=null,partialFailure=null;
             long statusSampleWall=0L,statusSampleElapsed=0L;
+            long clientsSampleWall=0L,blockedSampleWall=0L,smsSampleWall=0L;
             if(wantStatus&&foregroundCycleActive(cycleGeneration))try{
                 next=api.status();
                 statusSampleWall=System.currentTimeMillis();
@@ -515,9 +516,9 @@ public final class MainActivity extends Activity {
             // After a requested Band reboot only status is needed. Other WebUI calls
             // would multiply failed login attempts and delay recovery by many seconds.
             {
-                if(wantClients&&foregroundCycleActive(cycleGeneration))try{d=api.devices();}catch(Exception e){partialFailure="Устройства: "+e.getMessage();}
-                if(wantBlocked&&foregroundCycleActive(cycleGeneration))try{b=api.blockState();}catch(Exception e){if(tab==1)partialFailure="Список блокировок: "+e.getMessage();}
-                if(wantSms&&foregroundCycleActive(cycleGeneration))try{m=api.sms();}catch(Exception e){partialFailure="SMS: "+e.getMessage();}
+                if(wantClients&&foregroundCycleActive(cycleGeneration))try{d=api.devices();clientsSampleWall=System.currentTimeMillis();}catch(Exception e){partialFailure="Устройства: "+e.getMessage();}
+                if(wantBlocked&&foregroundCycleActive(cycleGeneration))try{b=api.blockState();blockedSampleWall=System.currentTimeMillis();}catch(Exception e){if(tab==1)partialFailure="Список блокировок: "+e.getMessage();}
+                if(wantSms&&foregroundCycleActive(cycleGeneration))try{m=api.sms();smsSampleWall=System.currentTimeMillis();}catch(Exception e){partialFailure="SMS: "+e.getMessage();}
             }
             // Optional Telnet counters: the entire snapshot is still governed by the same
             // refresh interval, with skipped ticks if AX8 has not yet answered.
@@ -551,6 +552,7 @@ public final class MainActivity extends Activity {
             }else if(monitorOn&&foregroundCycleActive(cycleGeneration))
                 trafficError="Список клиентов временно недоступен";
             final long sampledWall=statusSampleWall,sampledElapsed=statusSampleElapsed;
+            final long clientsSample=clientsSampleWall,blockedSample=blockedSampleWall,smsSample=smsSampleWall;
             final String limitedError=partialFailure;
             final JSONObject status2=next;final List<RouterClient.Device> devices2=d;final List<RouterClient.Sms> sms2=m;
             final RouterClient.BlockState blacklist=b;final String fail=failure;
@@ -586,7 +588,7 @@ public final class MainActivity extends Activity {
                     while(historyUl.size()>28)historyUl.removeFirst();
                 }
                 if(devices2!=null){
-                    devices=devices2;clientsAt=System.currentTimeMillis();
+                    devices=devices2;clientsAt=clientsSample;
                     android.content.SharedPreferences.Editor cache=null;
                     for(RouterClient.Device device:devices2){
                         String prev=prefs.getString("cached_client_name_"+device.mac,"");
@@ -597,8 +599,8 @@ public final class MainActivity extends Activity {
                     }
                     if(cache!=null)cache.apply();
                 }
-                if(sms2!=null){messages=sms2;smsAt=System.currentTimeMillis();}
-                if(blacklist!=null){blocked=blacklist;blockedAt=System.currentTimeMillis();}
+                if(sms2!=null){messages=sms2;smsAt=smsSample;}
+                if(blacklist!=null){blocked=blacklist;blockedAt=blockedSample;}
                 autoSelectOwner(false);
                 lastCompleteAt=System.currentTimeMillis();
                 rebuildNav();

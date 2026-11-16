@@ -32,6 +32,18 @@ class RefreshResumeTest(unittest.TestCase):
         self.assertIn("long counterTime=sampledElapsed;",worker)
         self.assertIn("lastBytesAt=counterTime",worker)
 
+    def test_section_timestamps_are_captured_before_qos(self):
+        worker=MAIN.split("private void refresh(boolean forced){",1)[1].split("private void clearPendingBand()",1)[0]
+        for read, stamp, assignment in (
+            ("d=api.devices();", "clientsSampleWall", "clientsAt=clientsSample;"),
+            ("b=api.blockState();", "blockedSampleWall", "blockedAt=blockedSample;"),
+            ("m=api.sms();", "smsSampleWall", "smsAt=smsSample;"),
+        ):
+            capture=read+stamp+"=System.currentTimeMillis();"
+            self.assertIn(capture,worker)
+            self.assertLess(worker.index(capture),worker.index("qos.resyncAddresses"))
+            self.assertIn(assignment,worker)
+
     def test_pause_invalidates_old_generation(self):
         self.assertIn("refreshSession.invalidate();",MAIN)
 
