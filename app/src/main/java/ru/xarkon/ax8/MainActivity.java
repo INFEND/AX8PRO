@@ -520,6 +520,19 @@ public final class MainActivity extends Activity {
                 if(wantBlocked&&foregroundCycleActive(cycleGeneration))try{b=api.blockState();blockedSampleWall=System.currentTimeMillis();}catch(Exception e){if(tab==1)partialFailure="Список блокировок: "+e.getMessage();}
                 if(wantSms&&foregroundCycleActive(cycleGeneration))try{m=api.sms();smsSampleWall=System.currentTimeMillis();}catch(Exception e){partialFailure="SMS: "+e.getMessage();}
             }
+            // SMS is independent of Telnet traffic/QoS. Publish the acquired
+            // snapshot before slow optional work, without releasing single-flight.
+            if(m!=null&&foregroundCycleActive(cycleGeneration)){
+                final List<RouterClient.Sms> earlySms=m;
+                final long earlySmsAt=smsSampleWall;
+                handler.post(()->{
+                    if(!refreshSession.accepts(cycleGeneration,running)
+                            ||isFinishing()||isDestroyed()||actionBusy)return;
+                    messages=earlySms;smsAt=earlySmsAt;
+                    rebuildNav();
+                    if(tab==2)updateSmsLive();
+                });
+            }
             // Optional Telnet counters: the entire snapshot is still governed by the same
             // refresh interval, with skipped ticks if AX8 has not yet answered.
             String qosIssue="";

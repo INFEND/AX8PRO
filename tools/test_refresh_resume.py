@@ -44,6 +44,15 @@ class RefreshResumeTest(unittest.TestCase):
             self.assertLess(worker.index(capture),worker.index("qos.resyncAddresses"))
             self.assertIn(assignment,worker)
 
+    def test_sms_is_published_before_optional_qos(self):
+        worker=MAIN.split("private void refresh(boolean forced){",1)[1].split("private void clearPendingBand()",1)[0]
+        early=worker.split("if(m!=null&&foregroundCycleActive(cycleGeneration)){",1)[1].split("// Optional Telnet counters:",1)[0]
+        self.assertLess(worker.index("messages=earlySms;smsAt=earlySmsAt;"),worker.index("qos.resyncAddresses"))
+        self.assertIn("!refreshSession.accepts(cycleGeneration,running)",early)
+        self.assertIn("||isFinishing()||isDestroyed()||actionBusy",early)
+        self.assertIn("if(tab==2)updateSmsLive();",early)
+        self.assertNotIn("refreshBusy=false",early)
+
     def test_action_completion_forces_refresh_after_releasing_busy_gate(self):
         callback=MAIN.split("actionBusy=false;temporaryAction=false;displayWork",1)[1].split("private RouterClient temporaryRouter()",1)[0]
         self.assertIn("clientsAt=0;smsAt=0;statusAt=0;",callback)
