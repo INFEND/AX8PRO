@@ -190,13 +190,18 @@ public final class RouterInternetProbe {
         if(budget==0)return null;
         // The worker must not inherit the longer overall diagnostic deadline.
         final long requestDeadline=Math.min(deadline,SystemClock.elapsedRealtime()+budget);
-        return BoundedHttps.resolve(() -> performHttps(network,endpoint,requestDeadline),budget);
+        BoundedHttps.Cancellation cancellation=new BoundedHttps.Cancellation();
+        return BoundedHttps.resolve(() -> performHttps(network,endpoint,requestDeadline,cancellation),budget,cancellation);
     }
-    private static Boolean performHttps(Network network,String endpoint,long deadline){
+    private static Boolean performHttps(Network network,String endpoint,long deadline,BoundedHttps.Cancellation cancellation){
         HttpURLConnection connection=null;
         try {
             if(exhausted(deadline))return null;
             connection=(HttpURLConnection)network.openConnection(new URL(endpoint));
+            if(!cancellation.register(connection::disconnect)){
+                connection.disconnect();
+                return null;
+            }
             int timeout=remainingTimeout(deadline,2500);
             if(timeout==0)return null;
             connection.setConnectTimeout(timeout);
@@ -209,7 +214,7 @@ public final class RouterInternetProbe {
             int response=connection.getResponseCode();
             return exhausted(deadline)?null:response==204;
         }catch(Exception ignored){return null;}
-        finally{if(connection!=null)connection.disconnect();}
+        finally{cancellation.finish();}
     }
     public static boolean networkStillPresent(Context context,Network network){
         if(network==null)return false;

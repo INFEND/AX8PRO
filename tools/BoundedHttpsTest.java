@@ -22,6 +22,29 @@ public class BoundedHttpsTest {
             a.join(3000); b.join(3000);
             if (a.isAlive() || b.isAlive()) throw new AssertionError("timeout");
         } finally { release.countDown(); }
+        // Wait for the original saturated workers to exit before testing cancellation.
+        a.join(); b.join();
+        long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (!"ready".equals(BoundedHttps.resolve(() -> "ready", 100)) && System.nanoTime() < until)
+            Thread.sleep(10);
+        BoundedHttps.Cancellation cancellation = new BoundedHttps.Cancellation();
+        CountDownLatch closed = new CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger closes = new java.util.concurrent.atomic.AtomicInteger();
+        Object result = BoundedHttps.resolve(() -> {
+            if (!cancellation.register(() -> { closes.incrementAndGet(); closed.countDown(); }))
+                throw new AssertionError("registration");
+            try {
+                while (true) {
+                    try { closed.await(); break; } catch (InterruptedException ignored) {}
+                }
+                return "late";
+            } finally { cancellation.finish(); }
+        }, 500, cancellation);
+        if (result != null || !closed.await(2, TimeUnit.SECONDS) || closes.get() != 1)
+            throw new AssertionError("asynchronous cancellation");
+        BoundedHttps.Cancellation late = new BoundedHttps.Cancellation();
+        late.cancel();
+        if (late.register(() -> {})) throw new AssertionError("late registration");
         Thread.currentThread().interrupt();
         if (BoundedHttps.resolve(() -> "unexpected", 1000) != null || !Thread.interrupted())
             throw new AssertionError("interrupt");

@@ -123,7 +123,7 @@ class InternetBadgeSourceTests(unittest.TestCase):
         self.assertIn('connection.setConnectTimeout(timeout);',source)
         self.assertIn('connection.setReadTimeout(timeout);',source)
         self.assertIn('network.openConnection(new URL(endpoint))',source)
-        self.assertIn('finally{if(connection!=null)connection.disconnect();}',source)
+        self.assertIn('finally{cancellation.finish();}',source)
 
     def test_socket_timeouts_are_capped_by_remaining_budget(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
@@ -237,7 +237,7 @@ class BoundedHttpsBehaviorTests(unittest.TestCase):
     def test_https_worker_uses_request_deadline(self):
         source=(SRC/"RouterInternetProbe.java").read_text(encoding="utf-8")
         self.assertIn("Math.min(deadline,SystemClock.elapsedRealtime()+budget)",source)
-        self.assertIn("performHttps(network,endpoint,requestDeadline)",source)
+        self.assertIn("performHttps(network,endpoint,requestDeadline,cancellation)",source)
         self.assertIn("return exhausted(deadline)?null:response==204;",source)
 
     def test_bounded_https_worker_behavior(self):
