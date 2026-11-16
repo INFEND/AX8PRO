@@ -491,17 +491,21 @@ public final class MainActivity extends Activity {
         workers.execute(()->{
             JSONObject next=null;List<RouterClient.Device> d=null;List<RouterClient.Sms> m=null;RouterClient.BlockState b=null;
             String failure=null,partialFailure=null;
+            long statusSampleWall=0L,statusSampleElapsed=0L;
             if(wantStatus&&foregroundCycleActive(cycleGeneration))try{
                 next=api.status();
+                statusSampleWall=System.currentTimeMillis();
+                statusSampleElapsed=android.os.SystemClock.elapsedRealtime();
                 if(next!=null && forced){
                     final JSONObject early=next;
+                    final long earlySampleWall=statusSampleWall;
                     handler.post(()->{
                         if(!refreshSession.accepts(cycleGeneration,running))return;
                         invalidateInternetOnPppChange(early);
                         // This snapshot has not reached the counter calculation yet.
                         // Never pair it with a fallback from a different snapshot.
                         fallbackDl=Double.NaN;fallbackUl=Double.NaN;
-                        status=early;statusAt=System.currentTimeMillis();error="";
+                        status=early;statusAt=earlySampleWall;error="";
                         updateConnection();
                         maybeProbeInternet(true);
                         if(tab==0)draw(true);
@@ -546,6 +550,7 @@ public final class MainActivity extends Activity {
                 }
             }else if(monitorOn&&foregroundCycleActive(cycleGeneration))
                 trafficError="Список клиентов временно недоступен";
+            final long sampledWall=statusSampleWall,sampledElapsed=statusSampleElapsed;
             final String limitedError=partialFailure;
             final JSONObject status2=next;final List<RouterClient.Device> devices2=d;final List<RouterClient.Sms> sms2=m;
             final RouterClient.BlockState blacklist=b;final String fail=failure;
@@ -563,8 +568,8 @@ public final class MainActivity extends Activity {
                 expireStaleSections(System.currentTimeMillis());
                 if(status2!=null){
                     double rx=num(status2,"realtime_rx_bytes"),tx=num(status2,"realtime_tx_bytes");
-                    long sampleTime=System.currentTimeMillis();
-                    long counterTime=android.os.SystemClock.elapsedRealtime();
+                    long sampleTime=sampledWall;
+                    long counterTime=sampledElapsed;
                     double sec=(counterTime-lastBytesAt)/1000.0;
                     // Never reuse a previous rate after missing/reset counters or an invalid interval.
                     fallbackDl=counterRate(rx,lastRx,sec,lastBytesAt>0);

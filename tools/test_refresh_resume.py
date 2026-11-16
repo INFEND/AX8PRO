@@ -24,6 +24,14 @@ class RefreshResumeTest(unittest.TestCase):
         self.assertEqual(len(callback),2)
         self.assertIn("private void clearPendingBand()",callback[1])
 
+    def test_status_timestamp_precedes_slow_followup_reads(self):
+        worker=MAIN.split("private void refresh(boolean forced){",1)[1].split("private void clearPendingBand()",1)[0]
+        self.assertLess(worker.index("statusSampleElapsed=android.os.SystemClock.elapsedRealtime();"),worker.index("d=api.devices()"))
+        self.assertIn("statusAt=earlySampleWall",worker)
+        self.assertIn("long sampleTime=sampledWall;",worker)
+        self.assertIn("long counterTime=sampledElapsed;",worker)
+        self.assertIn("lastBytesAt=counterTime",worker)
+
     def test_pause_invalidates_old_generation(self):
         self.assertIn("refreshSession.invalidate();",MAIN)
 
