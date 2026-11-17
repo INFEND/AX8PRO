@@ -536,6 +536,26 @@ public final class MainActivity extends Activity {
             {
                 if(wantClients&&foregroundCycleActive(cycleGeneration))try{d=api.devices();clientsSampleWall=System.currentTimeMillis();}catch(Exception e){partialFailure="Устройства: "+e.getMessage();}
                 if(wantBlocked&&foregroundCycleActive(cycleGeneration))try{b=api.blockState();blockedSampleWall=System.currentTimeMillis();}catch(Exception e){if(tab==1)partialFailure="Список блокировок: "+e.getMessage();}
+                // Publish a coherent client/ACL pair before SMS and optional QoS.
+                // With traffic monitoring enabled, wait for the complete sample
+                // so old per-device rates cannot be paired with new addresses.
+                if(d!=null&&b!=null&&foregroundCycleActive(cycleGeneration)){
+                    final List<RouterClient.Device> earlyDevices=d;
+                    final RouterClient.BlockState earlyBlocked=b;
+                    final long earlyClientsAt=clientsSampleWall,earlyBlockedAt=blockedSampleWall;
+                    handler.post(()->{
+                        if(!refreshSession.accepts(cycleGeneration,running)
+                                ||isFinishing()||isDestroyed()||actionBusy||monitorOn||tab!=1)return;
+                        long nowWall=System.currentTimeMillis();
+                        long limit=Math.max(10000L,refreshInterval()*3L);
+                        if(!BackgroundSummary.isFresh(earlyClientsAt,nowWall,limit)
+                                ||!BackgroundSummary.isFresh(earlyBlockedAt,nowWall,limit))return;
+                        devices=earlyDevices;clientsAt=earlyClientsAt;
+                        blocked=earlyBlocked;blockedAt=earlyBlockedAt;
+                        autoSelectOwner(false);
+                        updateClientsLive();
+                    });
+                }
                 if(wantSms&&foregroundCycleActive(cycleGeneration))try{m=api.sms();smsSampleWall=System.currentTimeMillis();}catch(Exception e){partialFailure="SMS: "+e.getMessage();}
             }
             // SMS is independent of Telnet traffic/QoS. Publish the acquired
