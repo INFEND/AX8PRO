@@ -1122,7 +1122,7 @@ public final class MainActivity extends Activity {
         addCard(summary);
         if(devices.isEmpty())rowCard(clientsAt>0?"Устройства не обнаружены":"Список клиентов ещё не загружен",
             clientsAt>0?"Подключитесь к AX8 и обновите список":"Ожидание ответа AX8. При необходимости повторите обновление",null,Ui.MUTED,null);
-        if(clientsAt>0&&System.currentTimeMillis()-clientsAt>Math.max(10000L,refreshInterval()*3L)){
+        if(clientListStale()){
             rowCard("Список клиентов устарел","Показаны последние известные данные. Действия QoS не применяются по старым IP-адресам. Обновите соединение с AX8.",null,Ui.ORANGE,null);
         }
         for(RouterClient.Device dev:devices){
@@ -1863,8 +1863,13 @@ public final class MainActivity extends Activity {
         confirm("Сменить LTE Band","Применить "+label+"? Роутер перезагрузится. Дождитесь подтверждения LockBandSuc перед перезагрузкой.",
             ()->action("Band Lock "+label,p->api.setBand(b,p),b));
     }
+    private boolean clientListStale(){
+        return clientsAt>0&&System.currentTimeMillis()-clientsAt>Math.max(10000L,refreshInterval()*3L);
+    }
     private String clientSkeletonSignature(){
-        StringBuilder b=new StringBuilder(sectionError).append(";CLIENTS_READY:").append(clientsAt>0).append(';');
+        StringBuilder b=new StringBuilder(sectionError).append(";CLIENTS_READY:").append(clientsAt>0)
+            .append(";CLIENTS_STALE:").append(clientListStale())
+            .append(";OWNER:").append(ownerMac).append(";MONITOR:").append(monitorOn).append(';');
         // Include the entire blacklist, not only blocked currently-online clients.
         if(blocked==null)b.append("ACL_PENDING;");
         else{

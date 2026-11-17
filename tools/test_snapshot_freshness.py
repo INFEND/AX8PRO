@@ -38,6 +38,12 @@ class SnapshotFreshnessTest(unittest.TestCase):
         self.assertIn("priority.update(d,traffic,qos)",worker)
         self.assertIn("uiQosWatch.check(d,traffic,qos)",worker)
         self.assertNotIn("new ArrayList<>(devices)",worker)
+    def test_client_cards_invalidate_on_owner_monitor_and_staleness(self):
+        signature=MAIN.split("private String clientSkeletonSignature(){",1)[1].split("private void updateClientsLive()",1)[0]
+        for marker in ("append(clientListStale())", "append(ownerMac)", "append(monitorOn)"):
+            self.assertIn(marker,signature)
+        self.assertIn("if(clientListStale()){",MAIN)
+        self.assertIn("if(!clientsSignature.equals(clientSkeletonSignature())){draw(true);return;}",MAIN)
     def test_acl_timestamp_set_from_both_foreground_and_background(self):
         self.assertIn("b=api.blockState();blockedSampleWall=System.currentTimeMillis();",MAIN)
         self.assertIn("blockedAt=blockedSample;",MAIN)
