@@ -32,6 +32,11 @@ class RefreshResumeTest(unittest.TestCase):
         self.assertIn("long counterTime=sampledElapsed;",worker)
         self.assertIn("lastBytesAt=counterTime",worker)
 
+    def test_early_status_rejects_inactive_ui_and_router_actions(self):
+        early=MAIN.split("final JSONObject early=next;",1)[1].split("invalidateInternetOnPppChange(early);",1)[0]
+        self.assertIn("!refreshSession.accepts(cycleGeneration,running)",early)
+        self.assertIn("||isFinishing()||isDestroyed()||actionBusy",early)
+
     def test_section_timestamps_are_captured_before_qos(self):
         worker=MAIN.split("private void refresh(boolean forced){",1)[1].split("private void clearPendingBand()",1)[0]
         for read, stamp, assignment in (

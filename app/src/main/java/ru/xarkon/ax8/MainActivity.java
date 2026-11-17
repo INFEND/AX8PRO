@@ -501,7 +501,8 @@ public final class MainActivity extends Activity {
                     final JSONObject early=next;
                     final long earlySampleWall=statusSampleWall;
                     handler.post(()->{
-                        if(!refreshSession.accepts(cycleGeneration,running))return;
+                        if(!refreshSession.accepts(cycleGeneration,running)
+                                ||isFinishing()||isDestroyed()||actionBusy)return;
                         invalidateInternetOnPppChange(early);
                         // This snapshot has not reached the counter calculation yet.
                         // Never pair it with a fallback from a different snapshot.
