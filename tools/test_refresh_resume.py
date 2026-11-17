@@ -74,6 +74,19 @@ class RefreshResumeTest(unittest.TestCase):
         self.assertIn("scroll!=target",draw)
         self.assertIn("pendingScrollY=-1;",draw)
 
+    def test_initial_draw_and_activity_state(self):
+        create=MAIN.split("public void onCreate(Bundle state)",1)[1].split("protected void onSaveInstanceState",1)[0]
+        self.assertNotIn("showTab(0)",create)
+        self.assertIn("rebuildNav();draw(true);",create)
+        self.assertIn('state.getInt("active_tab",0)',create)
+        self.assertIn("restored<TABS.length",create)
+        self.assertIn("positions.length==tabScrollY.length",create)
+        self.assertIn("pendingScrollY=tabScrollY[tab]",create)
+        save=MAIN.split("protected void onSaveInstanceState",1)[1].split("protected void onResume",1)[0]
+        self.assertIn('state.putInt("active_tab",tab)',save)
+        self.assertIn('state.putIntArray("tab_scroll_y",tabScrollY.clone())',save)
+        self.assertIn("super.onSaveInstanceState(state)",save)
+
     def test_pause_invalidates_old_generation(self):
         self.assertIn("refreshSession.invalidate();",MAIN)
 

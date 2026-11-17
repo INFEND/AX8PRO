@@ -139,7 +139,22 @@ public final class MainActivity extends Activity {
         // Never restore a blocking Band verification after a router reboot.
         clearPendingBand();
         restoreRecentRouterSnapshot();
-        Ui.load(prefs);applySystemBarTheme();requestNotificationPermission();createShell();showTab(0);UpdateSchedule.configure(this);
+        Ui.load(prefs);applySystemBarTheme();requestNotificationPermission();createShell();
+        if(state!=null){
+            int restored=state.getInt("active_tab",0);
+            tab=restored>=0&&restored<TABS.length?restored:0;
+            int[] positions=state.getIntArray("tab_scroll_y");
+            if(positions!=null&&positions.length==tabScrollY.length)
+                for(int i=0;i<positions.length;i++)tabScrollY[i]=Math.max(0,positions[i]);
+        }
+        pendingScrollY=tabScrollY[tab];
+        rebuildNav();draw(true);UpdateSchedule.configure(this);
+    }
+    @Override protected void onSaveInstanceState(Bundle state){
+        if(scroll!=null)tabScrollY[tab]=pendingScrollY>=0?pendingScrollY:scroll.getScrollY();
+        state.putInt("active_tab",tab);
+        state.putIntArray("tab_scroll_y",tabScrollY.clone());
+        super.onSaveInstanceState(state);
     }
     @Override protected void onResume(){
         super.onResume();
