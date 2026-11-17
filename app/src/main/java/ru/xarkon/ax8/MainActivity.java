@@ -113,6 +113,8 @@ public final class MainActivity extends Activity {
     private volatile boolean running=false;
     private final RefreshSession refreshSession=new RefreshSession();
     private int tab=0,lastNavTab=-1,lastNavUnread=-1;
+    private final int[] tabScrollY=new int[TABS.length];
+    private int pendingScrollY=-1,scrollRestoreRevision;
     private String error="",notice="";
     private long statusAt=0,clientsAt=0,smsAt=0,blockedAt=0,lastBytesAt=0;
     private double lastRx=Double.NaN,lastTx=Double.NaN,fallbackDl=Double.NaN,fallbackUl=Double.NaN;
@@ -235,10 +237,9 @@ public final class MainActivity extends Activity {
     }
     private void applyAppearance(){
         int keep=tab;
-        int keepY=(scroll==null)?0:scroll.getScrollY();
+        int keepY=pendingScrollY>=0?pendingScrollY:((scroll==null)?0:scroll.getScrollY());
         Ui.load(prefs);applySystemBarTheme();
-        createShell();tab=keep;rebuildNav();draw(true);
-        scroll.post(()->scroll.scrollTo(0,Math.max(0,keepY)));
+        createShell();tab=keep;pendingScrollY=keepY;rebuildNav();draw(true);
     }
     private boolean automaticPolling(){return prefs.getBoolean("refresh_auto",true);}
     private int refreshInterval(){
@@ -307,7 +308,8 @@ public final class MainActivity extends Activity {
     }
     private void showTab(int index){
         if(index==tab)return;
-        tab=index;rebuildNav();draw(false);scroll.scrollTo(0,0);
+        tabScrollY[tab]=pendingScrollY>=0?pendingScrollY:scroll.getScrollY();
+        tab=index;pendingScrollY=tabScrollY[index];rebuildNav();draw(true);
         if(Ui.MOTION){content.setAlpha(0);content.setTranslationY(d(14));
             content.animate().alpha(1).translationY(0).setDuration(230).start();}
         else{content.setAlpha(1);content.setTranslationY(0);}
@@ -780,7 +782,7 @@ public final class MainActivity extends Activity {
             s.contains("no route to host")||s.contains("failed to connect");
     }
     private void draw(boolean preserveScroll){
-        int y=preserveScroll?scroll.getScrollY():0;
+        int y=preserveScroll?(pendingScrollY>=0?pendingScrollY:scroll.getScrollY()):0;
         rebuildNav();
         content.removeAllViews();
         if(!error.isEmpty()) {
@@ -796,9 +798,16 @@ public final class MainActivity extends Activity {
             LinearLayout n=Ui.card(this);n.addView(Ui.text(this,sectionError,12,Ui.ORANGE,false));addCard(n);
         }
         if(tab==0)overview();else if(tab==1)clients();else if(tab==2)sms();else if(tab==3)network();else settings();
-        if(preserveScroll){final int expectedTab=tab;scroll.post(()->{
-            if(tab==expectedTab)scroll.scrollTo(0,Math.min(y,Math.max(0,content.getHeight()-scroll.getHeight())));
-        });}
+        if(preserveScroll){
+            final int expectedTab=tab,revision=++scrollRestoreRevision;
+            final ScrollView target=scroll;
+            pendingScrollY=y;
+            target.post(()->{
+                if(tab!=expectedTab||scroll!=target||revision!=scrollRestoreRevision)return;
+                pendingScrollY=-1;
+                target.scrollTo(0,Math.min(y,Math.max(0,content.getHeight()-target.getHeight())));
+            });
+        }
     }
     private void addCard(LinearLayout v){LinearLayout.LayoutParams p=Ui.lp(this,-1,-2);p.bottomMargin=d(13);(settingsTarget!=null?settingsTarget:content).addView(v,p);}
     private void addTitle(String s,String sub){LinearLayout v=Ui.vertical(this);v.setPadding(d(4),d(8),d(3),d(18));

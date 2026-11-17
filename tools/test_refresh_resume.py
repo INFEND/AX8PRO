@@ -64,6 +64,16 @@ class RefreshResumeTest(unittest.TestCase):
         self.assertIn("updateConnection();draw(true);refresh(true);",callback)
         self.assertLess(callback.index("clientsAt=0;"),callback.index("refresh(true);"))
 
+    def test_tab_scroll_is_preserved_and_stale_callbacks_rejected(self):
+        switch=MAIN.split("private void showTab(int index){",1)[1].split("private void displayWork",1)[0]
+        self.assertIn("if(index==tab)return;",switch)
+        self.assertIn("tabScrollY[tab]=pendingScrollY>=0?pendingScrollY:scroll.getScrollY();",switch)
+        self.assertIn("pendingScrollY=tabScrollY[index]",switch)
+        draw=MAIN.split("private void draw(boolean preserveScroll){",1)[1].split("private void addCard",1)[0]
+        self.assertIn("revision!=scrollRestoreRevision",draw)
+        self.assertIn("scroll!=target",draw)
+        self.assertIn("pendingScrollY=-1;",draw)
+
     def test_pause_invalidates_old_generation(self):
         self.assertIn("refreshSession.invalidate();",MAIN)
 
