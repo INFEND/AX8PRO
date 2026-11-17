@@ -1899,8 +1899,12 @@ public final class MainActivity extends Activity {
     }
     private String smsFingerprint(){
         StringBuilder b=new StringBuilder(sectionError).append(";SMS_READY:").append(smsAt>0).append(';');
-        for(RouterClient.Sms sms:messages)b.append(sms.id).append('|').append(sms.tag)
-            .append('|').append(sms.content.hashCode()).append(';');
+        // Include all fields captured by the card and its click listener.
+        // JSON array encoding avoids delimiter ambiguity and String.hashCode collisions.
+        for(RouterClient.Sms sms:messages){
+            b.append(new org.json.JSONArray().put(sms.id).put(sms.tag)
+                .put(sms.number).put(sms.date).put(sms.content).toString()).append(';');
+        }
         return b.toString();
     }
     private void updateSmsLive(){if(!smsSignature.equals(smsFingerprint()))draw(true);}

@@ -6,6 +6,13 @@ ROOT=Path(__file__).resolve().parents[1]
 MAIN=(ROOT/"app/src/main/java/ru/xarkon/ax8/MainActivity.java").read_text(encoding="utf-8")
 
 class RefreshResumeTest(unittest.TestCase):
+    def test_sms_fingerprint_includes_all_card_fields(self):
+        fingerprint=MAIN.split("private String smsFingerprint(){",1)[1].split("private void updateSmsLive()",1)[0]
+        for field in ("id", "tag", "number", "date", "content"):
+            self.assertIn(".put(sms."+field+")",fingerprint)
+        self.assertNotIn("hashCode()",fingerprint.replace("String.hashCode collisions",""))
+        self.assertIn("new org.json.JSONArray()",fingerprint)
+
     def test_forced_refresh_is_deferred_while_worker_busy(self):
         gate=MAIN.split("private void refresh(boolean forced){",1)[1].split("long now=System.currentTimeMillis();",1)[0]
         self.assertIn("if(refreshBusy){",gate)
