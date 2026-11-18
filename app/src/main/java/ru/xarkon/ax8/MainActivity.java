@@ -71,6 +71,15 @@ public final class MainActivity extends Activity {
     private RouterClient api;
     private QosController qos;
     private DeviceTrafficMonitor traffic;
+    // UI-owned immutable snapshot; never read the worker's changing rate map.
+    private Map<String,DeviceTrafficMonitor.Rate> displayedRates=Collections.emptyMap();
+    private List<RouterClient.Device> ratedDevices;
+    private long ratedGeneration=-1;
+    private DeviceTrafficMonitor.Rate displayedRate(RouterClient.Device dev){
+        return monitorOn && ratedDevices==devices && devices.contains(dev)
+            && !clientListStale() && refreshSession.accepts(ratedGeneration,running)
+            ? displayedRates.get(dev.mac):null;
+    }
     private final OwnerPriorityController priority=new OwnerPriorityController();
     private final QosWatchdog uiQosWatch=new QosWatchdog();
     private final BandSwitchTracker bandTracker=new BandSwitchTracker();
@@ -537,15 +546,14 @@ public final class MainActivity extends Activity {
                 if(wantClients&&foregroundCycleActive(cycleGeneration))try{d=api.devices();clientsSampleWall=System.currentTimeMillis();}catch(Exception e){partialFailure="Устройства: "+e.getMessage();}
                 if(wantBlocked&&foregroundCycleActive(cycleGeneration))try{b=api.blockState();blockedSampleWall=System.currentTimeMillis();}catch(Exception e){if(tab==1)partialFailure="Список блокировок: "+e.getMessage();}
                 // Publish a coherent client/ACL pair before SMS and optional QoS.
-                // With traffic monitoring enabled, wait for the complete sample
-                // so old per-device rates cannot be paired with new addresses.
+                // Rates are published separately, only with their matching client snapshot.
                 if(d!=null&&b!=null&&foregroundCycleActive(cycleGeneration)){
                     final List<RouterClient.Device> earlyDevices=d;
                     final RouterClient.BlockState earlyBlocked=b;
                     final long earlyClientsAt=clientsSampleWall,earlyBlockedAt=blockedSampleWall;
                     handler.post(()->{
                         if(!refreshSession.accepts(cycleGeneration,running)
-                                ||isFinishing()||isDestroyed()||actionBusy||monitorOn||tab!=1)return;
+                                ||isFinishing()||isDestroyed()||actionBusy||tab!=1)return;
                         long nowWall=System.currentTimeMillis();
                         long limit=Math.max(10000L,refreshInterval()*3L);
                         if(!BackgroundSummary.isFresh(earlyClientsAt,nowWall,limit)
@@ -574,6 +582,7 @@ public final class MainActivity extends Activity {
             // Optional Telnet counters: the entire snapshot is still governed by the same
             // refresh interval, with skipped ticks if AX8 has not yet answered.
             String qosIssue="";
+            final Map<String,DeviceTrafficMonitor.Rate> sampledRates=new HashMap<>();
             // A poll can outlive onPause(), while the background service takes
             // ownership of QoS. Reject its router-side effects and stale follow-up
             // reads, not only its eventual UI callback.
@@ -589,6 +598,10 @@ public final class MainActivity extends Activity {
                     if(foregroundCycleActive(cycleGeneration)){
                         trafficError=qosIssue;
                         if(traffic.error().isEmpty()){
+                            for(RouterClient.Device dev:d){
+                                DeviceTrafficMonitor.Rate rate=traffic.get(dev.mac);
+                                if(rate!=null)sampledRates.put(dev.mac,rate);
+                            }
                             if(priority.enabled&&foregroundCycleActive(cycleGeneration))
                                 priority.update(d,traffic,qos);
                             if(prefs.getBoolean("background_qos_watch",true)
@@ -638,6 +651,8 @@ public final class MainActivity extends Activity {
                     while(historyDl.size()>28)historyDl.removeFirst();
                     while(historyUl.size()>28)historyUl.removeFirst();
                 }
+                displayedRates=Collections.unmodifiableMap(sampledRates);
+                ratedDevices=devices2; ratedGeneration=cycleGeneration;
                 if(devices2!=null){
                     devices=devices2;clientsAt=clientsSample;
                     android.content.SharedPreferences.Editor cache=null;
@@ -1148,7 +1163,7 @@ public final class MainActivity extends Activity {
         for(RouterClient.Device dev:devices){
             boolean deny=blocked!=null&&blocked.black.contains(dev.mac);
             Integer limit=qos.effectiveLimit(dev.mac);
-            DeviceTrafficMonitor.Rate rate=monitorOn?traffic.get(dev.mac):null;
+            DeviceTrafficMonitor.Rate rate=displayedRate(dev);
             LinearLayout card=Ui.card(this);
             LinearLayout head=Ui.horizontal(this);
             TextView name=Ui.text(this,friendlyName(dev),16,Ui.TEXT,true);
@@ -1297,7 +1312,7 @@ public final class MainActivity extends Activity {
         boolean isBlocked=blocked!=null&&blocked.black.contains(dev.mac);
         TextView state=Ui.chip(this,isBlocked?"● ЗАБЛОКИРОВАН":"● ПОДКЛЮЧЕНО",isBlocked?Ui.RED:Ui.GREEN);
         body.addView(state);Ui.addSpace(body,this,12);
-        DeviceTrafficMonitor.Rate rate=traffic.get(dev.mac);
+        DeviceTrafficMonitor.Rate rate=displayedRate(dev);
         if(rate!=null){
             TextView[] incoming={null};body.addView(clientMetric("↓  Входящая",humanRate(rate.dl),Ui.CYAN,incoming));
             TextView[] outgoing={null};body.addView(clientMetric("↑  Исходящая",humanRate(rate.ul),Ui.ORANGE,outgoing));}
@@ -1910,7 +1925,7 @@ public final class MainActivity extends Activity {
         if(!clientsSignature.equals(clientSkeletonSignature())){draw(true);return;}
         if(qosStatusLive!=null)qosStatusLive.setText("QoS · "+uiQosWatch.status());
         for(RouterClient.Device dev:devices){
-            DeviceTrafficMonitor.Rate r=monitorOn?traffic.get(dev.mac):null;
+            DeviceTrafficMonitor.Rate r=displayedRate(dev);
             TextView dl=clientDlValues.get(dev.mac),ul=clientUlValues.get(dev.mac),limitView=clientLimitValues.get(dev.mac);
             if(dl!=null)dl.setText(r==null?"—":humanRate(r.dl));
             if(ul!=null)ul.setText(r==null?"—":humanRate(r.ul));
@@ -2268,7 +2283,7 @@ public final class MainActivity extends Activity {
                 if(turnOn){confirm("Включить мониторинг","На AX8 будут созданы цепочки AX8_APP_MON и AX8_APP_MON6 через Telnet. Может увеличить нагрузку.",()->{
                     monitorOn=true;prefs.edit().putBoolean("traffic_monitor",true).apply();draw(true);refresh(true);
                 });}
-                else{monitorOn=false;prefs.edit().putBoolean("traffic_monitor",false).apply();
+                else{monitorOn=false;ratedDevices=null;prefs.edit().putBoolean("traffic_monitor",false).apply();
                     action("Отключение мониторинга",pr->{
                         if(qos.priorityActive())qos.applyPriority(ownerMac,null,api.devices(),pr);
                         priority.disable();traffic.stop();

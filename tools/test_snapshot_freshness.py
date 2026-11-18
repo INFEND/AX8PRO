@@ -44,16 +44,26 @@ class SnapshotFreshnessTest(unittest.TestCase):
             self.assertIn(marker,signature)
         self.assertIn("if(clientListStale()){",MAIN)
         self.assertIn("if(!clientsSignature.equals(clientSkeletonSignature())){draw(true);return;}",MAIN)
-    def test_early_clients_require_coherent_acl_and_disabled_monitor(self):
+    def test_early_clients_require_coherent_acl(self):
         early=MAIN.split("// Publish a coherent client/ACL pair",1)[1].split("if(wantSms&&foregroundCycleActive",1)[0]
         for marker in ("d!=null&&b!=null", "refreshSession.accepts(cycleGeneration,running)",
-                       "actionBusy||monitorOn||tab!=1", "BackgroundSummary.isFresh(earlyClientsAt",
+                       "actionBusy||tab!=1", "BackgroundSummary.isFresh(earlyClientsAt",
                        "BackgroundSummary.isFresh(earlyBlockedAt", "devices=earlyDevices;clientsAt=earlyClientsAt;",
                        "blocked=earlyBlocked;blockedAt=earlyBlockedAt;", "autoSelectOwner(false);",
                        "updateClientsLive();"):
             self.assertIn(marker,early)
         self.assertNotIn("refreshBusy=false",early)
         self.assertNotIn("traffic.sample",early)
+
+    def test_displayed_rates_belong_to_published_client_snapshot(self):
+        for marker in ("ratedDevices==devices", "devices.contains(dev)",
+                       "refreshSession.accepts(ratedGeneration,running)",
+                       "displayedRates=Collections.unmodifiableMap(sampledRates)",
+                       "ratedDevices=devices2; ratedGeneration=cycleGeneration;",
+                       "monitorOn=false;ratedDevices=null"):
+            self.assertIn(marker, MAIN)
+        self.assertEqual(MAIN.count("=displayedRate(dev);"), 3)
+        self.assertNotIn("actionBusy||monitorOn||tab!=1", MAIN)
 
     def test_acl_timestamp_set_from_both_foreground_and_background(self):
         self.assertIn("b=api.blockState();blockedSampleWall=System.currentTimeMillis();",MAIN)
