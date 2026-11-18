@@ -89,5 +89,14 @@ class MissingRulesTest(unittest.TestCase):
         self.assertLess(block.index("if(!upload.equals(expected)||!download.equals(expected))"),
                         block.index("for(Map.Entry<String,long[]> entry:parsed.entrySet())"))
 
+    def test_ambiguous_or_incomplete_client_totals_are_not_published(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("owners.putIfAbsent(ip,d.mac)", source)
+        self.assertIn("if(owner!=null&&!owner.equals(d.mac))ambiguous.add(ip);", source)
+        guard = "if(!Collections.disjoint(addresses,ambiguous)||!totals.keySet().containsAll(addresses))"
+        self.assertIn(guard, source)
+        self.assertIn("prior.remove(d.mac);priorAddresses.remove(d.mac);rates.remove(d.mac);continue;", source.split(guard,1)[1].split("for(String ip:addresses)",1)[0])
+        self.assertLess(source.index(guard), source.index("priorAddresses.put(d.mac,addresses)"))
+
 if __name__ == "__main__":
     unittest.main()

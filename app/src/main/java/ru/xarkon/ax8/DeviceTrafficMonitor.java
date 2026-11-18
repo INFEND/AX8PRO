@@ -112,6 +112,18 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                 nextIpv6ProbeAt=System.nanoTime()+IPV6_PROBE_INTERVAL_NS;
                 note="IPv6: ошибка счётчика · "+shortText(e.getMessage());
             }
+            // An address reported for multiple MACs cannot be attributed safely.
+            Map<String,String> owners=new HashMap<>();
+            Set<String> ambiguous=new HashSet<>();
+            for(RouterClient.Device d:devices){
+                Set<String> assigned=new HashSet<>();
+                if(validIp4(d.ip))assigned.add(normalizeIp4(d.ip));
+                if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))assigned.add(normalizeIp6(ip));
+                for(String ip:assigned){
+                    String owner=owners.putIfAbsent(ip,d.mac);
+                    if(owner!=null&&!owner.equals(d.mac))ambiguous.add(ip);
+                }
+            }
             long now=System.nanoTime();double secs=lastAt==0?0:(now-lastAt)/1_000_000_000.0;
             for(RouterClient.Device d:devices){
                 // Missing IPv6 backend or failed IPv6 read makes dual-stack totals partial.
@@ -126,9 +138,11 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                 Set<String> addresses=new LinkedHashSet<>();
                 if(validIp4(d.ip))addresses.add(normalizeIp4(d.ip));
                 if(d.ipv6!=null)for(String ip:d.ipv6)if(validIp6(ip))addresses.add(normalizeIp6(ip));
+                if(!Collections.disjoint(addresses,ambiguous)||!totals.keySet().containsAll(addresses)){
+                    prior.remove(d.mac);priorAddresses.remove(d.mac);rates.remove(d.mac);continue;
+                }
                 for(String ip:addresses){
                     long[] n=totals.get(ip);
-                    if(n==null)continue;
                     found=true;
                     // Multiple IP addresses can belong to one client. Reject an
                     // overflowing aggregate instead of displaying negative rates.
