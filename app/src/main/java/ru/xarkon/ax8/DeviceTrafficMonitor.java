@@ -33,6 +33,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
     }
     private final TelnetShell shell;
     private final Map<String,long[]> prior=new HashMap<>();
+    private final Map<String,Set<String>> priorAddresses=new HashMap<>();
     private final Map<String,Rate> rates=new java.util.concurrent.ConcurrentHashMap<>();
     private String ips4="",ips6="";
     // Read by UI threads outside sample()/stop(): publish the latest status safely.
@@ -58,7 +59,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
         if(!started && !retry.isReady(System.nanoTime())){
             // A failed poll invalidates the time baseline as well as displayed rates.
             // Otherwise the first successful poll after backoff can use stale counters.
-            prior.clear();rates.clear();lastAt=0;return;
+            priorAddresses.clear();prior.clear();rates.clear();lastAt=0;return;
         }
         TreeSet<String> a4=new TreeSet<>(),a6=new TreeSet<>();
         for(RouterClient.Device d:devices){
@@ -83,7 +84,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                     }
                 }
                 if(active4==null && active6==null)throw new IOException("Нет поддерживаемого механизма учёта IPv4/IPv6");
-                ips4=next4;ips6=next6;started=true;retry.reset();prior.clear();rates.clear();lastAt=0;
+                ips4=next4;ips6=next6;started=true;retry.reset();priorAddresses.clear();prior.clear();rates.clear();lastAt=0;
                 note="IPv4: "+(a4.isEmpty()?"нет адресов":active4==null?"недоступен":active4.label())+
                     " · IPv6: "+(a6.isEmpty()?"нет адресов":active6==null?"недоступен":active6.label());
             }
@@ -96,7 +97,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                     active6=choose(true,a6);
                     // A newly installed chain starts with fresh counters. Discard the
                     // previous time baseline before the next complete measurement.
-                    prior.clear();rates.clear();lastAt=0;
+                    priorAddresses.clear();prior.clear();rates.clear();lastAt=0;
                     note="IPv6: восстановлен "+active6.label();
                 }catch(Exception ignored){active6=null;}
             }
@@ -117,7 +118,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                 // Never present IPv4-only bytes as a complete dual-stack rate.
                 // Keep IPv4-only stations updating, but re-baseline dual-stack stations.
                 if((ipv6ReadFailed || active6==null) && hasValidIpv6(d.ipv6)){
-                    prior.remove(d.mac);rates.remove(d.mac);continue;
+                    prior.remove(d.mac);priorAddresses.remove(d.mac);rates.remove(d.mac);continue;
                 }
                 long dl=0,ul=0;boolean found=false;
                 // Discovery may report the same address multiple times or in different
@@ -138,8 +139,12 @@ final class DeviceTrafficMonitor implements AutoCloseable {
                         throw new IOException("Переполнение счётчиков клиента",e);
                     }
                 }
-                if(!found){prior.remove(d.mac);rates.remove(d.mac);continue;}
+                if(!found){prior.remove(d.mac);priorAddresses.remove(d.mac);rates.remove(d.mac);continue;}
+                Set<String> previousAddresses=priorAddresses.put(d.mac,addresses);
                 long[] prev=prior.put(d.mac,new long[]{dl,ul});
+                // A MAC can acquire another client's IP without changing the global IP set.
+                // Never subtract counters belonging to different address sets.
+                if(!addresses.equals(previousAddresses))prev=null;
                 if(prev!=null&&secs>.09&&dl>=prev[0]&&ul>=prev[1])
                     rates.put(d.mac,new Rate((dl-prev[0])/secs,(ul-prev[1])/secs));
                 else rates.remove(d.mac);
@@ -149,12 +154,13 @@ final class DeviceTrafficMonitor implements AutoCloseable {
             Set<String> currentMacs=new HashSet<>();
             for(RouterClient.Device d:devices)currentMacs.add(d.mac);
             prior.keySet().retainAll(currentMacs);
+            priorAddresses.keySet().retainAll(currentMacs);
             rates.keySet().retainAll(currentMacs);
             lastAt=now;error="";
         }catch(Exception e){
             error=shortText(e.getMessage());note="Монитор недоступен: "+error;
             started=false;lastAt=0;retry.onFailure(System.nanoTime());
-            prior.clear();rates.clear();throw e;
+            priorAddresses.clear();prior.clear();rates.clear();throw e;
         }
         }
     }
@@ -323,7 +329,7 @@ final class DeviceTrafficMonitor implements AutoCloseable {
     synchronized void stop(){
         try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){
         remove(active4);remove(active6);
-        active4=null;active6=null;started=false;lastAt=0;nextIpv6ProbeAt=0;retry.reset();prior.clear();rates.clear();ips4=ips6="";
+        active4=null;active6=null;started=false;lastAt=0;nextIpv6ProbeAt=0;retry.reset();priorAddresses.clear();prior.clear();rates.clear();ips4=ips6="";
         note="Монитор остановлен";error="";
         }
     }

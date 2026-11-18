@@ -70,6 +70,15 @@ class MissingRulesTest(unittest.TestCase):
         self.assertLess(block.index("Set<String> addresses=new LinkedHashSet<>();"),
                         block.index("for(String ip:addresses)"))
 
+    def test_address_change_invalidates_per_mac_baseline(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn("priorAddresses.put(d.mac,addresses)", source)
+        self.assertIn("if(!addresses.equals(previousAddresses))prev=null;", source)
+        self.assertLess(source.index("if(!addresses.equals(previousAddresses))prev=null;"),
+                        source.index("if(prev!=null&&secs>.09"))
+        self.assertIn("priorAddresses.keySet().retainAll(currentMacs);", source)
+        self.assertEqual(source.count("prior.clear();"), source.count("priorAddresses.clear();"))
+
     def test_partial_or_duplicate_rules_are_rejected_before_publish(self):
         source = SOURCE.read_text(encoding="utf-8")
         block = source.split("private void readCounters(", 1)[1].split("private void remove(", 1)[0]
