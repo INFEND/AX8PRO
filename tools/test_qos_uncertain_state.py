@@ -17,10 +17,20 @@ class QosUncertainStateTest(unittest.TestCase):
             ("synchronized void setLimit(","synchronized void restore("),
             ("synchronized void applyPriority(","synchronized boolean priorityActive("),
             ("synchronized void limitEveryoneExcept(","private void enrichIpv6Neighbors("),
-            ("synchronized void resyncAddresses(","synchronized String audit("),
         ]:
             body=Q.split(start,1)[1].split(end,1)[0]
             self.assertIn("resyncPolicy.invalidate()",body,start)
+
+    def test_failed_automatic_transaction_invalidates_trust_without_resetting_throttle(self):
+        body=Q.split("synchronized void resyncAddresses(",1)[1].split("synchronized String audit(",1)[0]
+        self.assertIn("catch(Exception e){resyncPolicy.onAutomaticFailure();throw e;}",body)
+        self.assertNotIn("resyncPolicy.invalidate()",body)
+        self.assertLess(body.index("resyncPolicy.onAttempt(nowNs)"),body.index("try{apply("))
+        policy=P.split("void onAutomaticFailure()",1)[1].split("void onAttempt(",1)[0]
+        for marker in ['lastAppliedSignature = "";','pendingReducedSignature = "";']:
+            self.assertIn(marker,policy)
+        self.assertNotIn("attempted =",policy)
+        self.assertNotIn("lastAttemptNs =",policy)
 
     def test_rollback_only_remembered_after_success(self):
         for start,end in [
