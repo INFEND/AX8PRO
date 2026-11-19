@@ -90,6 +90,18 @@ class SnapshotFreshnessTest(unittest.TestCase):
         self.assertIn('trafficMonitorEpoch++;monitorOn=true;trafficError="";',MAIN)
         self.assertIn('displayedRates=Collections.emptyMap();trafficError="";',MAIN)
 
+    def test_qos_resync_keeps_ipv6_and_runs_without_traffic_monitor(self):
+        qos=(ROOT/"app/src/main/java/ru/xarkon/ax8/QosController.java").read_text(encoding="utf-8")
+        worker=MAIN.split('String qosIssue="";',1)[1].split("final String limitedError=partialFailure;",1)[0]
+        resync=worker.split("if(d!=null&&foregroundCycleActive(cycleGeneration)){",1)[1].split("if(monitorOn&&d!=null",1)[0]
+        self.assertIn("qos.resyncAddresses(d,message->{});",resync)
+        self.assertNotIn("monitorOn",resync)
+        address_sync=qos.split("synchronized void resyncAddresses(",1)[1].split("synchronized String audit(",1)[0]
+        self.assertIn("if(needsIpv6Lookup)enrichIpv6Neighbors(devices);",address_sync)
+        self.assertIn("if(eligible.isEmpty())return;",address_sync)
+        self.assertIn("if(!resyncPolicy.shouldResync(signature,nowNs))return;",address_sync)
+        self.assertIn("rememberApplied(devices,saved);",address_sync)
+
     def test_acl_timestamp_set_from_both_foreground_and_background(self):
         self.assertIn("b=api.blockState();blockedSampleWall=System.currentTimeMillis();",MAIN)
         self.assertIn("blockedAt=blockedSample;",MAIN)
