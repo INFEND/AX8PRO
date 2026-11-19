@@ -33,7 +33,7 @@ class SnapshotFreshnessTest(unittest.TestCase):
         self.assertIn("BackgroundSummary.isFresh(smsTime,now,limit)",MAIN)
     def test_qos_never_falls_back_to_previous_clients(self):
         worker=MAIN.split("String qosIssue=\"\";",1)[1].split("final String limitedError=partialFailure;",1)[0]
-        self.assertIn("if(monitorOn&&d!=null&&foregroundCycleActive(cycleGeneration))",worker)
+        self.assertIn("if(monitorOn&&d!=null&&cycleTrafficEpoch==trafficMonitorEpoch&&foregroundCycleActive(cycleGeneration))",worker)
         self.assertIn("traffic.sample(d)",worker)
         self.assertIn("priority.update(d,traffic,qos)",worker)
         self.assertIn("uiQosWatch.check(d,traffic,qos)",worker)
@@ -60,7 +60,7 @@ class SnapshotFreshnessTest(unittest.TestCase):
                        "refreshSession.accepts(ratedGeneration,running)",
                        "displayedRates=Collections.unmodifiableMap(sampledRates)",
                        "ratedDevices=devices2; ratedGeneration=cycleGeneration;",
-                       "monitorOn=false;ratedDevices=null"):
+                       "monitorOn=false;trafficMonitorEpoch++;ratedDevices=null"):
             self.assertIn(marker, MAIN)
         self.assertEqual(MAIN.count("=displayedRate(dev);"), 3)
         self.assertNotIn("actionBusy||monitorOn||tab!=1", MAIN)
@@ -73,6 +73,13 @@ class SnapshotFreshnessTest(unittest.TestCase):
                        "ratedDevices=measuredDevices", "updateClientsLive();"):
             self.assertIn(marker,early)
         self.assertNotIn("refreshBusy=false",early)
+
+    def test_monitor_toggle_invalidates_inflight_rates(self):
+        self.assertIn("final long cycleTrafficEpoch=trafficMonitorEpoch;",MAIN)
+        self.assertIn("trafficMonitorEpoch++;monitorOn=true",MAIN)
+        self.assertIn("monitorOn=false;trafficMonitorEpoch++;ratedDevices=null;displayedRates=Collections.emptyMap()",MAIN)
+        self.assertIn("||!monitorOn||cycleTrafficEpoch!=trafficMonitorEpoch",MAIN)
+        self.assertIn("if(monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch){\n                    displayedRates=Collections.unmodifiableMap(sampledRates);",MAIN)
 
     def test_acl_timestamp_set_from_both_foreground_and_background(self):
         self.assertIn("b=api.blockState();blockedSampleWall=System.currentTimeMillis();",MAIN)

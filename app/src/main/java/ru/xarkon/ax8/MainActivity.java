@@ -83,7 +83,8 @@ public final class MainActivity extends Activity {
     private final OwnerPriorityController priority=new OwnerPriorityController();
     private final QosWatchdog uiQosWatch=new QosWatchdog();
     private final BandSwitchTracker bandTracker=new BandSwitchTracker();
-    private boolean monitorOn=false;
+    private volatile boolean monitorOn=false;
+    private volatile long trafficMonitorEpoch=0;
     private String ownerMac="";
     private final java.util.Set<String> expandedSettings=new java.util.LinkedHashSet<>();
     private LinearLayout settingsTarget=null;
@@ -513,6 +514,7 @@ public final class MainActivity extends Activity {
         if(!wantStatus&&!wantClients&&!wantBlocked&&!wantSms)return;
         refreshBusy=true;
         final long cycleGeneration=refreshSession.capture();
+        final long cycleTrafficEpoch=trafficMonitorEpoch;
         final long cycleStart=android.os.SystemClock.elapsedRealtime();
         workers.execute(()->{
             JSONObject next=null;List<RouterClient.Device> d=null;List<RouterClient.Sms> m=null;RouterClient.BlockState b=null;
@@ -590,12 +592,12 @@ public final class MainActivity extends Activity {
                 try{qos.resyncAddresses(d,message->{});}
                 catch(Exception e){qosIssue="QoS: "+e.getMessage();}
             }
-            if(monitorOn&&d!=null&&foregroundCycleActive(cycleGeneration)){
+            if(monitorOn&&d!=null&&cycleTrafficEpoch==trafficMonitorEpoch&&foregroundCycleActive(cycleGeneration)){
                 // Never run traffic/QoS writes against a failed client fetch or
                 // a foreground generation that no longer owns router monitoring.
                 try{
                     traffic.sample(d);
-                    if(foregroundCycleActive(cycleGeneration)){
+                    if(monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch&&foregroundCycleActive(cycleGeneration)){
                         trafficError=qosIssue;
                         if(traffic.error().isEmpty()){
                             for(RouterClient.Device dev:d){
@@ -610,16 +612,16 @@ public final class MainActivity extends Activity {
                             handler.post(()->{
                                 if(!refreshSession.accepts(cycleGeneration,running)
                                         ||isFinishing()||isDestroyed()||actionBusy
-                                        ||!monitorOn||tab!=1||devices!=measuredDevices
+                                        ||!monitorOn||cycleTrafficEpoch!=trafficMonitorEpoch||tab!=1||devices!=measuredDevices
                                         ||clientListStale())return;
                                 displayedRates=measuredRates;
                                 ratedDevices=measuredDevices; ratedGeneration=cycleGeneration;
                                 updateClientsLive();
                             });
-                            if(priority.enabled&&foregroundCycleActive(cycleGeneration))
+                            if(priority.enabled&&monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch&&foregroundCycleActive(cycleGeneration))
                                 priority.update(d,traffic,qos);
                             if(prefs.getBoolean("background_qos_watch",true)
-                                    &&foregroundCycleActive(cycleGeneration))
+                                    &&monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch&&foregroundCycleActive(cycleGeneration))
                                 uiQosWatch.check(d,traffic,qos);
                         }
                     }
@@ -665,8 +667,10 @@ public final class MainActivity extends Activity {
                     while(historyDl.size()>28)historyDl.removeFirst();
                     while(historyUl.size()>28)historyUl.removeFirst();
                 }
-                displayedRates=Collections.unmodifiableMap(sampledRates);
-                ratedDevices=devices2; ratedGeneration=cycleGeneration;
+                if(monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch){
+                    displayedRates=Collections.unmodifiableMap(sampledRates);
+                    ratedDevices=devices2; ratedGeneration=cycleGeneration;
+                }
                 if(devices2!=null){
                     devices=devices2;clientsAt=clientsSample;
                     android.content.SharedPreferences.Editor cache=null;
@@ -2295,9 +2299,9 @@ public final class MainActivity extends Activity {
             monitorOn?Ui.CYAN:Ui.CARD2,monitorOn?Ui.contrastOn(Ui.CYAN):Ui.TEXT,()->{
                 boolean turnOn=!monitorOn;
                 if(turnOn){confirm("Включить мониторинг","На AX8 будут созданы цепочки AX8_APP_MON и AX8_APP_MON6 через Telnet. Может увеличить нагрузку.",()->{
-                    monitorOn=true;prefs.edit().putBoolean("traffic_monitor",true).apply();draw(true);refresh(true);
+                    trafficMonitorEpoch++;monitorOn=true;prefs.edit().putBoolean("traffic_monitor",true).apply();draw(true);refresh(true);
                 });}
-                else{monitorOn=false;ratedDevices=null;prefs.edit().putBoolean("traffic_monitor",false).apply();
+                else{monitorOn=false;trafficMonitorEpoch++;ratedDevices=null;displayedRates=Collections.emptyMap();prefs.edit().putBoolean("traffic_monitor",false).apply();
                     action("Отключение мониторинга",pr->{
                         if(qos.priorityActive())qos.applyPriority(ownerMac,null,api.devices(),pr);
                         priority.disable();traffic.stop();
