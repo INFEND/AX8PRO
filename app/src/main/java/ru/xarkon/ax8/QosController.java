@@ -254,7 +254,7 @@ final class QosController implements AutoCloseable {
         resyncPolicy.onAttempt(nowNs);
         progress.note("QoS: проверка соответствия MAC и IP...");
         try{apply(devices,saved,progress);}
-        catch(Exception e){resyncPolicy.invalidate();throw e;}
+        catch(Exception e){resyncPolicy.onAutomaticFailure();throw e;}
         // apply() may enrich IPv6 neighbors; remember the rules actually
         // installed, not the earlier incomplete station-list snapshot.
         rememberApplied(devices,saved);

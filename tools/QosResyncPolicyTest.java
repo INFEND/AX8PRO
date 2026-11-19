@@ -95,6 +95,17 @@ public final class QosResyncPolicyTest {
         uncertain.invalidate();
         check(uncertain.shouldResync(both, second), "invalidated rules need immediate recovery");
 
+        QosResyncPolicy automatic = new QosResyncPolicy();
+        automatic.onSuccess(both);
+        automatic.onAttempt(start);
+        automatic.onAutomaticFailure();
+        check(!automatic.shouldResync(both, start + second), "automatic failure must not retry every poll");
+        check(!automatic.shouldResync(one, start + 30 * second - 1), "changed signature cannot bypass cooldown");
+        check(automatic.shouldResync(both, start + 30 * second), "automatic failure invalidates trust and retries at deadline");
+        automatic.onAttempt(start + 30 * second);
+        automatic.onSuccess(both);
+        check(!automatic.shouldResync(both, start + 60 * second), "successful retry restores trust");
+
         System.out.println("QosResyncPolicyTest: " + checks + " checks passed");
     }
 }

@@ -55,6 +55,12 @@ final class QosResyncPolicy {
         attempted = false;
     }
 
+    /** Automatic failures invalidate trust but retain the retry throttle. */
+    void onAutomaticFailure() {
+        lastAppliedSignature = "";
+        pendingReducedSignature = "";
+    }
+
     void onAttempt(long nowNs) {
         attempted = true;
         lastAttemptNs = nowNs;
