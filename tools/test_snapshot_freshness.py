@@ -65,6 +65,15 @@ class SnapshotFreshnessTest(unittest.TestCase):
         self.assertEqual(MAIN.count("=displayedRate(dev);"), 3)
         self.assertNotIn("actionBusy||monitorOn||tab!=1", MAIN)
 
+    def test_rates_published_before_optional_qos_writes(self):
+        early=MAIN.split("// Publish measured rates before optional priority/watchdog writes.",1)[1].split("priority.update(d,traffic,qos)",1)[0]
+        for marker in ("new HashMap<>(sampledRates)", "Collections.unmodifiableMap",
+                       "refreshSession.accepts(cycleGeneration,running)", "actionBusy",
+                       "!monitorOn", "devices!=measuredDevices", "clientListStale()",
+                       "ratedDevices=measuredDevices", "updateClientsLive();"):
+            self.assertIn(marker,early)
+        self.assertNotIn("refreshBusy=false",early)
+
     def test_acl_timestamp_set_from_both_foreground_and_background(self):
         self.assertIn("b=api.blockState();blockedSampleWall=System.currentTimeMillis();",MAIN)
         self.assertIn("blockedAt=blockedSample;",MAIN)

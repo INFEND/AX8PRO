@@ -602,6 +602,20 @@ public final class MainActivity extends Activity {
                                 DeviceTrafficMonitor.Rate rate=traffic.get(dev.mac);
                                 if(rate!=null)sampledRates.put(dev.mac,rate);
                             }
+                            // Publish measured rates before optional priority/watchdog writes.
+                            // Keep the router worker single-flight and preserve QoS ordering.
+                            final List<RouterClient.Device> measuredDevices=d;
+                            final Map<String,DeviceTrafficMonitor.Rate> measuredRates=
+                                Collections.unmodifiableMap(new HashMap<>(sampledRates));
+                            handler.post(()->{
+                                if(!refreshSession.accepts(cycleGeneration,running)
+                                        ||isFinishing()||isDestroyed()||actionBusy
+                                        ||!monitorOn||tab!=1||devices!=measuredDevices
+                                        ||clientListStale())return;
+                                displayedRates=measuredRates;
+                                ratedDevices=measuredDevices; ratedGeneration=cycleGeneration;
+                                updateClientsLive();
+                            });
                             if(priority.enabled&&foregroundCycleActive(cycleGeneration))
                                 priority.update(d,traffic,qos);
                             if(prefs.getBoolean("background_qos_watch",true)
