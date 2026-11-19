@@ -584,6 +584,7 @@ public final class MainActivity extends Activity {
             // Optional Telnet counters: the entire snapshot is still governed by the same
             // refresh interval, with skipped ticks if AX8 has not yet answered.
             String qosIssue="";
+            String cycleTrafficError="";
             final Map<String,DeviceTrafficMonitor.Rate> sampledRates=new HashMap<>();
             // A poll can outlive onPause(), while the background service takes
             // ownership of QoS. Reject its router-side effects and stale follow-up
@@ -598,7 +599,7 @@ public final class MainActivity extends Activity {
                 try{
                     traffic.sample(d);
                     if(monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch&&foregroundCycleActive(cycleGeneration)){
-                        trafficError=qosIssue;
+                        cycleTrafficError=qosIssue;
                         if(traffic.error().isEmpty()){
                             for(RouterClient.Device dev:d){
                                 DeviceTrafficMonitor.Rate rate=traffic.get(dev.mac);
@@ -626,11 +627,12 @@ public final class MainActivity extends Activity {
                         }
                     }
                 }catch(Exception e){
-                    if(foregroundCycleActive(cycleGeneration))
-                        trafficError=e.getMessage()==null?e.toString():e.getMessage();
+                    if(monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch&&foregroundCycleActive(cycleGeneration))
+                        cycleTrafficError=e.getMessage()==null?e.toString():e.getMessage();
                 }
-            }else if(monitorOn&&foregroundCycleActive(cycleGeneration))
-                trafficError="Список клиентов временно недоступен";
+            }else if(monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch&&foregroundCycleActive(cycleGeneration))
+                cycleTrafficError="Список клиентов временно недоступен";
+            final String sampledTrafficError=cycleTrafficError;
             final long sampledWall=statusSampleWall,sampledElapsed=statusSampleElapsed;
             final long clientsSample=clientsSampleWall,blockedSample=blockedSampleWall,smsSample=smsSampleWall;
             final String limitedError=partialFailure;
@@ -670,6 +672,7 @@ public final class MainActivity extends Activity {
                 if(monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch){
                     displayedRates=Collections.unmodifiableMap(sampledRates);
                     ratedDevices=devices2; ratedGeneration=cycleGeneration;
+                    trafficError=sampledTrafficError;
                 }
                 if(devices2!=null){
                     devices=devices2;clientsAt=clientsSample;
@@ -2299,9 +2302,9 @@ public final class MainActivity extends Activity {
             monitorOn?Ui.CYAN:Ui.CARD2,monitorOn?Ui.contrastOn(Ui.CYAN):Ui.TEXT,()->{
                 boolean turnOn=!monitorOn;
                 if(turnOn){confirm("Включить мониторинг","На AX8 будут созданы цепочки AX8_APP_MON и AX8_APP_MON6 через Telnet. Может увеличить нагрузку.",()->{
-                    trafficMonitorEpoch++;monitorOn=true;prefs.edit().putBoolean("traffic_monitor",true).apply();draw(true);refresh(true);
+                    trafficMonitorEpoch++;monitorOn=true;trafficError="";prefs.edit().putBoolean("traffic_monitor",true).apply();draw(true);refresh(true);
                 });}
-                else{monitorOn=false;trafficMonitorEpoch++;ratedDevices=null;displayedRates=Collections.emptyMap();prefs.edit().putBoolean("traffic_monitor",false).apply();
+                else{monitorOn=false;trafficMonitorEpoch++;ratedDevices=null;displayedRates=Collections.emptyMap();trafficError="";prefs.edit().putBoolean("traffic_monitor",false).apply();
                     action("Отключение мониторинга",pr->{
                         if(qos.priorityActive())qos.applyPriority(ownerMac,null,api.devices(),pr);
                         priority.disable();traffic.stop();

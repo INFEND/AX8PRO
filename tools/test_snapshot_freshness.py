@@ -81,6 +81,15 @@ class SnapshotFreshnessTest(unittest.TestCase):
         self.assertIn("||!monitorOn||cycleTrafficEpoch!=trafficMonitorEpoch",MAIN)
         self.assertIn("if(monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch){\n                    displayedRates=Collections.unmodifiableMap(sampledRates);",MAIN)
 
+    def test_traffic_errors_are_published_only_for_current_monitor_epoch(self):
+        worker=MAIN.split('String qosIssue="";',1)[1].split("final String limitedError=partialFailure;",1)[0]
+        self.assertNotIn("trafficError=",worker)
+        self.assertIn("final String sampledTrafficError=cycleTrafficError;",worker)
+        callback=MAIN.split("if(monitorOn&&cycleTrafficEpoch==trafficMonitorEpoch){\n                    displayedRates=",1)[1].split("if(devices2!=null)",1)[0]
+        self.assertIn("trafficError=sampledTrafficError;",callback)
+        self.assertIn('trafficMonitorEpoch++;monitorOn=true;trafficError="";',MAIN)
+        self.assertIn('displayedRates=Collections.emptyMap();trafficError="";',MAIN)
+
     def test_acl_timestamp_set_from_both_foreground_and_background(self):
         self.assertIn("b=api.blockState();blockedSampleWall=System.currentTimeMillis();",MAIN)
         self.assertIn("blockedAt=blockedSample;",MAIN)
