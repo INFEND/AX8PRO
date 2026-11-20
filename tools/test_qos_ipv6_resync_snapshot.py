@@ -6,9 +6,9 @@ SRC=(ROOT/"app/src/main/java/ru/xarkon/ax8/QosController.java").read_text(encodi
 class QosIpv6ResyncTest(unittest.TestCase):
     def test_remembers_after_apply_enriches_ipv6(self):
         body=SRC.split("synchronized void resyncAddresses(",1)[1].split("synchronized String audit(",1)[0]
-        self.assertIn("apply(devices,saved,progress);",body)
+        self.assertIn("apply(devices,saved,progress,needsIpv6Lookup);",body)
         self.assertIn("rememberApplied(devices,saved);",body)
-        self.assertLess(body.index("apply(devices,saved,progress);"),body.index("rememberApplied(devices,saved);"))
+        self.assertLess(body.index("apply(devices,saved,progress,needsIpv6Lookup);"),body.index("rememberApplied(devices,saved);"))
         self.assertNotIn("resyncPolicy.onSuccess(signature);",body)
     def test_remember_uses_actual_device_ipv6(self):
         body=SRC.split("private void rememberApplied(",1)[1].split("synchronized void resyncAddresses(",1)[0]
