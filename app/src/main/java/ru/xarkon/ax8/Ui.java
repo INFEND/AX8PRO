@@ -142,6 +142,10 @@ final class Ui {
             wrap.addView(badge,bp);
         }
         TextView caption=text(c,label,10,active?TEXT:MUTED,active);caption.setGravity(Gravity.CENTER);
+        // Keep long Russian tab labels inside their allocated width at large font scales.
+        // TalkBack still receives the complete label from the parent tab.
+        caption.setSingleLine(true);caption.setEllipsize(TextUtils.TruncateAt.END);
+        caption.setMaxWidth(dp(c,90));
         wrap.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         caption.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         l.addView(wrap,wrapParams);addSpace(l,c,4);l.addView(caption);l.setOnClickListener(v->run.run());animateTouch(l);return l;
