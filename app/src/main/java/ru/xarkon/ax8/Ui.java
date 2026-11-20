@@ -128,7 +128,7 @@ final class Ui {
         // Fixed-size icon slot. The badge is always inside its parent (no negative margins),
         // including on narrow screens and for '99+'.
         FrameLayout wrap=new FrameLayout(c);
-        LinearLayout.LayoutParams wrapParams=lp(c,49,34);wrapParams.gravity=Gravity.CENTER_HORIZONTAL;
+        LinearLayout.LayoutParams wrapParams=lp(c,-1,34);wrapParams.gravity=Gravity.CENTER_HORIZONTAL;
         TextView icon=text(c,symbol,23,active?CYAN:MUTED,true);icon.setGravity(Gravity.CENTER);
         FrameLayout.LayoutParams ip=new FrameLayout.LayoutParams(dp(c,32),dp(c,31),Gravity.CENTER);
         wrap.addView(icon,ip);
