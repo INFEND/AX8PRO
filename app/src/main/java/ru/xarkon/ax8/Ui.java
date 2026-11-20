@@ -330,10 +330,16 @@ final class Ui {
         }
         @Override protected void onDraw(Canvas c){super.onDraw(c);int w=getWidth(),h=getHeight();if(w==0||h==0)return;
             // Keep the graph inside its actual bounds on narrow screens and split-screen.
-            int rightPad=Math.min(dp(getContext(),58),Math.max(dp(getContext(),28),w/3));
-            int top=dp(getContext(),6),bottom=dp(getContext(),14),left=dp(getContext(),2);
-            int plotW=Math.max(1,w-rightPad-left),plotH=Math.max(1,h-top-bottom);
             float max=1f;for(float x:down)max=Math.max(max,x);for(float x:up)max=Math.max(max,x);
+            // Reserve space for the actual scale labels, not a fixed 58dp slot.
+            // On tiny split-screen widths, prioritize the graph over intermediate labels.
+            p.setTypeface(typeface(getContext(),false));p.setTextSize(dp(getContext(),9));
+            int labelWidth=(int)Math.ceil(Math.max(p.measureText("0 B/s"),p.measureText(rate(max))))+dp(getContext(),7);
+            int left=dp(getContext(),2);
+            boolean showScale=w>=dp(getContext(),125);
+            int rightPad=showScale?Math.min(labelWidth,Math.max(0,w/2-left)):dp(getContext(),2);
+            int top=dp(getContext(),6),bottom=dp(getContext(),14);
+            int plotW=Math.max(1,w-rightPad-left),plotH=Math.max(1,h-top-bottom);
             p.setShader(null);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(getContext(),1));p.setColor(0x33506A80);
             for(int mark=0;mark<=4;mark++){
                 float ratio=mark/4f;
@@ -342,10 +348,13 @@ final class Ui {
             }
             p.setStyle(Paint.Style.FILL);p.setTextAlign(Paint.Align.RIGHT);p.setTypeface(typeface(getContext(),false));
             p.setTextSize(dp(getContext(),9));p.setColor(MUTED);
-            for(int mark=0;mark<=4;mark++){
+            if(showScale)for(int mark=0;mark<=4;mark++){
                 float ratio=mark/4f;
                 float y=top+plotH-(plotH*ratio);
-                c.drawText(mark==0?"0 B/s":rate(max*ratio),w-dp(getContext(),2),y+dp(getContext(),3),p);
+                String label=mark==0?"0 B/s":rate(max*ratio);
+                // Avoid painting the axis text over the plotted series at high values.
+                if(p.measureText(label)>rightPad-dp(getContext(),4))continue;
+                c.drawText(label,w-dp(getContext(),2),y+dp(getContext(),3),p);
             }
             drawSeries(c,down,max,plotW,plotH,left,top,CYAN,0x3045DACD);
             drawSeries(c,up,max,plotW,plotH,left,top,ORANGE,0x26FFB765);
