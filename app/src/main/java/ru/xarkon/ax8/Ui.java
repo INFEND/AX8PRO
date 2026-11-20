@@ -268,9 +268,14 @@ final class Ui {
             if(level<0.9f)return SG_GOOD;
             return SG_GREAT;
         }
+        private void updateAccessibleLevel(){
+            setContentDescription(Float.isNaN(level)?"Оценка сигнала: нет данных":
+                "Оценка сигнала: "+Math.round(level*100)+" процентов");
+        }
         void setLevelImmediate(float l){
             if(animator!=null){animator.cancel();animator=null;}
-            level=l;invalidate();
+            level=Float.isNaN(l)?Float.NaN:Math.max(0f,Math.min(1f,l));
+            updateAccessibleLevel();invalidate();
         }
         void setLevel(float l){
             if(!MOTION){setLevelImmediate(l);return;}
@@ -282,6 +287,11 @@ final class Ui {
             animator=android.animation.ValueAnimator.ofFloat(level,l);
             animator.setDuration(440);
             animator.addUpdateListener(v->{level=(float)v.getAnimatedValue();invalidate();});
+            animator.addListener(new android.animation.AnimatorListenerAdapter(){
+                @Override public void onAnimationEnd(android.animation.Animator animation){
+                    if(animator==animation){animator=null;updateAccessibleLevel();}
+                }
+            });
             animator.start();
         }
         @Override protected void onDetachedFromWindow(){if(animator!=null){animator.cancel();animator=null;}super.onDetachedFromWindow();}
@@ -295,10 +305,18 @@ final class Ui {
                 c.drawArc(cx-r,cy-r,cx+r,cy+r,145,250*level,false,p);
             }
             p.setStyle(Paint.Style.FILL);p.setColor(state);p.setTextAlign(Paint.Align.CENTER);
-            p.setTypeface(typeface(getContext(),true));p.setTextSize(dp(getContext(),29));
-            c.drawText(Float.isNaN(level)?"—":Math.round(level*100)+"%",cx,cy+dp(getContext(),9),p);
-            p.setTextSize(dp(getContext(),10));p.setTypeface(typeface(getContext(),false));p.setColor(MUTED);
-            c.drawText("ОЦЕНКА",cx,cy+dp(getContext(),29),p);
+            p.setTypeface(typeface(getContext(),true));
+            String value=Float.isNaN(level)?"—":Math.round(level*100)+"%";
+            float availableWidth=Math.max(1f,size*.67f);
+            p.setTextSize(Math.min(dp(getContext(),29),size*.23f));
+            if(p.measureText(value)>availableWidth)p.setTextSize(p.getTextSize()*availableWidth/p.measureText(value));
+            float valueSize=p.getTextSize();
+            c.drawText(value,cx,cy+valueSize*.32f,p);
+            p.setTypeface(typeface(getContext(),false));p.setColor(MUTED);
+            p.setTextSize(Math.min(dp(getContext(),10),size*.085f));
+            String caption="ОЦЕНКА";
+            if(p.measureText(caption)>availableWidth)p.setTextSize(p.getTextSize()*availableWidth/p.measureText(caption));
+            c.drawText(caption,cx,cy+valueSize*.32f+p.getTextSize()*1.9f,p);
         }
     }
     static class SpeedGraph extends View {
