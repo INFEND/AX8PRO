@@ -183,13 +183,13 @@ final class Ui {
         LinearLayout actions=horizontal(activity);actions.setGravity(Gravity.END);
         if(accept!=null){
             TextView cancel=button(activity,"Отмена",CARD2,MUTED,dialog::dismiss);
-            actions.addView(cancel,new LinearLayout.LayoutParams(0,dp(activity,48),1));
+            actions.addView(cancel,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
             View space=new View(activity);actions.addView(space,lp(activity,9,1));
         }
         TextView yes=button(activity,positive,accept==null?CARD2:CYAN,accept==null?TEXT:contrastOn(CYAN),()->{
             if(accept!=null)accept.run();dialog.dismiss();
         });
-        actions.addView(yes,new LinearLayout.LayoutParams(0,dp(activity,48),1));
+        actions.addView(yes,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
         panel.addView(actions);
         dialog.setContentView(panel);
         Window window=dialog.getWindow();
@@ -236,7 +236,7 @@ final class Ui {
         panel.addView(scroller,new LinearLayout.LayoutParams(-1,-2));
         addSpace(panel,activity,12);
         TextView dismiss=button(activity,"Закрыть",CARD2,MUTED,dialog::dismiss);
-        panel.addView(dismiss,lp(activity,-1,48));
+        panel.addView(dismiss,lp(activity,-1,-2));
         dialog.setContentView(panel);
         android.view.Window win=dialog.getWindow();
         if(win!=null){win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));win.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
