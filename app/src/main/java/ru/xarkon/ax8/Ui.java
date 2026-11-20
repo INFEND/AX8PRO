@@ -308,12 +308,12 @@ final class Ui {
             p.setTypeface(typeface(getContext(),true));
             String value=Float.isNaN(level)?"—":Math.round(level*100)+"%";
             float availableWidth=Math.max(1f,size*.67f);
-            p.setTextSize(Math.min(dp(getContext(),29),size*.23f));
+            p.setTextSize(Math.min(29f*getResources().getDisplayMetrics().scaledDensity*FONT_SCALE,size*.23f));
             if(p.measureText(value)>availableWidth)p.setTextSize(p.getTextSize()*availableWidth/p.measureText(value));
             float valueSize=p.getTextSize();
             c.drawText(value,cx,cy+valueSize*.32f,p);
             p.setTypeface(typeface(getContext(),false));p.setColor(MUTED);
-            p.setTextSize(Math.min(dp(getContext(),10),size*.085f));
+            p.setTextSize(Math.min(10f*getResources().getDisplayMetrics().scaledDensity*FONT_SCALE,size*.085f));
             String caption="ОЦЕНКА";
             if(p.measureText(caption)>availableWidth)p.setTextSize(p.getTextSize()*availableWidth/p.measureText(caption));
             c.drawText(caption,cx,cy+valueSize*.32f+p.getTextSize()*1.9f,p);
