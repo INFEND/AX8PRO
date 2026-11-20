@@ -329,8 +329,10 @@ final class Ui {
             p.setStrokeWidth(dp(getContext(),2));p.setColor(line);c.drawPath(curve,p);
         }
         @Override protected void onDraw(Canvas c){super.onDraw(c);int w=getWidth(),h=getHeight();if(w==0||h==0)return;
-            int rightPad=dp(getContext(),58),top=dp(getContext(),6),bottom=dp(getContext(),14),left=dp(getContext(),2);
-            int plotW=Math.max(dp(getContext(),80),w-rightPad-left),plotH=Math.max(dp(getContext(),36),h-top-bottom);
+            // Keep the graph inside its actual bounds on narrow screens and split-screen.
+            int rightPad=Math.min(dp(getContext(),58),Math.max(dp(getContext(),28),w/3));
+            int top=dp(getContext(),6),bottom=dp(getContext(),14),left=dp(getContext(),2);
+            int plotW=Math.max(1,w-rightPad-left),plotH=Math.max(1,h-top-bottom);
             float max=1f;for(float x:down)max=Math.max(max,x);for(float x:up)max=Math.max(max,x);
             p.setShader(null);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(getContext(),1));p.setColor(0x33506A80);
             for(int mark=0;mark<=4;mark++){
