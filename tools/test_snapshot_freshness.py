@@ -102,6 +102,13 @@ class SnapshotFreshnessTest(unittest.TestCase):
         self.assertIn("if(!resyncPolicy.shouldResync(signature,nowNs))return;",address_sync)
         self.assertIn("rememberApplied(devices,saved);",address_sync)
 
+    def test_qos_resync_avoids_duplicate_ipv6_neighbor_read(self):
+        qos=(ROOT/"app/src/main/java/ru/xarkon/ax8/QosController.java").read_text(encoding="utf-8")
+        self.assertIn("if(needsIpv6Lookup)enrichIpv6Neighbors(devices);",qos)
+        self.assertIn("try{apply(devices,saved,progress,needsIpv6Lookup);}",qos)
+        self.assertIn("apply(devices,requested,progress,false);",qos)
+        self.assertIn("if(!ipv6Prepared)enrichIpv6Neighbors(devices);",qos)
+
     def test_acl_timestamp_set_from_both_foreground_and_background(self):
         self.assertIn("b=api.blockState();blockedSampleWall=System.currentTimeMillis();",MAIN)
         self.assertIn("blockedAt=blockedSample;",MAIN)
