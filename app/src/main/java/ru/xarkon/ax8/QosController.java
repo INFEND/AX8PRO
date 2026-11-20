@@ -147,10 +147,13 @@ final class QosController implements AutoCloseable {
         }
     }
     synchronized void apply(List<RouterClient.Device> devices,Map<String,Integer> requested,RouterClient.Progress progress)throws Exception{
+        apply(devices,requested,progress,false);
+    }
+    private void apply(List<RouterClient.Device> devices,Map<String,Integer> requested,RouterClient.Progress progress,boolean ipv6Prepared)throws Exception{
         // Hold one process-wide lease for the complete tc/iptables transaction.
         try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){
         progress.note("Подключение к служебной оболочке AX8...");
-        enrichIpv6Neighbors(devices);
+        if(!ipv6Prepared)enrichIpv6Neighbors(devices);
         List<Active> active=selected(devices,requested);
         ArrayList<String> interfaces=interfaces();
         List<Active> limited=new ArrayList<>(),zero=new ArrayList<>();
@@ -253,7 +256,7 @@ final class QosController implements AutoCloseable {
         if(!resyncPolicy.shouldResync(signature,nowNs))return;
         resyncPolicy.onAttempt(nowNs);
         progress.note("QoS: проверка соответствия MAC и IP...");
-        try{apply(devices,saved,progress);}
+        try{apply(devices,saved,progress,needsIpv6Lookup);}
         catch(Exception e){resyncPolicy.onAutomaticFailure();throw e;}
         // apply() may enrich IPv6 neighbors; remember the rules actually
         // installed, not the earlier incomplete station-list snapshot.
