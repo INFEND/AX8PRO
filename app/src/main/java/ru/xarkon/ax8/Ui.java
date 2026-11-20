@@ -119,7 +119,11 @@ final class Ui {
         return navItem(c,symbol,label,active,0,run);
     }
     static LinearLayout navItem(Context c,String symbol,String label,boolean active,int badgeCount,Runnable run){
-        LinearLayout l=vertical(c);l.setGravity(Gravity.CENTER);l.setPadding(2,10,2,10);
+        LinearLayout l=vertical(c);l.setGravity(Gravity.CENTER);
+        l.setPadding(dp(c,2),dp(c,10),dp(c,2),dp(c,10));
+        l.setClickable(true);l.setFocusable(true);l.setSelected(active);
+        // Expose the tab as one accessible target, not separate icon, label and badge.
+        l.setContentDescription(label+(badgeCount>0?", непрочитанных: "+badgeCount:""));
         if(active)l.setBackground(shape(c,CARD2,0,Math.max(4,CORNER-6)));
         // Fixed-size icon slot. The badge is always inside its parent (no negative margins),
         // including on narrow screens and for '99+'.
@@ -138,6 +142,8 @@ final class Ui {
             wrap.addView(badge,bp);
         }
         TextView caption=text(c,label,10,active?TEXT:MUTED,active);caption.setGravity(Gravity.CENTER);
+        wrap.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        caption.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         l.addView(wrap,wrapParams);addSpace(l,c,4);l.addView(caption);l.setOnClickListener(v->run.run());animateTouch(l);return l;
     }
     static TextView chip(Context c,String value,int fg){
