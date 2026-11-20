@@ -259,7 +259,7 @@ final class Ui {
         private float level=Float.NaN;
         private android.animation.ValueAnimator animator;
         private final Paint p=new Paint(3);
-        SignalGauge(Context c){super(c);}
+        SignalGauge(Context c){super(c);setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);updateAccessibleLevel();}
         private int stateColor(){
             if(Float.isNaN(level))return SG_EMPTY;
             if(level<0.25f)return SG_BAD;
@@ -298,7 +298,7 @@ final class Ui {
         @Override protected void onDraw(Canvas c){super.onDraw(c);
             float w=getWidth(),h=getHeight(),size=Math.min(w,h),cx=w/2,cy=h/2,r=size*.39f;
             int state=stateColor();
-            p.setShader(null);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(getContext(),11));p.setStrokeCap(Paint.Cap.ROUND);
+            p.setShader(null);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(Math.min(dp(getContext(),11),Math.max(1f,size*.09f)));p.setStrokeCap(Paint.Cap.ROUND);
             p.setColor(Color.rgb(40,62,78));c.drawArc(cx-r,cy-r,cx+r,cy+r,145,250,false,p);
             if(!Float.isNaN(level)){
                 p.setColor(state);
