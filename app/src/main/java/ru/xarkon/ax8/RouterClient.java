@@ -199,6 +199,91 @@ public final class RouterClient {
         JSONObject result=post(map("goformId",command,"notCallback","true"));
         if(!success(result))throw new IOException(command+" : "+result);
     }
+    /** Radio mode from the authenticated WebUI. Empty means this firmware is not verified. */
+    public synchronized String networkPreference() throws Exception {
+        ensureAuth();
+        JSONObject state=get("net_select,net_select_mode,m_netselect_save");
+        for(String key:new String[]{"net_select","net_select_mode","m_netselect_save"}){
+            String value=state.optString(key,"").trim();
+            if(value.equals("NETWORK_auto")||value.equals("Only_LTE")||
+                value.equals("Only_WCDMA")||value.equals("TD_W")||value.equals("Only_GSM"))
+                return value;
+        }
+        return "";
+    }
+    /** Fail closed if the firmware does not expose a recognizable network-mode setting. */
+    public synchronized void setNetworkPreference(String value) throws Exception {
+        if(!"NETWORK_auto".equals(value)&&!"Only_LTE".equals(value))
+            throw new IllegalArgumentException("Режим сети не подтверждён для этой прошивки");
+        String before=networkPreference();
+        if(before.isEmpty())throw new IOException("Прошивка не сообщает режим сети. Запись отменена.");
+        if(before.equals(value))return;
+        JSONObject answer=post(map("goformId","SET_BEARER_PREFERENCE","BearerPreference",value));
+        if(!success(answer))throw new IOException("Роутер отклонил выбор режима сети: "+answer.optString("result","нет ответа"));
+        String after=networkPreference();
+        if(!value.equals(after))throw new IOException("Команда принята, но новое значение режима не подтверждено. Проверьте WebUI.");
+    }
+    public static final class ApnProfile {
+        public final int index;
+        public final String name,apn,pdpType;
+        private ApnProfile(int index,String name,String apn,String pdpType){
+            this.index=index;this.name=name;this.apn=apn;this.pdpType=pdpType;
+        }
+    }
+    public static final class ApnCatalog {
+        public final int currentIndex;
+        public final List<ApnProfile> profiles;
+        private ApnCatalog(int currentIndex,List<ApnProfile> profiles){
+            this.currentIndex=currentIndex;
+            this.profiles=Collections.unmodifiableList(new ArrayList<>(profiles));
+        }
+    }
+    /**
+     * Only reads documented APN_config slots. Some firmware families expose a
+     * different schema; never invent profile indices or touch settings in that case.
+     * Password fields in the raw router reply are never returned to the UI.
+     */
+    public synchronized ApnCatalog apnProfiles() throws Exception {
+        ensureAuth();
+        StringBuilder fields=new StringBuilder("Current_index,wan_apn");
+        for(int i=0;i<20;i++)fields.append(",APN_config").append(i);
+        JSONObject snapshot=get(fields.toString());
+        int current=-1;
+        try{current=Integer.parseInt(snapshot.optString("Current_index","").trim());}
+        catch(NumberFormatException ignored){}
+        List<ApnProfile> profiles=new ArrayList<>();
+        for(int i=0;i<20;i++){
+            String raw=snapshot.optString("APN_config"+i,"");
+            if(raw.isEmpty()||!raw.contains("($)"))continue;
+            String[] parts=raw.split(java.util.regex.Pattern.quote("($)"),-1);
+            if(parts.length<8)continue;
+            String name=parts[0].trim(),apn=parts[1].trim(),pdp=parts[7].trim();
+            if(name.isEmpty()||apn.isEmpty()||name.length()>100||apn.length()>200)continue;
+            if(!("IP".equalsIgnoreCase(pdp)||"IPv4".equalsIgnoreCase(pdp)||
+                "IPv6".equalsIgnoreCase(pdp)||"IPv4v6".equalsIgnoreCase(pdp)))continue;
+            profiles.add(new ApnProfile(i,name,apn,pdp));
+        }
+        if(current<0||current>19||profiles.isEmpty())
+            throw new IOException("Список APN этой прошивки не удалось подтвердить. Настройки не изменены.");
+        return new ApnCatalog(current,profiles);
+    }
+    /** Switch only to an existing, freshly read router profile, with readback. */
+    public synchronized void selectApnProfile(int index) throws Exception {
+        ApnCatalog before=apnProfiles();
+        ApnProfile target=null;
+        for(ApnProfile profile:before.profiles)if(profile.index==index){target=profile;break;}
+        if(target==null)throw new IllegalArgumentException("Профиль APN отсутствует в ответе роутера");
+        if(before.currentIndex==index)return;
+        String pdp=target.pdpType.equalsIgnoreCase("IPv4")?"IP":target.pdpType;
+        JSONObject answer=post(map("goformId","APN_PROC_EX","apn_mode","manual",
+            "apn_action","set_default","set_default_flag","1",
+            "pdp_type",pdp,"index",String.valueOf(index)));
+        if(!success(answer))throw new IOException("Роутер отклонил APN: "+answer.optString("result","нет ответа"));
+        JSONObject state=get("Current_index,wan_apn");
+        if(!String.valueOf(index).equals(state.optString("Current_index","").trim()) ||
+            !target.apn.equalsIgnoreCase(state.optString("wan_apn","").trim()))
+            throw new IOException("Команда APN отправлена, но профиль не подтверждён повторным чтением. Проверьте WebUI.");
+    }
     public synchronized void reconnect(Progress progress) throws Exception {
         progress.note("Отключение мобильной сети...");network(false);
         waitPpp(false,20,progress);
