@@ -161,6 +161,11 @@ public final class OtaProgressDialog {
             if(spin!=null)spin.cancel();
             if(sweepAnim!=null)sweepAnim.cancel();
             mark.animate().cancel();
+            // Dismissal cancels the animator: reset its state so a reused dialog
+            // can start the ring again on the next download attempt.
+            spinning=false;
+            mark.setRotation(0f);
+            mark.setSweep(360f);
             shown=false;
         });
     }
