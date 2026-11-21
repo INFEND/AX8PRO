@@ -106,7 +106,10 @@ final class Ui {
     }
     static LinearLayout infoRow(Context c,String label,String value,int accent){
         LinearLayout row=horizontal(c);row.setPadding(0,dp(c,9),0,dp(c,9));
+        // Keep information rows touch-friendly and legible with larger system fonts.
+        row.setMinimumHeight(dp(c,48));
         TextView a=text(c,label,13,MUTED,false),b=text(c,value,14,accent,true);
+        a.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
         a.setPadding(0,0,dp(c,12),0);
         b.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         b.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
