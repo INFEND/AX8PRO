@@ -151,7 +151,10 @@ final class Ui {
         caption.setMaxWidth(dp(c,90));
         wrap.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         caption.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        l.addView(wrap,wrapParams);addSpace(l,c,4);l.addView(caption);l.setOnClickListener(v->run.run());animateTouch(l);return l;
+        l.addView(wrap,wrapParams);addSpace(l,c,4);l.addView(caption);
+        // Tapping the current tab must not rebuild its screen or reset scroll position.
+        l.setOnClickListener(v->{if(!active)run.run();});
+        animateTouch(l);return l;
     }
     static TextView chip(Context c,String value,int fg){
         TextView x=text(c,value,11,fg,true);x.setPadding(dp(c,10),dp(c,6),dp(c,10),dp(c,6));
