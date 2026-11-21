@@ -284,6 +284,92 @@ public final class RouterClient {
             !target.apn.equalsIgnoreCase(state.optString("wan_apn","").trim()))
             throw new IOException("Команда APN отправлена, но профиль не подтверждён повторным чтением. Проверьте WebUI.");
     }
+    /** A network is a cellular PLMN discovered by the modem, not a Wi-Fi SSID. */
+    public static final class MobileOperator {
+        public final String name,plmn;
+        public final int rat,state;
+        MobileOperator(String name,String plmn,int rat,int state){
+            this.name=name;this.plmn=plmn;this.rat=rat;this.state=state;
+        }
+        public String technology(){return rat==7?"4G LTE":rat==2?"3G":rat==0?"2G":"RAT "+rat;}
+        public boolean selectable(){return (state==1||state==2)&&(rat==0||rat==2||rat==7);}
+    }
+    /** Pure parser; never manufacture carriers when a firmware returns another format. */
+    public static List<MobileOperator> parseMobileOperators(String raw){
+        ArrayList<MobileOperator> found=new ArrayList<>();
+        if(raw==null||raw.length()>16000)return found;
+        LinkedHashSet<String> seen=new LinkedHashSet<>();
+        for(String item:raw.split(";",-1)){
+            String[] p=item.split(",",-1);
+            if(p.length!=4)continue;
+            String name=p[1].trim().replace("\"","");
+            String number=p[2].trim();
+            if(!number.matches("[0-9]{5,6}")||name.length()>70)continue;
+            int rat,state;
+            try{state=Integer.parseInt(p[0].trim());rat=Integer.parseInt(p[3].trim());}
+            catch(NumberFormatException ignored){continue;}
+            if(state<0||state>4||!(rat==0||rat==2||rat==7))continue;
+            if(name.isEmpty())name=number;
+            String key=number+"/"+rat;
+            if(seen.add(key))found.add(new MobileOperator(name,number,rat,state));
+        }
+        return found;
+    }
+    /** The selection mode is independent of the 2G/3G/4G bearer preference. */
+    public synchronized String mobileOperatorSelectionMode()throws Exception{
+        ensureAuth();
+        String mode=getSingle("net_select_mode").optString("net_select_mode","").trim();
+        return mode.equals("auto_select")||mode.equals("manual_select")?mode:"";
+    }
+    /**
+     * SCAN_NETWORK searches operators on the router's own modem.
+     * Never disconnect WAN automatically: scanning on a connected modem is
+     * rejected with an actionable message, so other users are not kicked offline.
+     */
+    public synchronized List<MobileOperator> scanMobileOperators(Progress progress)throws Exception{
+        ensureAuth();
+        String ppp=getSingle("ppp_status").optString("ppp_status","");
+        if(!ppp.equals("ppp_disconnected")&&!ppp.equals("ppp_dial_fail")&&!ppp.equals("ppp_connect_failed"))
+            throw new IOException("Для ручного поиска сначала отключите мобильные данные кнопкой «Отключить мобильную сеть». Сканирование не запускалось (WAN: "+ppp+").");
+        JSONObject started=post(map("goformId","SCAN_NETWORK"));
+        if(!success(started))throw new IOException("Поиск операторов отклонён прошивкой: "+started.optString("result","нет ответа"));
+        progress.note("Модем ищет доступные сети...");
+        // Firmware scans are asynchronous. Wait for the status and fresh result
+        // rather than interpreting an empty initial response as no networks.
+        for(int i=0;i<75;i++){
+            String phase=getSingle("m_netselect_status").optString("m_netselect_status","").trim();
+            if(!"manual_selecting".equals(phase)){
+                String raw=getSingle("m_netselect_contents").optString("m_netselect_contents","");
+                List<MobileOperator> results=parseMobileOperators(raw);
+                if(!results.isEmpty())return results;
+                if(!raw.trim().isEmpty())
+                    throw new IOException("Роутер вернул неизвестный формат списка сетей. Выбор отключён.");
+            }
+            if(i%8==0)progress.note("Поиск операторов... "+(i+1)+" с");
+            Thread.sleep(1000);
+        }
+        throw new IOException("Список сетей не получен за 75 секунд. Эта прошивка может требовать поиск через WebUI.");
+    }
+    /** Manual PLMN registration, only using an operator from the fresh scan. */
+    public synchronized void registerMobileOperator(MobileOperator target,Progress progress)throws Exception{
+        if(target==null||!target.selectable()||!target.plmn.matches("[0-9]{5,6}"))
+            throw new IllegalArgumentException("Оператор или тип сети не поддерживается");
+        ensureAuth();
+        String ppp=getSingle("ppp_status").optString("ppp_status","");
+        if(!"ppp_disconnected".equals(ppp)&&!"ppp_dial_fail".equals(ppp)&&!"ppp_connect_failed".equals(ppp))
+            throw new IOException("Перед ручной регистрацией отключите мобильную передачу данных. WAN: "+ppp);
+        JSONObject reply=post(map("goformId","SET_NETWORK","NetworkNumber",target.plmn,"Rat",String.valueOf(target.rat)));
+        if(!success(reply))throw new IOException("Роутер отклонил регистрацию: "+reply.optString("result","нет ответа"));
+        progress.note("Ожидание подтверждения регистрации "+target.plmn+"...");
+        for(int i=0;i<90;i++){
+            String result=getSingle("m_netselect_result").optString("m_netselect_result","");
+            if("manual_success".equals(result))return;
+            if("manual_fail".equals(result))throw new IOException("Оператор отклонил регистрацию. Можно вернуться к автоматическому выбору в WebUI.");
+            if(i%10==0)progress.note("Регистрация в сети... "+i+" с");
+            Thread.sleep(1000);
+        }
+        throw new IOException("Подтверждение ручной регистрации не получено. Проверьте состояние сети в WebUI.");
+    }
     public synchronized void reconnect(Progress progress) throws Exception {
         progress.note("Отключение мобильной сети...");network(false);
         waitPpp(false,20,progress);
