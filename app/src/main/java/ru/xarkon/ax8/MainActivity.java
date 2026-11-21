@@ -273,6 +273,14 @@ public final class MainActivity extends Activity {
     private void applyAppearance(){
         int keep=tab;
         int keepY=pendingScrollY>=0?pendingScrollY:((scroll==null)?0:scroll.getScrollY());
+        // Appearance changes can alter card and text heights. Preserve the
+        // relative reading position instead of restoring stale absolute pixels.
+        // Only the settings page uses this policy; other tabs keep their own Y.
+        if(keep==TABS.length-1 && scroll!=null && pendingCompactScrollFraction<0f){
+            int maxY=Math.max(0,content.getHeight()-scroll.getHeight());
+            pendingCompactScrollFraction=maxY>0
+                ?Math.max(0f,Math.min(1f,keepY/(float)maxY)):0f;
+        }
         Ui.load(prefs);applySystemBarTheme();
         createShell();tab=keep;pendingScrollY=keepY;rebuildNav();draw(true);
     }
