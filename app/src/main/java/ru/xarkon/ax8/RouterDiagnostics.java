@@ -123,7 +123,9 @@ public final class RouterDiagnostics {
 
         long elapsed=(System.nanoTime()-start)/1_000_000L;
         JSONObject live=answers.get("radio");
-        boolean hasLive=live!=null&&live.length()>0;
+        boolean hasLive=live!=null && (!raw(live,"network_type").isEmpty() ||
+                !raw(live,"ppp_status").isEmpty() || !raw(live,"nv_rsrp").isEmpty() ||
+                !raw(live,"network_provider").isEmpty());
         long now=System.currentTimeMillis();
         boolean cacheFresh=input.cachedRadio!=null&&input.cachedRadioAt>0&&
                 input.cachedRadioAt<=now&&now-input.cachedRadioAt<=30000;
@@ -146,6 +148,7 @@ public final class RouterDiagnostics {
         out.append(new SimpleDateFormat("dd.MM.yyyy HH:mm:ss",Locale.getDefault()).format(new Date(now))).append("\n");
         out.append("Только чтение. Никаких изменений настроек, поиска операторов или перезапусков.\n\n");
         out.append("━━ СВОДКА ━━\n");
+        out.append("Адрес WebUI: ").append(client.host()).append("\n");
         out.append("WebUI: ").append(authorized?"авторизация подтверждена":"не удалось подтвердить авторизацию").append("\n");
         if(!authError.isEmpty())out.append("Причина WebUI: ").append(authError).append("\n");
         out.append("Радиоданные: ").append(hasLive?"текущий отдельный запрос":
@@ -196,14 +199,15 @@ public final class RouterDiagnostics {
                 "wifi_channel","wifi_channel_2g","wifi_2g_channel"))).append("\n");
         out.append("Wi-Fi статус: ").append(show(first(wifi,radio,"wifi_onoff","wifi_enable",
                 "wifi_status"))).append("\n");
-        out.append("Батарея (точное поле): ").append(show(first(system,radio,
-                "battery_vol_percent"))).append("%\n");
+        String batteryPercent=first(system,radio,"battery_vol_percent");
+        out.append("Батарея (процент от модема): ")
+                .append(batteryPercent.isEmpty()?"—":batteryPercent+"%").append("\n");
         String coarse=first(system,radio,"battery_pers");
         out.append("Индикатор батареи (ступень): ").append(show(coarse));
         if("4".equals(coarse))out.append(" (4/4, НЕ 4%)");
         out.append("\n");
         out.append("Зарядка (по полю модема): ").append(charging(first(system,radio,"battery_charging"))).append("\n");
-        out.append("Неподтверждённые лимиты: ").append(input.savedLimitCount)
+        out.append("Сохранённые лимиты (без подтверждения трафиком): ").append(input.savedLimitCount)
                 .append(" сохранённых записей; ").append(show(input.qosState)).append("\n");
         out.append("Монитор трафика: ").append(show(input.trafficState)).append("\n");
         out.append("Интервал опроса приложения: ").append(input.refreshMs).append(" мс\n");
@@ -214,6 +218,14 @@ public final class RouterDiagnostics {
                 input.internetCheckedAgeMs/1000+" с назад)").append("\n");
         if(!input.connectionError.isEmpty())out.append("Ошибка фонового WebUI: ")
                 .append(safe(input.connectionError)).append("\n");
+        out.append("\n━━ СЕТЕВАЯ ЦЕПОЧКА ━━\n");
+        out.append("WAN IPv4: ").append(show(first(wan,radio,"wan_ipaddr","wan_ip"))).append("\n");
+        out.append("WAN IPv6: ").append(show(first(wan,radio,"ipv6_wan_ipaddr","wan_ipv6_addr"))).append("\n");
+        out.append("Шлюз WAN: ").append(show(first(wan,radio,"wan_gateway"))).append("\n");
+        out.append("DNS WAN: ").append(show(first(wan,radio,"wan_dns","wan_dns1","dns1")))
+                .append(" / ").append(show(first(wan,radio,"wan_dns2","dns2"))).append("\n");
+        out.append("APN: ").append(show(first(wan,radio,"wan_apn"))).append("\n");
+        out.append("Тип PDP: ").append(show(first(wan,radio,"pdp_type","ipv4_pdp_type"))).append("\n");
         out.append("\n━━ ДИАГНОСТИЧЕСКИЕ ВЫВОДЫ ━━\n");
         if(!authorized)out.append("• Сначала восстановите доступ/авторизацию WebUI. Остальные проверки не выполнены.\n");
         if(noService) {
@@ -251,7 +263,8 @@ public final class RouterDiagnostics {
                 .append(errors.get(group.id)).append("\n");
         }
         out.append("\nПримечание: пустое поле означает «не получено», а не ноль, отсутствие функции или аппаратный дефект. " +
-                "Этот тест намеренно не читает пароли, IMSI, ICCID, IMEI и не изменяет конфигурацию.\n");
+                "Этот тест намеренно не читает пароли, IMSI, ICCID, IMEI и не изменяет конфигурацию. " +
+                "Отчёт содержит сетевые адреса и технические данные. Перед отправкой проверьте их.\n");
 
         try{
             all.put("generated_at",now);
