@@ -891,10 +891,23 @@ public final class MainActivity extends Activity {
         Ui.title(v,this,s,sub);content.addView(v);
     }
     private void rowCard(String heading,String detail,String badge,int accent,Runnable click){
-        LinearLayout card=Ui.card(this);LinearLayout head=Ui.horizontal(this);
-        LinearLayout left=Ui.vertical(this);left.addView(Ui.text(this,heading,15,Ui.TEXT,true));Ui.addSpace(left,this,5);
-        left.addView(Ui.text(this,detail,12,Ui.MUTED,false));head.addView(left,new LinearLayout.LayoutParams(0,-2,1));
-        if(badge!=null){TextView b=Ui.chip(this,badge,accent);head.addView(b);}
+        LinearLayout card=Ui.card(this);
+        boolean stacked=badge!=null&&(getResources().getConfiguration().screenWidthDp<=360
+                ||getResources().getConfiguration().fontScale>=1.4f);
+        LinearLayout head=stacked?Ui.vertical(this):Ui.horizontal(this);
+        LinearLayout left=Ui.vertical(this);
+        left.addView(Ui.text(this,heading,15,Ui.TEXT,true));Ui.addSpace(left,this,5);
+        left.addView(Ui.text(this,detail,12,Ui.MUTED,false));
+        if(stacked)head.addView(left,new LinearLayout.LayoutParams(-1,-2));
+        else head.addView(left,new LinearLayout.LayoutParams(0,-2,1));
+        if(badge!=null){
+            TextView b=Ui.chip(this,badge,accent);
+            if(stacked){
+                LinearLayout.LayoutParams badgeParams=new LinearLayout.LayoutParams(-2,-2);
+                badgeParams.topMargin=d(10);
+                head.addView(b,badgeParams);
+            }else head.addView(b);
+        }
         card.addView(head);if(click!=null){card.setOnClickListener(v->click.run());Ui.animateTouch(card);}
         addCard(card);
     }
