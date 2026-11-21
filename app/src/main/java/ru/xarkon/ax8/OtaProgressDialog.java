@@ -149,7 +149,13 @@ public final class OtaProgressDialog {
         actions.addView(primary,ap);primary.setVisibility(View.GONE);
         primary.setClickable(true);primary.setFocusable(true);
         primary.setMinHeight(dp(48));
-        dialog.setContentView(root);dialog.setCancelable(true);
+        // Keep the action row reachable on compact screens and with enlarged system fonts.
+        android.widget.ScrollView contentScroll=new android.widget.ScrollView(a);
+        contentScroll.setFillViewport(false);
+        contentScroll.setVerticalScrollBarEnabled(false);
+        contentScroll.setClipToPadding(false);
+        contentScroll.addView(root,new android.widget.ScrollView.LayoutParams(-1,-2));
+        dialog.setContentView(contentScroll);dialog.setCancelable(true);
         dialog.setOnDismissListener(ignore->{
             if(numberAnim!=null)numberAnim.cancel();
             if(spin!=null)spin.cancel();
