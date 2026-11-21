@@ -183,16 +183,23 @@ final class Ui {
             panel.addView(sc,new LinearLayout.LayoutParams(-1,-2));
         }
         addSpace(panel,activity,22);
-        LinearLayout actions=horizontal(activity);actions.setGravity(Gravity.END);
+        // Stack actions when two equal-width buttons cannot fit large Russian labels.
+        DisplayMetrics actionMetrics=activity.getResources().getDisplayMetrics();
+        float availableDp=actionMetrics.widthPixels/actionMetrics.density-70f;
+        float fontScale=activity.getResources().getConfiguration().fontScale*FONT_SCALE;
+        boolean stacked=accept!=null&&(availableDp<300f||fontScale>=1.4f);
+        LinearLayout actions=stacked?vertical(activity):horizontal(activity);
+        actions.setGravity(Gravity.END);
         if(accept!=null){
             TextView cancel=button(activity,"Отмена",CARD2,MUTED,dialog::dismiss);
-            actions.addView(cancel,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
-            View space=new View(activity);actions.addView(space,lp(activity,9,1));
+            actions.addView(cancel,stacked?lp(activity,-1,-2):new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
+            View space=new View(activity);
+            actions.addView(space,stacked?lp(activity,1,9):lp(activity,9,1));
         }
         TextView yes=button(activity,positive,accept==null?CARD2:CYAN,accept==null?TEXT:contrastOn(CYAN),()->{
             if(accept!=null)accept.run();dialog.dismiss();
         });
-        actions.addView(yes,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
+        actions.addView(yes,stacked?lp(activity,-1,-2):new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));
         panel.addView(actions);
         dialog.setContentView(panel);
         Window window=dialog.getWindow();
