@@ -31,6 +31,9 @@ public final class MainActivity extends Activity {
     private final ExecutorService temporaryWorker=Executors.newSingleThreadExecutor();
     // Internet tests never delay the WebUI/SMS/QoS polling worker.
     private final ExecutorService internetWorker=Executors.newSingleThreadExecutor();
+    // Heavy on-demand diagnostics use their own authenticated read-only connection.
+    private final ExecutorService diagnosticWorker=Executors.newSingleThreadExecutor();
+    private volatile boolean diagnosticBusy=false;
     private boolean internetBusy=false,internetWatching=false,internetChangeScheduled=false;
     private long internetLastStart=0L,internetCheckedAt=0L,internetRevision=0L;
     private int internetResult=InternetStatusPolicy.UNKNOWN;
@@ -258,7 +261,7 @@ public final class MainActivity extends Activity {
         }
     }
     @Override protected void onDestroy(){
-        internetWorker.shutdownNow();temporaryWorker.shutdown();workers.shutdown();super.onDestroy();
+        internetWorker.shutdownNow();diagnosticWorker.shutdownNow();temporaryWorker.shutdown();workers.shutdown();super.onDestroy();
     }
     private void applySystemBarTheme(){
         getWindow().setStatusBarColor(Ui.BG);getWindow().setNavigationBarColor(Ui.BG);
@@ -1907,7 +1910,10 @@ public final class MainActivity extends Activity {
         bands.addView(grid);bands.addView(Ui.button(this,"AUTO",0xFF174A4B,Ui.CYAN,()->bandConfirm(0)));addCard(bands);
         LinearLayout technical=Ui.card(this);Ui.title(technical,this,"Расширенная диагностика","Поля радиомодуля и параметры LTE");Ui.addSpace(technical,this,9);
         addRows(technical,new String[][]{{"RSRP",reading(rsrp(),"dBm")},{"RSRQ",reading(rsrq(),"dB")},{"SINR",reading(sinr(),"dB")},{"RSSI",rssi()},
-            {"Bandwidth",bandwidth()}});addCard(technical);
+            {"Bandwidth",bandwidth()}});
+        Ui.addSpace(technical,this,10);
+        technical.addView(Ui.button(this,"◈  Полная диагностика модема и роутера",Ui.CARD2,Ui.CYAN,this::showDeepDiagnostics));
+        addCard(technical);
         LinearLayout q=Ui.card(this);Ui.title(q,this,"Ограничения трафика","Установленные лимиты хранятся по MAC-адресу и требуют Telnet на AX8.");
         Map<String,Integer> savedLimits=qos.limits();
         Ui.addSpace(q,this,12);q.addView(Ui.infoRow(this,"Сохранено правил",String.valueOf(savedLimits.size()),Ui.CYAN));
@@ -2381,7 +2387,9 @@ public final class MainActivity extends Activity {
     }
     private void addDiagnosticsInfoSettings(){
         LinearLayout storage=Ui.card(this);Ui.title(storage,this,"Данные и диагностика","Экспорт настроек для проверки и восстановления");Ui.addSpace(storage,this,11);
-        storage.addView(Ui.button(this,"⇧  Поделиться диагностикой",Ui.CARD2,Ui.TEXT,()->exportDiagnostic()));
+        storage.addView(Ui.button(this,"◈  Полная диагностика AX8 (только чтение)",Ui.CARD2,Ui.CYAN,this::showDeepDiagnostics));
+        Ui.addSpace(storage,this,9);
+        storage.addView(Ui.button(this,"⇧  Экспорт текущего снимка (JSON)",Ui.CARD2,Ui.TEXT,()->exportDiagnostic()));
         Ui.addSpace(storage,this,9);
         storage.addView(Ui.button(this,"↻  Сбросить соединение",Ui.CARD2,Ui.ORANGE,()->{
             api.invalidate();statusAt=0;devices.clear();messages.clear();blocked=null;error="";refresh(true);
@@ -2958,6 +2966,87 @@ public final class MainActivity extends Activity {
         confirm("Массовый QoS","Установить "+limitName(limit)+" для всех кроме "+ownerMac+"?",
             ()->action("Массовый QoS",pr->qos.limitEveryoneExcept(ownerMac,limit,api.devices(),pr)));
     }
+    /**
+     * Explicitly started deep diagnosis. Never runs in the 500 ms poller, in
+     * background tasks or on a shared RouterClient session.
+     */
+    private void showDeepDiagnostics(){
+        if(diagnosticBusy){toast("Диагностика уже выполняется");return;}
+        diagnosticBusy=true;
+        final RouterDiagnostics.Input input=new RouterDiagnostics.Input();
+        try{input.cachedRadio=status==null?null:new JSONObject(status.toString());}
+        catch(Exception ignored){input.cachedRadio=null;}
+        input.cachedRadioAt=statusAt;
+        input.deviceCount=devices.size();
+        input.devicesAt=clientsAt;
+        input.savedLimitCount=qos.limits().size();
+        input.qosState=qos.diagnostics();
+        input.trafficState=monitorOn?
+            (trafficError.isEmpty()?traffic.status():trafficError):"отключён";
+        input.connectionError=error;
+        input.refreshMs=refreshInterval();
+        input.internetState=internetResult;
+        input.internetCheckedAgeMs=internetCheckedAt>0?
+            android.os.SystemClock.elapsedRealtime()-internetCheckedAt:-1L;
+        final String host=prefs.getString("host","192.168.150.1");
+        final String username=prefs.getString("username","root");
+        final String password=prefs.getString("password","admin");
+        final LinearLayout panel=Ui.vertical(this);
+        final TextView stage=Ui.text(this,"Подготовка отдельного безопасного опроса…",13,Ui.CYAN,true);
+        panel.addView(stage);Ui.addSpace(panel,this,12);
+        final TextView report=Ui.text(this,"Собираем подтверждённые данные WebUI. "+
+            "Текущий опрос интерфейса не блокируется. Никакие настройки не меняются.",12,Ui.TEXT,false);
+        report.setTextIsSelectable(true);
+        panel.addView(report);Ui.addSpace(panel,this,14);
+        final String[] complete={null};
+        panel.addView(Ui.button(this,"▣  Скопировать отчёт",Ui.CARD2,Ui.TEXT,()->{
+            if(complete[0]==null){toast("Отчёт ещё формируется");return;}
+            android.content.ClipboardManager manager=(android.content.ClipboardManager)
+                getSystemService(CLIPBOARD_SERVICE);
+            if(manager!=null){
+                manager.setPrimaryClip(ClipData.newPlainText("AX8 diagnostics",complete[0]));
+                toast("Отчёт скопирован");
+            }
+        }));
+        Ui.addSpace(panel,this,8);
+        panel.addView(Ui.button(this,"⇧  Поделиться отчётом",Ui.CARD2,Ui.CYAN,()->{
+            if(complete[0]==null){toast("Отчёт ещё формируется");return;}
+            Intent intent=new Intent(Intent.ACTION_SEND);
+            intent.setType("text/plain");
+            intent.putExtra(Intent.EXTRA_SUBJECT,"AX8 PRO · глубокая диагностика");
+            intent.putExtra(Intent.EXTRA_TEXT,complete[0]);
+            startActivity(Intent.createChooser(intent,"Экспорт диагностики AX8"));
+        }));
+        final Dialog dialog=Ui.sheet(this,"Полная диагностика AX8",
+            "SIM · LTE/CA · WAN · Wi-Fi · питание · QoS",panel);
+        try{
+            diagnosticWorker.execute(()->{
+                RouterDiagnostics.Result result;
+                try{
+                    RouterClient isolated=new RouterClient(host,username,password);
+                    result=RouterDiagnostics.collect(isolated,input,message->handler.post(()->{
+                        if(!isFinishing()&&!isDestroyed()&&dialog.isShowing())stage.setText("◌  "+message);
+                    }));
+                }catch(Exception e){
+                    result=new RouterDiagnostics.Result("Ошибка глубокой диагностики: "+
+                        String.valueOf(e.getMessage()),new JSONObject());
+                }
+                final String text=result.report;
+                handler.post(()->{
+                    diagnosticBusy=false;
+                    if(isFinishing()||isDestroyed()||!dialog.isShowing())return;
+                    complete[0]=text;
+                    stage.setText("✓  Проверка завершена · можно скопировать или отправить");
+                    stage.setTextColor(Ui.GREEN);
+                    report.setText(text);
+                });
+            });
+        }catch(RejectedExecutionException e){
+            diagnosticBusy=false;
+            stage.setText("Не удалось запустить диагностику");
+        }
+    }
+
     private void exportDiagnostic(){
         try {JSONObject j=new JSONObject();j.put("time",System.currentTimeMillis());j.put("host",api.host());
             j.put("radio",status==null?JSONObject.NULL:status);j.put("devices",devices.size());
