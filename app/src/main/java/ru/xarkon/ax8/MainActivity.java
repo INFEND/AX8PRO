@@ -2712,20 +2712,39 @@ public final class MainActivity extends Activity {
             });
         }));
         Ui.addSpace(theme,this,13);
-        theme.addView(Ui.infoRow(this,"Масштаб текста",prefs.getInt("font_scale",100)+"%",Ui.CYAN));
+        final TextView fontScaleLabel=Ui.text(this,"Масштаб текста · "+prefs.getInt("font_scale",100)+"%",14,Ui.TEXT,true);
+        theme.addView(fontScaleLabel);
         SeekBar size=new SeekBar(this);size.setMax(55);size.setProgress(prefs.getInt("font_scale",100)-80);
+        size.setContentDescription("Масштаб текста, от 80 до 135 процентов");
         size.setProgressTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));
         size.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar b,int value,boolean fromUser){}
+            public void onProgressChanged(SeekBar b,int value,boolean fromUser){
+                if(fromUser)fontScaleLabel.setText("Масштаб текста · "+(80+value)+"%");
+            }
             public void onStartTrackingTouch(SeekBar b){}
-            public void onStopTrackingTouch(SeekBar b){prefs.edit().putInt("font_scale",80+b.getProgress()).apply();applyAppearance();}
+            public void onStopTrackingTouch(SeekBar b){
+                int next=80+b.getProgress();
+                if(next!=prefs.getInt("font_scale",100)){
+                    prefs.edit().putInt("font_scale",next).apply();applyAppearance();
+                }
+            }
         });theme.addView(size);
-        theme.addView(Ui.infoRow(this,"Скругления",prefs.getInt("corner",22)+" dp",Ui.CYAN));
+        Ui.addSpace(theme,this,8);
+        final TextView cornerLabel=Ui.text(this,"Скругления · "+prefs.getInt("corner",22)+" dp",14,Ui.TEXT,true);
+        theme.addView(cornerLabel);
         SeekBar corner=new SeekBar(this);corner.setMax(34);corner.setProgress(Math.max(0,prefs.getInt("corner",22)-6));
+        corner.setContentDescription("Скругления карточек, от 6 до 40 dp");
         corner.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onProgressChanged(SeekBar b,int value,boolean fromUser){}
+            public void onProgressChanged(SeekBar b,int value,boolean fromUser){
+                if(fromUser)cornerLabel.setText("Скругления · "+(6+value)+" dp");
+            }
             public void onStartTrackingTouch(SeekBar b){}
-            public void onStopTrackingTouch(SeekBar b){prefs.edit().putInt("corner",6+b.getProgress()).apply();applyAppearance();}
+            public void onStopTrackingTouch(SeekBar b){
+                int next=6+b.getProgress();
+                if(next!=prefs.getInt("corner",22)){
+                    prefs.edit().putInt("corner",next).apply();applyAppearance();
+                }
+            }
         });theme.addView(corner);Ui.addSpace(theme,this,10);
         theme.addView(Ui.button(this,(Ui.MOTION?"●":"○")+"  Анимации · "+(Ui.MOTION?"ВКЛ":"ВЫКЛ"),Ui.CARD2,Ui.TEXT,()->{
             prefs.edit().putBoolean("motion",!Ui.MOTION).apply();applyAppearance();
