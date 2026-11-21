@@ -928,11 +928,15 @@ public final class MainActivity extends Activity {
     private static double parse(Object raw){try{return Double.parseDouble(String.valueOf(raw).replace("%","").trim());}catch(Exception e){return Double.NaN;}}
     private static double num(JSONObject o,String key){return o==null?Double.NaN:parse(o.optString(key,""));}
     private String s(String key){return status==null?"":status.optString(key,"");}
-    private String band(){String b=stat("nv_band");return b.equals("—")?"—":b.toUpperCase(Locale.US).startsWith("B")?b:"B"+b;}
+    private boolean noCellService(){
+        return "No Service".equalsIgnoreCase(s("network_type").trim()) ||
+            "No Service".equalsIgnoreCase(s("sub_network_type").trim());
+    }
+    private String band(){if(noCellService())return "—";String b=stat("nv_band");return b.equals("—")?"—":b.toUpperCase(Locale.US).startsWith("B")?b:"B"+b;}
     private String stat(String key){String raw=s(key).trim();return raw.isEmpty()||raw.equals("?")||raw.equals("--")||raw.equalsIgnoreCase("null")?"—":raw;}
-    private double rsrpValue(){double v=num(status,"nv_rsrp");return v>0?v-141:v;}
-    private double rsrqValue(){double v=num(status,"nv_rsrq");return v>0?(v-40)/2:v;}
-    private double sinrValue(){return num(status,"nv_sinr");}
+    private double rsrpValue(){if(noCellService())return Double.NaN;double v=num(status,"nv_rsrp");return v>0?v-141:v;}
+    private double rsrqValue(){if(noCellService())return Double.NaN;double v=num(status,"nv_rsrq");return v>0?(v-40)/2:v;}
+    private double sinrValue(){return noCellService()?Double.NaN:num(status,"nv_sinr");}
     private String rsrp(){return fmt(rsrpValue());}
     private String rsrq(){return fmt(rsrqValue());}
     private String sinr(){return fmt(sinrValue());}
@@ -2151,6 +2155,7 @@ public final class MainActivity extends Activity {
         });
     }
     private String rssi(){
+        if(noCellService())return "—";
         double v=Double.NaN;for(String key:new String[]{"nv_rssi","lte_rssi"}){v=num(status,key);if(!Double.isNaN(v))break;}
         if(!Double.isNaN(v)){if(v>0&&v<=150)v=-v;if(v>=-150&&v<=-20)return fmt(v)+" dBm";}
         double csq=num(status,"wan_csq");if(!Double.isNaN(csq)&&csq>=0&&csq<=31)return fmt(-113+2*csq)+" dBm";
@@ -2163,7 +2168,7 @@ public final class MainActivity extends Activity {
         if(!Double.isNaN(r)&&!Double.isNaN(q)&&rb>0)return "≈ "+fmt(r+10*Math.log10(rb)-q)+" dBm";
         return "—";
     }
-    private String bandwidth(){String nativeVal=firstStatus("lte_bandwidth","lte_bw","current_bandwidth","dl_bandwidth");
+    private String bandwidth(){if(noCellService())return "—";String nativeVal=firstStatus("lte_bandwidth","lte_bw","current_bandwidth","dl_bandwidth");
         if(!nativeVal.equals("—"))return nativeVal.toLowerCase(Locale.US).contains("mhz")?nativeVal:nativeVal+" MHz";
         String code=stat("nv_bandwidth");return code.equals("1")?"20 MHz":code.equals("2")?"10 MHz":"—";
     }
@@ -2997,7 +3002,6 @@ public final class MainActivity extends Activity {
         final TextView report=Ui.text(this,"Собираем подтверждённые данные WebUI. "+
             "Текущий опрос интерфейса не блокируется. Никакие настройки не меняются.",12,Ui.TEXT,false);
         report.setTextIsSelectable(true);
-        panel.addView(report);Ui.addSpace(panel,this,14);
         final String[] complete={null};
         panel.addView(Ui.button(this,"▣  Скопировать отчёт",Ui.CARD2,Ui.TEXT,()->{
             if(complete[0]==null){toast("Отчёт ещё формируется");return;}
@@ -3017,6 +3021,10 @@ public final class MainActivity extends Activity {
             intent.putExtra(Intent.EXTRA_TEXT,complete[0]);
             startActivity(Intent.createChooser(intent,"Экспорт диагностики AX8"));
         }));
+        Ui.addSpace(panel,this,11);
+        panel.addView(Ui.text(this,"Отчёт может содержать IP-адреса и сведения о сети. Проверьте их перед отправкой.",11,Ui.MUTED,false));
+        Ui.addSpace(panel,this,10);
+        panel.addView(report);
         final Dialog dialog=Ui.sheet(this,"Полная диагностика AX8",
             "SIM · LTE/CA · WAN · Wi-Fi · питание · QoS",panel);
         try{
