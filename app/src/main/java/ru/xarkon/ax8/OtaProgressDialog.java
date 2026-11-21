@@ -254,6 +254,8 @@ public final class OtaProgressDialog {
         label.setText("Не удалось обновить AX8 PRO CONTROL");
         details.setText(message);bytes.setText("");percent.setText("");
         secondary.setText("ЗАКРЫТЬ");
+        // The same action view is reused after an update offer: restore its retry label.
+        primary.setText("ПОВТОРИТЬ");
         primary.setVisibility(retry==null?View.GONE:View.VISIBLE);
         primary.setOnClickListener(v->{if(retry!=null)retry.run();});
     }
