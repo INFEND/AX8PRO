@@ -2038,6 +2038,18 @@ public final class MainActivity extends Activity {
         LinearLayout wrapper=Ui.card(this);
         wrapper.setPadding(d(13),d(11),d(13),d(11));
         LinearLayout head=Ui.horizontal(this);head.setGravity(Gravity.CENTER_VERTICAL);
+        // Keep collapsible settings headers comfortably tappable at large font scales.
+        head.setMinimumHeight(d(48));
+        head.setClickable(true);
+        head.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        head.setAccessibilityDelegate(new View.AccessibilityDelegate(){
+            @Override public void onInitializeAccessibilityNodeInfo(View host,android.view.accessibility.AccessibilityNodeInfo info){
+                super.onInitializeAccessibilityNodeInfo(host,info);
+                info.setClassName(android.widget.Button.class.getName());
+                info.setCheckable(true);
+                info.setChecked(expandedSettings.contains(key));
+            }
+        });
         TextView emblem=Ui.text(this,symbol,22,Ui.CYAN,true);
         emblem.setGravity(Gravity.CENTER);emblem.setMinWidth(d(39));head.addView(emblem);
         LinearLayout words=Ui.vertical(this);words.setPadding(d(9),0,d(5),0);
