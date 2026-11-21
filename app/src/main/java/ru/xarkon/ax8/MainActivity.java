@@ -2401,15 +2401,34 @@ public final class MainActivity extends Activity {
         Ui.addSpace(panel,this,9);
         panel.addView(Ui.button(this,"↻  Проверить обновления",Ui.CARD2,Ui.CYAN,()->checkOta(false)));
         Ui.addSpace(panel,this,9);
-        boolean launch=prefs.getBoolean("ota_on_launch",true);
-        panel.addView(Ui.button(this,launch?"☑ Проверять при запуске":"☐ Проверять при запуске",Ui.CARD2,Ui.TEXT,()->{
-            prefs.edit().putBoolean("ota_on_launch",!launch).apply();draw(true);
-        }));
+        // Update toggle labels in place: rebuilding the settings page would
+        // collapse the user's context and jump the scroll position.
+        final TextView[] launchButton={null};
+        launchButton[0]=Ui.button(this,
+            prefs.getBoolean("ota_on_launch",true)?"☑ Проверять при запуске":"☐ Проверять при запуске",
+            Ui.CARD2,Ui.TEXT,()->{
+                boolean next=!prefs.getBoolean("ota_on_launch",true);
+                prefs.edit().putBoolean("ota_on_launch",next).apply();
+                launchButton[0].setText(next?"☑ Проверять при запуске":"☐ Проверять при запуске");
+                launchButton[0].setContentDescription((next?"Включено: ":"Выключено: ")+"проверять обновления при запуске");
+            });
+        launchButton[0].setContentDescription(
+            (prefs.getBoolean("ota_on_launch",true)?"Включено: ":"Выключено: ")+"проверять обновления при запуске");
+        panel.addView(launchButton[0]);
         Ui.addSpace(panel,this,9);
-        boolean background=prefs.getBoolean("ota_background",false);
-        panel.addView(Ui.button(this,background?"☑ Проверять в фоне (24 ч)":"☐ Проверять в фоне (24 ч)",Ui.CARD2,Ui.TEXT,()->{
-            prefs.edit().putBoolean("ota_background",!background).apply();UpdateSchedule.configure(this);draw(true);
-        }));
+        final TextView[] backgroundButton={null};
+        backgroundButton[0]=Ui.button(this,
+            prefs.getBoolean("ota_background",false)?"☑ Проверять в фоне (24 ч)":"☐ Проверять в фоне (24 ч)",
+            Ui.CARD2,Ui.TEXT,()->{
+                boolean next=!prefs.getBoolean("ota_background",false);
+                prefs.edit().putBoolean("ota_background",next).apply();
+                UpdateSchedule.configure(this);
+                backgroundButton[0].setText(next?"☑ Проверять в фоне (24 ч)":"☐ Проверять в фоне (24 ч)");
+                backgroundButton[0].setContentDescription((next?"Включено: ":"Выключено: ")+"проверять обновления в фоне каждые 24 часа");
+            });
+        backgroundButton[0].setContentDescription(
+            (prefs.getBoolean("ota_background",false)?"Включено: ":"Выключено: ")+"проверять обновления в фоне каждые 24 часа");
+        panel.addView(backgroundButton[0]);
         Ui.addSpace(panel,this,9);
         panel.addView(Ui.text(this,"Перед установкой проверяются версия, пакет, контрольная сумма APK и цифровая подпись приложения.",12,Ui.MUTED,false));
         addCard(panel);
