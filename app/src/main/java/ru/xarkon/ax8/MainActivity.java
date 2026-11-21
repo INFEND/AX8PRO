@@ -2802,10 +2802,20 @@ public final class MainActivity extends Activity {
                 LinearLayout item=Ui.vertical(this);item.setGravity(Gravity.CENTER);item.setPadding(d(3),d(5),d(3),d(5));
                 TextView swatch=Ui.text(this,Ui.CYAN==value?"✓":"●",20,Ui.contrastOn(value),true);
                 swatch.setGravity(Gravity.CENTER);swatch.setMinHeight(d(38));swatch.setBackground(Ui.shape(this,value,0,12));
-                item.addView(swatch,Ui.lp(this,-1,40));
-                TextView text=Ui.text(this,names[j],10,Ui.TEXT,false);text.setGravity(Gravity.CENTER);
+                item.addView(swatch,Ui.lp(this,-1,48));
+                TextView text=Ui.text(this,names[j],12,Ui.TEXT,false);text.setGravity(Gravity.CENTER);
                 Ui.addSpace(item,this,5);item.addView(text);
-                item.setOnClickListener(v->{prefs.edit().putInt("accent_color",value).apply();dlog[0].dismiss();applyAppearance();});
+                boolean selected=Ui.CYAN==value;
+                item.setContentDescription("Акцентный цвет: "+names[j]+(selected?", выбран":""));
+                item.setSelected(selected);
+                item.setFocusable(true);
+                item.setClickable(true);
+                item.setMinimumHeight(d(64));
+                item.setOnClickListener(v->{
+                    if(value==Ui.CYAN){dlog[0].dismiss();return;}
+                    prefs.edit().putInt("accent_color",value).apply();
+                    dlog[0].dismiss();applyAppearance();
+                });
                 LinearLayout.LayoutParams w=new LinearLayout.LayoutParams(0,-2,1);w.setMargins(d(2),0,d(2),0);row.addView(item,w);
             }
             body.addView(row);Ui.addSpace(body,this,5);
