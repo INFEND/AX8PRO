@@ -2517,10 +2517,10 @@ public final class MainActivity extends Activity {
             prefs.edit().putBoolean("background_keep_awake",next).apply();
             awakeButton[0].setText((next?"☑ ":"☐ ")+"Не засыпать в фоне (CPU + Wi-Fi)");
             awakeButton[0].setContentDescription((next?"Включено: ":"Выключено: ")+"не засыпать в фоне, процессор и Wi-Fi");
-            awakeButton[0].setStateDescription(next?"Включено":"Выключено");
+            if(Build.VERSION.SDK_INT>=30)awakeButton[0].setStateDescription(next?"Включено":"Выключено");
         });
         awakeButton[0].setContentDescription((awake?"Включено: ":"Выключено: ")+"не засыпать в фоне, процессор и Wi-Fi");
-        awakeButton[0].setStateDescription(awake?"Включено":"Выключено");
+        if(Build.VERSION.SDK_INT>=30)awakeButton[0].setStateDescription(awake?"Включено":"Выключено");
         c.addView(awakeButton[0]);
         Ui.addSpace(c,this,9);
         final TextView[] watchButton={null};
@@ -2530,10 +2530,10 @@ public final class MainActivity extends Activity {
             prefs.edit().putBoolean("background_qos_watch",next).apply();
             watchButton[0].setText((next?"☑ ":"☐ ")+"Контроль превышения QoS");
             watchButton[0].setContentDescription((next?"Включено: ":"Выключено: ")+"контроль превышения QoS");
-            watchButton[0].setStateDescription(next?"Включено":"Выключено");
+            if(Build.VERSION.SDK_INT>=30)watchButton[0].setStateDescription(next?"Включено":"Выключено");
         });
         watchButton[0].setContentDescription((watch?"Включено: ":"Выключено: ")+"контроль превышения QoS");
-        watchButton[0].setStateDescription(watch?"Включено":"Выключено");
+        if(Build.VERSION.SDK_INT>=30)watchButton[0].setStateDescription(watch?"Включено":"Выключено");
         c.addView(watchButton[0]);
         Ui.addSpace(c,this,11);
         if(active){
