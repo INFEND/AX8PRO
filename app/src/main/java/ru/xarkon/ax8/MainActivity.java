@@ -1869,6 +1869,21 @@ public final class MainActivity extends Activity {
         wan.addView(Ui.button(this,connected?"◯  Отключить мобильную сеть":"●  Подключить мобильную сеть",
             connected?0xFF43303A:0xFF154B4A,connected?Ui.RED:Ui.GREEN,netToggle));
         Ui.addSpace(wan,this,9);wan.addView(Ui.button(this,"↻  Переподключить WAN",Ui.CARD2,Ui.TEXT,()->networkReconnect()));addCard(wan);
+        LinearLayout mobile=Ui.card(this);
+        Ui.title(mobile,this,"Выбор сети","Режим подключения и оператор. Изменения могут временно отключить интернет.");
+        Ui.addSpace(mobile,this,10);
+        mobile.addView(Ui.infoRow(this,"Оператор",stat("network_provider"),Ui.CYAN));
+        mobile.addView(Ui.infoRow(this,"Текущая технология",stat("network_type"),Ui.CYAN));
+        Ui.addSpace(mobile,this,9);
+        mobile.addView(Ui.button(this,"◉  Режим сети: Авто / 4G",Ui.CARD2,Ui.CYAN,()->showNetworkModes()));
+        Ui.addSpace(mobile,this,8);
+        mobile.addView(Ui.button(this,"◈  Выбрать оператора в WebUI",Ui.CARD2,Ui.TEXT,()->openRouterNetworkPage()));
+        addCard(mobile);
+        LinearLayout apnCard=Ui.card(this);
+        Ui.title(apnCard,this,"Профили APN","Переключение существующих профилей, сохранённых на роутере");
+        Ui.addSpace(apnCard,this,12);
+        apnCard.addView(Ui.button(this,"◉  Список профилей и переключение",Ui.CARD2,Ui.CYAN,()->showApnProfiles()));
+        addCard(apnCard);
         LinearLayout bands=Ui.card(this);Ui.title(bands,this,"Фиксация LTE Band","Текущий: "+band()+". После смены потребуется перезагрузка AX8.");Ui.addSpace(bands,this,15);
         LinearLayout grid=Ui.vertical(this);
         int[] bs=RouterClient.SUPPORTED_BANDS;
@@ -1914,6 +1929,105 @@ public final class MainActivity extends Activity {
         Ui.addSpace(filters,this,10);
         filters.addView(Ui.button(this,"Настроить сервисы",Ui.CARD2,Ui.CYAN,()->serviceScopes()));
         addCard(filters);
+    }
+    /** Advanced operator selection is firmware-dependent; open the real WebUI instead of guessing SET_NETWORK. */
+    private void openRouterNetworkPage(){
+        try{
+            String host=api.host();
+            if(!host.startsWith("http://")&&!host.startsWith("https://"))
+                throw new IllegalArgumentException("Некорректный адрес WebUI");
+            startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(host+"/index.html")));
+        }catch(Exception e){alert("Выбор оператора","Не удалось открыть WebUI: "+e.getMessage());}
+    }
+    private void showNetworkModes(){
+        if(actionBusy){toast("Дождитесь завершения действия");return;}
+        displayWork("Чтение режима сети...");
+        workers.execute(()->{
+            String raw="",failure=null;
+            try{raw=api.networkPreference();}
+            catch(Exception e){failure=e.getMessage();}
+            final String current=raw,err=failure;
+            handler.post(()->{
+                displayWork("");
+                if(!running)return;
+                if(err!=null){alert("Режим сети","Не удалось получить настройки: "+err);return;}
+                if(current.isEmpty()){
+                    alert("Режим сети","Эта прошивка не возвращает подтверждённый режим. Команды переключения отключены. Используйте WebUI роутера.");
+                    return;
+                }
+                String shown="NETWORK_auto".equals(current)?"Автоматически":
+                    "Only_LTE".equals(current)?"Только 4G":
+                    ("Only_WCDMA".equals(current)||"TD_W".equals(current))?"Только 3G":"Текущий: "+current;
+                LinearLayout body=Ui.vertical(this);
+                body.addView(Ui.text(this,"Сейчас: "+shown,14,Ui.TEXT,true));
+                Ui.addSpace(body,this,8);
+                body.addView(Ui.text(this,"После переключения связь с роутером может временно пропасть. 3G и ручная регистрация оператора зависят от прошивки.",12,Ui.MUTED,false));
+                Ui.addSpace(body,this,12);
+                final Dialog[] sheet={null};
+                String[] codes={"NETWORK_auto","Only_LTE"};
+                String[] names={"Автоматически","Только 4G (LTE)"};
+                for(int i=0;i<codes.length;i++){
+                    String code=codes[i],name=names[i];boolean active=code.equals(current);
+                    body.addView(Ui.button(this,(active?"✓  ":"○  ")+name,
+                        active?Ui.CYAN:Ui.CARD2,active?Ui.contrastOn(Ui.CYAN):Ui.TEXT,()->{
+                            if(active)return;
+                            if(sheet[0]!=null)sheet[0].dismiss();
+                            confirm("Сменить режим сети",
+                                "Переключить роутер на «"+name+"»? Мобильный интернет может временно отключиться. Продолжить?",
+                                ()->action("Выбор режима сети",p->{
+                                    p.note("Применение режима сети...");
+                                    api.setNetworkPreference(code);
+                                }));
+                        }));
+                    Ui.addSpace(body,this,8);
+                }
+                sheet[0]=Ui.sheet(this,"Выбор режима сети","Проверенные значения WebUI",body);
+            });
+        });
+    }
+    private void showApnProfiles(){
+        if(actionBusy){toast("Дождитесь завершения действия");return;}
+        displayWork("Чтение профилей APN...");
+        workers.execute(()->{
+            RouterClient.ApnCatalog result=null;String failure=null;
+            try{result=api.apnProfiles();}
+            catch(Exception e){failure=e.getMessage();}
+            final RouterClient.ApnCatalog catalog=result;final String err=failure;
+            handler.post(()->{
+                displayWork("");
+                if(!running)return;
+                if(err!=null){
+                    alert("Профили APN",err+"\n\nКоманды не отправлялись. Для другой прошивки используйте настройки APN в WebUI.");
+                    return;
+                }
+                LinearLayout body=Ui.vertical(this);
+                body.addView(Ui.text(this,"Профили прочитаны из памяти роутера. Выбор изменяет APN мобильного подключения, а не настройки телефона.",12,Ui.MUTED,false));
+                Ui.addSpace(body,this,12);
+                final Dialog[] sheet={null};
+                for(RouterClient.ApnProfile profile:catalog.profiles){
+                    boolean active=profile.index==catalog.currentIndex;
+                    LinearLayout item=Ui.vertical(this);
+                    item.addView(Ui.text(this,(active?"✓  ":"○  ")+profile.name,15,active?Ui.CYAN:Ui.TEXT,true));
+                    Ui.addSpace(item,this,3);
+                    item.addView(Ui.text(this,"APN: "+profile.apn+" · "+profile.pdpType,12,Ui.MUTED,false));
+                    body.addView(item);
+                    Ui.addSpace(body,this,6);
+                    body.addView(Ui.button(this,active?"Активный профиль":"Выбрать этот профиль",
+                        active?Ui.CARD:Ui.CARD2,active?Ui.GREEN:Ui.CYAN,()->{
+                            if(active)return;
+                            if(sheet[0]!=null)sheet[0].dismiss();
+                            confirm("Сменить APN",
+                                "Сделать «"+profile.name+"» ("+profile.apn+") основным профилем? Интернет может отключиться. При ошибке потребуется вернуть прежний APN в WebUI.",
+                                ()->action("Переключение APN",p->{
+                                    p.note("Запись профиля APN...");
+                                    api.selectApnProfile(profile.index);
+                                }));
+                        }));
+                    Ui.addSpace(body,this,14);
+                }
+                sheet[0]=Ui.sheet(this,"Профили APN","Только существующие настройки AX8",body);
+            });
+        });
     }
     private String rssi(){
         double v=Double.NaN;for(String key:new String[]{"nv_rssi","lte_rssi"}){v=num(status,key);if(!Double.isNaN(v))break;}
