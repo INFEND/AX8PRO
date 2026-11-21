@@ -140,11 +140,15 @@ public final class OtaProgressDialog {
         secondary=text("СКРЫТЬ",12,muted,true);secondary.setGravity(Gravity.CENTER);
         secondary.setPadding(dp(16),dp(14),dp(16),dp(14));
         secondary.setOnClickListener(v->dismiss());
+        secondary.setClickable(true);secondary.setFocusable(true);
+        secondary.setMinHeight(dp(48));
         actions.addView(secondary);
-        primary=text("ПОВТОРИТЬ",12,Color.BLACK,true);primary.setGravity(Gravity.CENTER);
+        primary=text("ПОВТОРИТЬ",12,Ui.contrastOn(accent),true);primary.setGravity(Gravity.CENTER);
         primary.setBackground(shape(accent,0,13));primary.setPadding(dp(16),dp(13),dp(16),dp(13));
         LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-2,-2);ap.leftMargin=dp(8);
         actions.addView(primary,ap);primary.setVisibility(View.GONE);
+        primary.setClickable(true);primary.setFocusable(true);
+        primary.setMinHeight(dp(48));
         dialog.setContentView(root);dialog.setCancelable(true);
         dialog.setOnDismissListener(ignore->{
             if(numberAnim!=null)numberAnim.cancel();
@@ -274,10 +278,12 @@ public final class OtaProgressDialog {
             styled.append(display);
             int tint=display.startsWith("[+]")?0xff4dd69c:
                 display.startsWith("[–]")?0xfff07878:0xffffaa4d;
-            styled.setSpan(new android.text.style.ForegroundColorSpan(tint),
-                begin,begin+3,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            styled.setSpan(new android.text.style.StyleSpan(Typeface.BOLD),
-                begin,begin+3,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            if(display.startsWith("[+]")||display.startsWith("[–]")||display.startsWith("[=]")){
+                styled.setSpan(new android.text.style.ForegroundColorSpan(tint),
+                    begin,begin+3,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                styled.setSpan(new android.text.style.StyleSpan(Typeface.BOLD),
+                    begin,begin+3,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
             // Highlight the leading action word, plus explicitly marked key phrases.
             int actionStart=4,actionEnd=actionStart;
             while(actionEnd<display.length()&&!Character.isWhitespace(display.charAt(actionEnd))
