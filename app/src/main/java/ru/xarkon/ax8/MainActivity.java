@@ -31,6 +31,9 @@ public final class MainActivity extends Activity {
     private final ExecutorService temporaryWorker=Executors.newSingleThreadExecutor();
     // Internet tests never delay the WebUI/SMS/QoS polling worker.
     private final ExecutorService internetWorker=Executors.newSingleThreadExecutor();
+    // Heavy on-demand diagnostics use their own authenticated read-only connection.
+    private final ExecutorService diagnosticWorker=Executors.newSingleThreadExecutor();
+    private volatile boolean diagnosticBusy=false;
     private boolean internetBusy=false,internetWatching=false,internetChangeScheduled=false;
     private long internetLastStart=0L,internetCheckedAt=0L,internetRevision=0L;
     private int internetResult=InternetStatusPolicy.UNKNOWN;
@@ -258,7 +261,7 @@ public final class MainActivity extends Activity {
         }
     }
     @Override protected void onDestroy(){
-        internetWorker.shutdownNow();temporaryWorker.shutdown();workers.shutdown();super.onDestroy();
+        internetWorker.shutdownNow();diagnosticWorker.shutdownNow();temporaryWorker.shutdown();workers.shutdown();super.onDestroy();
     }
     private void applySystemBarTheme(){
         getWindow().setStatusBarColor(Ui.BG);getWindow().setNavigationBarColor(Ui.BG);
@@ -925,11 +928,15 @@ public final class MainActivity extends Activity {
     private static double parse(Object raw){try{return Double.parseDouble(String.valueOf(raw).replace("%","").trim());}catch(Exception e){return Double.NaN;}}
     private static double num(JSONObject o,String key){return o==null?Double.NaN:parse(o.optString(key,""));}
     private String s(String key){return status==null?"":status.optString(key,"");}
-    private String band(){String b=stat("nv_band");return b.equals("—")?"—":b.toUpperCase(Locale.US).startsWith("B")?b:"B"+b;}
+    private boolean noCellService(){
+        return "No Service".equalsIgnoreCase(s("network_type").trim()) ||
+            "No Service".equalsIgnoreCase(s("sub_network_type").trim());
+    }
+    private String band(){if(noCellService())return "—";String b=stat("nv_band");return b.equals("—")?"—":b.toUpperCase(Locale.US).startsWith("B")?b:"B"+b;}
     private String stat(String key){String raw=s(key).trim();return raw.isEmpty()||raw.equals("?")||raw.equals("--")||raw.equalsIgnoreCase("null")?"—":raw;}
-    private double rsrpValue(){double v=num(status,"nv_rsrp");return v>0?v-141:v;}
-    private double rsrqValue(){double v=num(status,"nv_rsrq");return v>0?(v-40)/2:v;}
-    private double sinrValue(){return num(status,"nv_sinr");}
+    private double rsrpValue(){if(noCellService())return Double.NaN;double v=num(status,"nv_rsrp");return v>0?v-141:v;}
+    private double rsrqValue(){if(noCellService())return Double.NaN;double v=num(status,"nv_rsrq");return v>0?(v-40)/2:v;}
+    private double sinrValue(){return noCellService()?Double.NaN:num(status,"nv_sinr");}
     private String rsrp(){return fmt(rsrpValue());}
     private String rsrq(){return fmt(rsrqValue());}
     private String sinr(){return fmt(sinrValue());}
@@ -1907,7 +1914,10 @@ public final class MainActivity extends Activity {
         bands.addView(grid);bands.addView(Ui.button(this,"AUTO",0xFF174A4B,Ui.CYAN,()->bandConfirm(0)));addCard(bands);
         LinearLayout technical=Ui.card(this);Ui.title(technical,this,"Расширенная диагностика","Поля радиомодуля и параметры LTE");Ui.addSpace(technical,this,9);
         addRows(technical,new String[][]{{"RSRP",reading(rsrp(),"dBm")},{"RSRQ",reading(rsrq(),"dB")},{"SINR",reading(sinr(),"dB")},{"RSSI",rssi()},
-            {"Bandwidth",bandwidth()}});addCard(technical);
+            {"Bandwidth",bandwidth()}});
+        Ui.addSpace(technical,this,10);
+        technical.addView(Ui.button(this,"◈  Полная диагностика модема и роутера",Ui.CARD2,Ui.CYAN,this::showDeepDiagnostics));
+        addCard(technical);
         LinearLayout q=Ui.card(this);Ui.title(q,this,"Ограничения трафика","Установленные лимиты хранятся по MAC-адресу и требуют Telnet на AX8.");
         Map<String,Integer> savedLimits=qos.limits();
         Ui.addSpace(q,this,12);q.addView(Ui.infoRow(this,"Сохранено правил",String.valueOf(savedLimits.size()),Ui.CYAN));
@@ -2145,6 +2155,7 @@ public final class MainActivity extends Activity {
         });
     }
     private String rssi(){
+        if(noCellService())return "—";
         double v=Double.NaN;for(String key:new String[]{"nv_rssi","lte_rssi"}){v=num(status,key);if(!Double.isNaN(v))break;}
         if(!Double.isNaN(v)){if(v>0&&v<=150)v=-v;if(v>=-150&&v<=-20)return fmt(v)+" dBm";}
         double csq=num(status,"wan_csq");if(!Double.isNaN(csq)&&csq>=0&&csq<=31)return fmt(-113+2*csq)+" dBm";
@@ -2157,7 +2168,7 @@ public final class MainActivity extends Activity {
         if(!Double.isNaN(r)&&!Double.isNaN(q)&&rb>0)return "≈ "+fmt(r+10*Math.log10(rb)-q)+" dBm";
         return "—";
     }
-    private String bandwidth(){String nativeVal=firstStatus("lte_bandwidth","lte_bw","current_bandwidth","dl_bandwidth");
+    private String bandwidth(){if(noCellService())return "—";String nativeVal=firstStatus("lte_bandwidth","lte_bw","current_bandwidth","dl_bandwidth");
         if(!nativeVal.equals("—"))return nativeVal.toLowerCase(Locale.US).contains("mhz")?nativeVal:nativeVal+" MHz";
         String code=stat("nv_bandwidth");return code.equals("1")?"20 MHz":code.equals("2")?"10 MHz":"—";
     }
@@ -2381,7 +2392,9 @@ public final class MainActivity extends Activity {
     }
     private void addDiagnosticsInfoSettings(){
         LinearLayout storage=Ui.card(this);Ui.title(storage,this,"Данные и диагностика","Экспорт настроек для проверки и восстановления");Ui.addSpace(storage,this,11);
-        storage.addView(Ui.button(this,"⇧  Поделиться диагностикой",Ui.CARD2,Ui.TEXT,()->exportDiagnostic()));
+        storage.addView(Ui.button(this,"◈  Полная диагностика AX8 (только чтение)",Ui.CARD2,Ui.CYAN,this::showDeepDiagnostics));
+        Ui.addSpace(storage,this,9);
+        storage.addView(Ui.button(this,"⇧  Экспорт текущего снимка (JSON)",Ui.CARD2,Ui.TEXT,()->exportDiagnostic()));
         Ui.addSpace(storage,this,9);
         storage.addView(Ui.button(this,"↻  Сбросить соединение",Ui.CARD2,Ui.ORANGE,()->{
             api.invalidate();statusAt=0;devices.clear();messages.clear();blocked=null;error="";refresh(true);
@@ -2958,6 +2971,90 @@ public final class MainActivity extends Activity {
         confirm("Массовый QoS","Установить "+limitName(limit)+" для всех кроме "+ownerMac+"?",
             ()->action("Массовый QoS",pr->qos.limitEveryoneExcept(ownerMac,limit,api.devices(),pr)));
     }
+    /**
+     * Explicitly started deep diagnosis. Never runs in the 500 ms poller, in
+     * background tasks or on a shared RouterClient session.
+     */
+    private void showDeepDiagnostics(){
+        if(diagnosticBusy){toast("Диагностика уже выполняется");return;}
+        diagnosticBusy=true;
+        final RouterDiagnostics.Input input=new RouterDiagnostics.Input();
+        try{input.cachedRadio=status==null?null:new JSONObject(status.toString());}
+        catch(Exception ignored){input.cachedRadio=null;}
+        input.cachedRadioAt=statusAt;
+        input.deviceCount=devices.size();
+        input.devicesAt=clientsAt;
+        input.savedLimitCount=qos.limits().size();
+        input.qosState=qos.diagnostics();
+        input.trafficState=monitorOn?
+            (trafficError.isEmpty()?traffic.status():trafficError):"отключён";
+        input.connectionError=error;
+        input.refreshMs=refreshInterval();
+        input.internetState=internetResult;
+        input.internetCheckedAgeMs=internetCheckedAt>0?
+            android.os.SystemClock.elapsedRealtime()-internetCheckedAt:-1L;
+        final String host=prefs.getString("host","192.168.150.1");
+        final String username=prefs.getString("username","root");
+        final String password=prefs.getString("password","admin");
+        final LinearLayout panel=Ui.vertical(this);
+        final TextView stage=Ui.text(this,"Подготовка отдельного безопасного опроса…",13,Ui.CYAN,true);
+        panel.addView(stage);Ui.addSpace(panel,this,12);
+        final TextView report=Ui.text(this,"Собираем подтверждённые данные WebUI. "+
+            "Текущий опрос интерфейса не блокируется. Никакие настройки не меняются.",12,Ui.TEXT,false);
+        report.setTextIsSelectable(true);
+        final String[] complete={null};
+        panel.addView(Ui.button(this,"▣  Скопировать отчёт",Ui.CARD2,Ui.TEXT,()->{
+            if(complete[0]==null){toast("Отчёт ещё формируется");return;}
+            android.content.ClipboardManager manager=(android.content.ClipboardManager)
+                getSystemService(CLIPBOARD_SERVICE);
+            if(manager!=null){
+                manager.setPrimaryClip(ClipData.newPlainText("AX8 diagnostics",complete[0]));
+                toast("Отчёт скопирован");
+            }
+        }));
+        Ui.addSpace(panel,this,8);
+        panel.addView(Ui.button(this,"⇧  Поделиться отчётом",Ui.CARD2,Ui.CYAN,()->{
+            if(complete[0]==null){toast("Отчёт ещё формируется");return;}
+            Intent intent=new Intent(Intent.ACTION_SEND);
+            intent.setType("text/plain");
+            intent.putExtra(Intent.EXTRA_SUBJECT,"AX8 PRO · глубокая диагностика");
+            intent.putExtra(Intent.EXTRA_TEXT,complete[0]);
+            startActivity(Intent.createChooser(intent,"Экспорт диагностики AX8"));
+        }));
+        Ui.addSpace(panel,this,11);
+        panel.addView(Ui.text(this,"Отчёт может содержать IP-адреса и сведения о сети. Проверьте их перед отправкой.",11,Ui.MUTED,false));
+        Ui.addSpace(panel,this,10);
+        panel.addView(report);
+        final Dialog dialog=Ui.sheet(this,"Полная диагностика AX8",
+            "SIM · LTE/CA · WAN · Wi-Fi · питание · QoS",panel);
+        try{
+            diagnosticWorker.execute(()->{
+                RouterDiagnostics.Result result;
+                try{
+                    RouterClient isolated=new RouterClient(host,username,password);
+                    result=RouterDiagnostics.collect(isolated,input,message->handler.post(()->{
+                        if(!isFinishing()&&!isDestroyed()&&dialog.isShowing())stage.setText("◌  "+message);
+                    }));
+                }catch(Exception e){
+                    result=new RouterDiagnostics.Result("Ошибка глубокой диагностики: "+
+                        String.valueOf(e.getMessage()),new JSONObject());
+                }
+                final String text=result.report;
+                handler.post(()->{
+                    diagnosticBusy=false;
+                    if(isFinishing()||isDestroyed()||!dialog.isShowing())return;
+                    complete[0]=text;
+                    stage.setText("✓  Проверка завершена · можно скопировать или отправить");
+                    stage.setTextColor(Ui.GREEN);
+                    report.setText(text);
+                });
+            });
+        }catch(RejectedExecutionException e){
+            diagnosticBusy=false;
+            stage.setText("Не удалось запустить диагностику");
+        }
+    }
+
     private void exportDiagnostic(){
         try {JSONObject j=new JSONObject();j.put("time",System.currentTimeMillis());j.put("host",api.host());
             j.put("radio",status==null?JSONObject.NULL:status);j.put("devices",devices.size());
