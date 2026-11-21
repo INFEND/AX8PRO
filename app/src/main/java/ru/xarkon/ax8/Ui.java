@@ -175,7 +175,10 @@ final class Ui {
             final int maxBody=Math.min((int)(dm.heightPixels*.52f),dp(activity,440));
             ScrollView sc=new ScrollView(activity){
                 @Override protected void onMeasure(int ws,int hs){
-                    super.onMeasure(ws,MeasureSpec.makeMeasureSpec(maxBody,MeasureSpec.AT_MOST));
+                    // Respect the dialog's remaining height after the keyboard appears.
+                    int available=MeasureSpec.getSize(hs);
+                    int limit=available>0?Math.min(maxBody,available):maxBody;
+                    super.onMeasure(ws,MeasureSpec.makeMeasureSpec(limit,MeasureSpec.AT_MOST));
                 }
             };
             sc.setFillViewport(false);sc.setVerticalScrollBarEnabled(false);
