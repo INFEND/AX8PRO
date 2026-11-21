@@ -300,7 +300,9 @@ public final class MainActivity extends Activity {
         header.addView(connectionLabel);
         root.addView(header);
         workLabel=Ui.text(this,"",12,Ui.CYAN,true);workLabel.setGravity(Gravity.CENTER_VERTICAL);
-        workLabel.setPadding(d(18),0,d(18),0);workLabel.setVisibility(View.GONE);
+        // Let long progress messages wrap instead of clipping inside a fixed-height banner.
+        workLabel.setMinHeight(d(37));
+        workLabel.setPadding(d(18),d(8),d(18),d(8));workLabel.setVisibility(View.GONE);
         root.addView(workLabel,Ui.lp(this,-1,0));
         scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);scroll.setVerticalScrollBarEnabled(false);
         content=Ui.vertical(this);content.setPadding(d(16),d(6),d(16),d(20));scroll.addView(content);
@@ -342,7 +344,7 @@ public final class MainActivity extends Activity {
     }
     private void displayWork(String message){handler.post(()->{
         if(message==null||message.isEmpty()){workLabel.setVisibility(View.GONE);workLabel.getLayoutParams().height=0;}
-        else{workLabel.setText("◌  "+message);workLabel.setBackgroundColor(Ui.CARD2);workLabel.getLayoutParams().height=d(37);workLabel.setVisibility(View.VISIBLE);}
+        else{workLabel.setText("◌  "+message);workLabel.setBackgroundColor(Ui.CARD2);workLabel.getLayoutParams().height=ViewGroup.LayoutParams.WRAP_CONTENT;workLabel.setVisibility(View.VISIBLE);}
         workLabel.requestLayout();
     });}
     private void alert(String title,String text){Ui.modal(this,title,text,null,"Закрыть",null);}
