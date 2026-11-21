@@ -140,17 +140,25 @@ public final class OtaProgressDialog {
         bar.setIndeterminate(true);
         bar.setContentDescription("Проверка обновления");
         LinearLayout actions=new LinearLayout(a);actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+        // Stack actions when the available width or font scale would squeeze their labels.
+        float availableDp=a.getResources().getDisplayMetrics().widthPixels /
+            a.getResources().getDisplayMetrics().density;
+        boolean compactActions=availableDp<360f ||
+            a.getResources().getConfiguration().fontScale>=1.3f;
+        if(compactActions)actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setGravity(compactActions?Gravity.CENTER:Gravity.END|Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams al=new LinearLayout.LayoutParams(-1,-2);al.topMargin=dp(24);root.addView(actions,al);
         secondary=text("СКРЫТЬ",12,muted,true);secondary.setGravity(Gravity.CENTER);
         secondary.setPadding(dp(16),dp(14),dp(16),dp(14));
         secondary.setOnClickListener(v->dismiss());
         secondary.setClickable(true);secondary.setFocusable(true);
         secondary.setMinHeight(dp(48));
-        actions.addView(secondary);
+        actions.addView(secondary,compactActions?
+            new LinearLayout.LayoutParams(-1,-2):new LinearLayout.LayoutParams(-2,-2));
         primary=text("ПОВТОРИТЬ",12,Ui.contrastOn(accent),true);primary.setGravity(Gravity.CENTER);
         primary.setBackground(shape(accent,0,13));primary.setPadding(dp(16),dp(13),dp(16),dp(13));
-        LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-2,-2);ap.leftMargin=dp(8);
+        LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(compactActions?-1:-2,-2);
+        if(compactActions)ap.topMargin=dp(8);else ap.leftMargin=dp(8);
         actions.addView(primary,ap);primary.setVisibility(View.GONE);
         primary.setClickable(true);primary.setFocusable(true);
         primary.setMinHeight(dp(48));
