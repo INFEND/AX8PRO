@@ -2510,15 +2510,31 @@ public final class MainActivity extends Activity {
                 else confirm("Фоновый мониторинг","Android покажет постоянное уведомление. При блокировке возможен повышенный расход батареи. Продолжить?",()->startBackgroundMode());
             }));
         Ui.addSpace(c,this,10);
+        final TextView[] awakeButton={null};
         boolean awake=prefs.getBoolean("background_keep_awake",true);
-        c.addView(Ui.button(this,awake?"☑ Не засыпать в фоне (CPU + Wi-Fi)":"☐ Не засыпать в фоне (CPU + Wi-Fi)",Ui.CARD2,Ui.TEXT,()->{
-            prefs.edit().putBoolean("background_keep_awake",!awake).apply();draw(true);
-        }));
+        awakeButton[0]=Ui.button(this,awake?"☑ Не засыпать в фоне (CPU + Wi-Fi)":"☐ Не засыпать в фоне (CPU + Wi-Fi)",Ui.CARD2,Ui.TEXT,()->{
+            boolean next=!prefs.getBoolean("background_keep_awake",true);
+            prefs.edit().putBoolean("background_keep_awake",next).apply();
+            awakeButton[0].setText((next?"☑ ":"☐ ")+"Не засыпать в фоне (CPU + Wi-Fi)");
+            awakeButton[0].setContentDescription((next?"Включено: ":"Выключено: ")+"не засыпать в фоне, процессор и Wi-Fi");
+            awakeButton[0].setStateDescription(next?"Включено":"Выключено");
+        });
+        awakeButton[0].setContentDescription((awake?"Включено: ":"Выключено: ")+"не засыпать в фоне, процессор и Wi-Fi");
+        awakeButton[0].setStateDescription(awake?"Включено":"Выключено");
+        c.addView(awakeButton[0]);
         Ui.addSpace(c,this,9);
+        final TextView[] watchButton={null};
         boolean watch=prefs.getBoolean("background_qos_watch",true);
-        c.addView(Ui.button(this,watch?"☑ Контроль превышения QoS":"☐ Контроль превышения QoS",Ui.CARD2,Ui.YELLOW,()->{
-            prefs.edit().putBoolean("background_qos_watch",!watch).apply();draw(true);
-        }));
+        watchButton[0]=Ui.button(this,watch?"☑ Контроль превышения QoS":"☐ Контроль превышения QoS",Ui.CARD2,Ui.YELLOW,()->{
+            boolean next=!prefs.getBoolean("background_qos_watch",true);
+            prefs.edit().putBoolean("background_qos_watch",next).apply();
+            watchButton[0].setText((next?"☑ ":"☐ ")+"Контроль превышения QoS");
+            watchButton[0].setContentDescription((next?"Включено: ":"Выключено: ")+"контроль превышения QoS");
+            watchButton[0].setStateDescription(next?"Включено":"Выключено");
+        });
+        watchButton[0].setContentDescription((watch?"Включено: ":"Выключено: ")+"контроль превышения QoS");
+        watchButton[0].setStateDescription(watch?"Включено":"Выключено");
+        c.addView(watchButton[0]);
         Ui.addSpace(c,this,11);
         if(active){
             c.addView(Ui.button(this,"✉  Проверить SMS-уведомление",Ui.CARD2,Ui.CYAN,()->{
