@@ -347,10 +347,20 @@ public final class MainActivity extends Activity {
         else{content.setAlpha(1);content.setTranslationY(0);}
         if(index==1||index==2||index==3)refresh(true);
     }
+    /** Update the shared progress banner only when its visible state actually changes. */
     private void displayWork(String message){handler.post(()->{
-        if(message==null||message.isEmpty()){workLabel.setVisibility(View.GONE);workLabel.getLayoutParams().height=0;}
-        else{workLabel.setText("◌  "+message);workLabel.setBackgroundColor(Ui.CARD2);workLabel.getLayoutParams().height=ViewGroup.LayoutParams.WRAP_CONTENT;workLabel.setVisibility(View.VISIBLE);}
-        workLabel.requestLayout();
+        if(workLabel==null)return;
+        String label=message==null||message.isEmpty()?"":"◌  "+message;
+        if(label.isEmpty()){
+            if(workLabel.getVisibility()!=View.GONE)workLabel.setVisibility(View.GONE);
+            return;
+        }
+        if(!label.contentEquals(workLabel.getText()))workLabel.setText(label);
+        if(workLabel.getVisibility()!=View.VISIBLE){
+            workLabel.setBackgroundColor(Ui.CARD2);
+            workLabel.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+            workLabel.setVisibility(View.VISIBLE);
+        }
     });}
     private void alert(String title,String text){Ui.modal(this,title,text,null,"Закрыть",null);}
     private void confirm(String title,String text,Runnable yes){Ui.modal(this,title,text,null,"Подтвердить",yes);}
