@@ -893,7 +893,7 @@ public final class MainActivity extends Activity {
             target.post(()->{
                 if(tab!=expectedTab||scroll!=target||revision!=scrollRestoreRevision)return;
                 pendingScrollY=-1;
-                target.scrollTo(0,Math.min(y,Math.max(0,content.getHeight()-target.getHeight())));
+                target.scrollTo(0,Math.max(0,Math.min(y,Math.max(0,content.getHeight()-target.getHeight()))));
             });
         }
     }
@@ -2296,10 +2296,14 @@ public final class MainActivity extends Activity {
         if(opened)populateSettings(body,populate);
         head.setOnClickListener(v->{
             if(expandedSettings.contains(key)){
-                expandedSettings.remove(key);arrow.setText("⌄");body.animate().cancel();body.setVisibility(View.GONE);
+                expandedSettings.remove(key);arrow.setText("⌄");body.animate().cancel();
+                // A rapid close during the fade-in must not leave a transparent
+                // expanded section on the next tap.
+                body.setAlpha(1f);body.setVisibility(View.GONE);
             }else{
                 expandedSettings.add(key);arrow.setText("⌃");body.removeAllViews();
                 populateSettings(body,populate);body.setVisibility(View.VISIBLE);
+                body.animate().cancel();
                 if(Ui.MOTION){body.setAlpha(0f);body.animate().alpha(1f).setDuration(190).start();}
                 else body.setAlpha(1f);
             }
