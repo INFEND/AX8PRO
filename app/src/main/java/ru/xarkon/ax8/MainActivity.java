@@ -1966,14 +1966,13 @@ public final class MainActivity extends Activity {
                     12,Ui.MUTED,false));
                 Ui.addSpace(body,this,12);
                 final Dialog[] sheet={null};
-                body.addView(Ui.button(this,"◉  Автоматически"+("auto_select".equals(current)?" · ВЫБРАНО":""),
+                body.addView(Ui.button(this,"◉  Автоматически"+("auto_select".equals(current)?" · ВЫБРАНО":" · WebUI"),
                     "auto_select".equals(current)?Ui.CARD:Ui.CARD2,Ui.GREEN,()->{
                         if(sheet[0]!=null)sheet[0].dismiss();
                         if("auto_select".equals(current)){toast("Автоматический выбор уже включён");return;}
-                        // Do not confuse SET_BEARER_PREFERENCE (radio technology) with
-                        // automatic operator registration. Use WebUI until confirmed.
-                        alert("Автоматический выбор оператора",
-                            "Для возврата к автоматической регистрации откройте штатный WebUI и выберите «Автоматически». Команда для этой прошивки пока не подтверждена.");
+                        // SET_BEARER_PREFERENCE chooses a radio technology, not the
+                        // operator. Never send it as an unverified auto-registration fix.
+                        toast("В WebUI выберите режим регистрации «Автоматически»");
                         openRouterNetworkPage();
                     }));
                 Ui.addSpace(body,this,9);
