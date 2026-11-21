@@ -2746,9 +2746,16 @@ public final class MainActivity extends Activity {
                 }
             }
         });theme.addView(corner);Ui.addSpace(theme,this,10);
-        theme.addView(Ui.button(this,(Ui.MOTION?"●":"○")+"  Анимации · "+(Ui.MOTION?"ВКЛ":"ВЫКЛ"),Ui.CARD2,Ui.TEXT,()->{
-            prefs.edit().putBoolean("motion",!Ui.MOTION).apply();applyAppearance();
-        }));Ui.addSpace(theme,this,8);
+        final TextView[] motionToggle={null};
+        motionToggle[0]=Ui.button(this,(Ui.MOTION?"●":"○")+"  Анимации · "+(Ui.MOTION?"ВКЛ":"ВЫКЛ"),Ui.CARD2,Ui.TEXT,()->{
+            boolean enabled=!prefs.getBoolean("motion",true);
+            prefs.edit().putBoolean("motion",enabled).apply();
+            Ui.MOTION=enabled;
+            motionToggle[0].setText((enabled?"●":"○")+"  Анимации · "+(enabled?"ВКЛ":"ВЫКЛ"));
+            motionToggle[0].setContentDescription("Анимации, "+(enabled?"включены":"выключены"));
+        });
+        motionToggle[0].setContentDescription("Анимации, "+(Ui.MOTION?"включены":"выключены"));
+        theme.addView(motionToggle[0]);Ui.addSpace(theme,this,8);
         theme.addView(Ui.button(this,(Ui.COMPACT?"●":"○")+"  Компактные карточки · "+(Ui.COMPACT?"ВКЛ":"ВЫКЛ"),Ui.CARD2,Ui.TEXT,()->{
             prefs.edit().putBoolean("compact",!Ui.COMPACT).apply();applyAppearance();
         }));Ui.addSpace(theme,this,8);
