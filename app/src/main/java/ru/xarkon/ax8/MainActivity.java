@@ -120,6 +120,7 @@ public final class MainActivity extends Activity {
     private List<RouterClient.Sms> messages=new ArrayList<>();
     private RouterClient.BlockState blocked;
     private volatile boolean actionBusy=false,refreshBusy=false,temporaryAction=false;
+    private volatile boolean operatorScanBusy=false;
     private volatile boolean running=false;
     private final RefreshSession refreshSession=new RefreshSession();
     private int tab=0,lastNavTab=-1,lastNavUnread=-1;
@@ -1870,14 +1871,14 @@ public final class MainActivity extends Activity {
             connected?0xFF43303A:0xFF154B4A,connected?Ui.RED:Ui.GREEN,netToggle));
         Ui.addSpace(wan,this,9);wan.addView(Ui.button(this,"↻  Переподключить WAN",Ui.CARD2,Ui.TEXT,()->networkReconnect()));addCard(wan);
         LinearLayout mobile=Ui.card(this);
-        Ui.title(mobile,this,"Выбор сети","Режим подключения и оператор. Изменения могут временно отключить интернет.");
+        Ui.title(mobile,this,"Выбор оператора","Автоматическая регистрация или ручной поиск доступных мобильных сетей");
         Ui.addSpace(mobile,this,10);
-        mobile.addView(Ui.infoRow(this,"Оператор",stat("network_provider"),Ui.CYAN));
+        mobile.addView(Ui.infoRow(this,"Текущий оператор",stat("network_provider"),Ui.CYAN));
         mobile.addView(Ui.infoRow(this,"Текущая технология",stat("network_type"),Ui.CYAN));
         Ui.addSpace(mobile,this,9);
-        mobile.addView(Ui.button(this,"◉  Режим сети: Авто / 4G",Ui.CARD2,Ui.CYAN,()->showNetworkModes()));
+        mobile.addView(Ui.button(this,"◉  Автоматически / Ручной поиск",Ui.CARD2,Ui.CYAN,()->showOperatorSelection()));
         Ui.addSpace(mobile,this,8);
-        mobile.addView(Ui.button(this,"◈  Выбрать оператора в WebUI",Ui.CARD2,Ui.TEXT,()->openRouterNetworkPage()));
+        mobile.addView(Ui.button(this,"⌁  Технология сети: Авто / Только 4G",Ui.CARD2,Ui.TEXT,()->showNetworkModes()));
         addCard(mobile);
         LinearLayout apnCard=Ui.card(this);
         Ui.title(apnCard,this,"Профили APN","Переключение существующих профилей, сохранённых на роутере");
@@ -1938,6 +1939,111 @@ public final class MainActivity extends Activity {
                 throw new IllegalArgumentException("Некорректный адрес WebUI");
             startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(host+"/index.html")));
         }catch(Exception e){alert("Выбор оператора","Не удалось открыть WebUI: "+e.getMessage());}
+    }
+    /** Operator selection is separate from 4G/3G bearer preference. */
+    private void showOperatorSelection(){
+        if(actionBusy||operatorScanBusy){toast("Дождитесь завершения предыдущего действия");return;}
+        displayWork("Проверка режима выбора оператора...");
+        workers.execute(()->{
+            String mode="",failure=null;
+            try{mode=api.mobileOperatorSelectionMode();}
+            catch(Exception e){failure=e.getMessage();}
+            final String current=mode,err=failure;
+            handler.post(()->{
+                displayWork("");
+                if(!running)return;
+                LinearLayout body=Ui.vertical(this);
+                String state="auto_select".equals(current)?"Автоматически":
+                    "manual_select".equals(current)?"Ручной выбор":"Не определён прошивкой";
+                body.addView(Ui.infoRow(this,"Текущий режим",state,Ui.CYAN));
+                if(err!=null){
+                    Ui.addSpace(body,this,8);
+                    body.addView(Ui.text(this,"Не удалось прочитать режим: "+err,12,Ui.ORANGE,false));
+                }
+                Ui.addSpace(body,this,10);
+                body.addView(Ui.text(this,
+                    "Автоматически: роутер сам регистрируется в доступной сети. Ручной поиск: модем показывает операторов и их PLMN. Для сканирования мобильный интернет должен быть отключён.",
+                    12,Ui.MUTED,false));
+                Ui.addSpace(body,this,12);
+                final Dialog[] sheet={null};
+                body.addView(Ui.button(this,"◉  Автоматически"+("auto_select".equals(current)?" · ВЫБРАНО":""),
+                    "auto_select".equals(current)?Ui.CARD:Ui.CARD2,Ui.GREEN,()->{
+                        if(sheet[0]!=null)sheet[0].dismiss();
+                        if("auto_select".equals(current)){toast("Автоматический выбор уже включён");return;}
+                        // Do not confuse SET_BEARER_PREFERENCE (radio technology) with
+                        // automatic operator registration. Use WebUI until confirmed.
+                        alert("Автоматический выбор оператора",
+                            "Для возврата к автоматической регистрации откройте штатный WebUI и выберите «Автоматически». Команда для этой прошивки пока не подтверждена.");
+                        openRouterNetworkPage();
+                    }));
+                Ui.addSpace(body,this,9);
+                body.addView(Ui.button(this,"⌕  Найти доступные сети",Ui.CARD2,Ui.CYAN,()->{
+                    if(sheet[0]!=null)sheet[0].dismiss();
+                    confirm("Поиск мобильных сетей",
+                        "Роутер выполнит поиск операторов. Перед этим необходимо отключить мобильные данные в разделе «Мобильное подключение». Wi-Fi останется включённым. Поиск может занимать до 75 секунд. Начать?",
+                        ()->scanAvailableOperators());
+                }));
+                sheet[0]=Ui.sheet(this,"Выбор оператора","Мобильные сети · не Wi-Fi",body);
+            });
+        });
+    }
+    private void scanAvailableOperators(){
+        if(actionBusy||operatorScanBusy){toast("Дождитесь завершения предыдущего действия");return;}
+        operatorScanBusy=true;
+        displayWork("Поиск доступных мобильных сетей...");
+        workers.execute(()->{
+            List<RouterClient.MobileOperator> result=null;String failure=null;
+            try{result=api.scanMobileOperators(message->displayWork(message));}
+            catch(Exception e){failure=e.getMessage()==null?e.toString():e.getMessage();}
+            final List<RouterClient.MobileOperator> found=result;final String err=failure;
+            handler.post(()->{
+                operatorScanBusy=false;displayWork("");
+                if(!running)return;
+                if(err!=null){
+                    alert("Поиск операторов",err+"\n\nНи одна сеть не выбиралась. Можно открыть WebUI для проверки поддержки поиска.");
+                    return;
+                }
+                if(found==null||found.isEmpty()){alert("Поиск операторов","Модем не вернул доступных сетей.");return;}
+                LinearLayout body=Ui.vertical(this);
+                body.addView(Ui.text(this,"Найдено сетей: "+found.size()+
+                    ". Наличие оператора не гарантирует разрешение регистрации для вашей SIM-карты.",
+                    12,Ui.MUTED,false));
+                Ui.addSpace(body,this,12);
+                final Dialog[] sheet={null};
+                for(RouterClient.MobileOperator operator:found){
+                    boolean selectable=operator.selectable();
+                    String note=operator.plmn+" · "+operator.technology()+
+                        (operator.state==2?" · Текущая":"");
+                    LinearLayout item=Ui.vertical(this);
+                    item.addView(Ui.text(this,operator.name,15,Ui.TEXT,true));
+                    Ui.addSpace(item,this,3);
+                    item.addView(Ui.text(this,note,12,Ui.MUTED,false));
+                    body.addView(item);Ui.addSpace(body,this,6);
+                    TextView choose=Ui.button(this,
+                        selectable?"Выбрать эту сеть":"Регистрация недоступна (код "+operator.state+")",
+                        Ui.CARD2,selectable?Ui.CYAN:Ui.MUTED,()->{
+                            if(!selectable)return;
+                            if(sheet[0]!=null)sheet[0].dismiss();
+                            confirm("Зарегистрироваться в сети?",
+                                operator.name+" · "+operator.plmn+" · "+operator.technology()+
+                                "\n\nРучная регистрация может прервать интернет или быть отклонена оператором. При неудаче верните автоматический выбор через WebUI. Продолжить?",
+                                ()->action("Регистрация оператора",p->api.registerMobileOperator(operator,p)));
+                        });
+                    if(!selectable){choose.setEnabled(false);choose.setAlpha(.6f);}
+                    body.addView(choose);Ui.addSpace(body,this,12);
+                }
+                body.addView(Ui.button(this,"↻  Повторить поиск",Ui.CARD2,Ui.TEXT,()->{
+                    if(sheet[0]!=null)sheet[0].dismiss();
+                    scanAvailableOperators();
+                }));
+                Ui.addSpace(body,this,9);
+                body.addView(Ui.button(this,"◉  Автоматически · WebUI",Ui.CARD2,Ui.GREEN,()->{
+                    if(sheet[0]!=null)sheet[0].dismiss();
+                    openRouterNetworkPage();
+                }));
+                sheet[0]=Ui.sheet(this,"Найденные мобильные сети","Список, полученный непосредственно от модема",body);
+            });
+        });
     }
     private void showNetworkModes(){
         if(actionBusy){toast("Дождитесь завершения действия");return;}
