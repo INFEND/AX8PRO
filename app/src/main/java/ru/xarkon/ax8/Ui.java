@@ -114,8 +114,22 @@ final class Ui {
         b.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         b.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
         b.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
-        row.addView(a,new LinearLayout.LayoutParams(0,-2,.94f));
-        row.addView(b,new LinearLayout.LayoutParams(0,-2,1.06f));return row;
+        // On narrow screens or with large accessibility fonts, give both fields
+        // their full width instead of squeezing long Russian labels into columns.
+        float systemScale=c.getResources().getConfiguration().fontScale*FONT_SCALE;
+        boolean stacked=c.getResources().getConfiguration().screenWidthDp<=360 || systemScale>=1.4f;
+        if(stacked){
+            row.setOrientation(LinearLayout.VERTICAL);
+            a.setPadding(0,0,0,dp(c,4));
+            b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
+            b.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+            row.addView(a,new LinearLayout.LayoutParams(-1,-2));
+            row.addView(b,new LinearLayout.LayoutParams(-1,-2));
+        }else{
+            row.addView(a,new LinearLayout.LayoutParams(0,-2,.94f));
+            row.addView(b,new LinearLayout.LayoutParams(0,-2,1.06f));
+        }
+        return row;
     }
     static View rule(Context c){View v=new View(c);v.setBackgroundColor(BORDER);return v;}
     static LinearLayout navItem(Context c,String symbol,String label,boolean active,Runnable run){
