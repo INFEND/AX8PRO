@@ -129,6 +129,8 @@ public final class MainActivity extends Activity {
     private int tab=0,lastNavTab=-1,lastNavUnread=-1;
     private final int[] tabScrollY=new int[TABS.length];
     private int pendingScrollY=-1,scrollRestoreRevision;
+    // Preserve relative reading position when compact cards change the page height.
+    private float pendingCompactScrollFraction=-1f;
     private String error="",notice="";
     private long statusAt=0,clientsAt=0,smsAt=0,blockedAt=0,lastBytesAt=0;
     private double lastRx=Double.NaN,lastTx=Double.NaN,fallbackDl=Double.NaN,fallbackUl=Double.NaN;
@@ -896,7 +898,11 @@ public final class MainActivity extends Activity {
             target.post(()->{
                 if(tab!=expectedTab||scroll!=target||revision!=scrollRestoreRevision)return;
                 pendingScrollY=-1;
-                target.scrollTo(0,Math.max(0,Math.min(y,Math.max(0,content.getHeight()-target.getHeight()))));
+                int maxY=Math.max(0,content.getHeight()-target.getHeight());
+                int restoredY=pendingCompactScrollFraction>=0f
+                    ?Math.round(pendingCompactScrollFraction*maxY):y;
+                pendingCompactScrollFraction=-1f;
+                target.scrollTo(0,Math.max(0,Math.min(restoredY,maxY)));
             });
         }
     }
@@ -2769,9 +2775,17 @@ public final class MainActivity extends Activity {
         });
         motionToggle[0].setContentDescription("Анимации, "+(Ui.MOTION?"включены":"выключены"));
         theme.addView(motionToggle[0]);Ui.addSpace(theme,this,8);
-        theme.addView(Ui.button(this,(Ui.COMPACT?"●":"○")+"  Компактные карточки · "+(Ui.COMPACT?"ВКЛ":"ВЫКЛ"),Ui.CARD2,Ui.TEXT,()->{
-            prefs.edit().putBoolean("compact",!Ui.COMPACT).apply();applyAppearance();
-        }));Ui.addSpace(theme,this,8);
+        TextView compactToggle=Ui.button(this,(Ui.COMPACT?"●":"○")+"  Компактные карточки · "+(Ui.COMPACT?"ВКЛ":"ВЫКЛ"),Ui.CARD2,Ui.TEXT,()->{
+            int maxY=scroll==null?0:Math.max(0,content.getHeight()-scroll.getHeight());
+            int currentY=scroll==null?0:(pendingScrollY>=0?pendingScrollY:scroll.getScrollY());
+            pendingCompactScrollFraction=maxY>0?Math.max(0f,Math.min(1f,currentY/(float)maxY)):0f;
+            prefs.edit().putBoolean("compact",!Ui.COMPACT).apply();
+            applyAppearance();
+        });
+        compactToggle.setMinHeight(d(48));
+        compactToggle.setContentDescription("Компактные карточки, "+(Ui.COMPACT?"включены":"выключены")+
+            ". Изменяет плотность карточек, сохраняя положение в настройках");
+        theme.addView(compactToggle);Ui.addSpace(theme,this,8);
         theme.addView(Ui.button(this,"↺  Сбросить оформление",Ui.CARD2,Ui.ORANGE,()->confirm("Сброс оформления","Восстановить стандартную тёмную тему и цвета?",()->{
             prefs.edit().remove("theme").remove("accent_color").remove("background_color").remove("card_color")
                 .remove("font").remove("font_scale").remove("corner").remove("motion").remove("compact")
