@@ -102,6 +102,8 @@ public final class OtaProgressDialog {
         FrameLayout symbolBox=new FrameLayout(a);symbolBox.setBackground(shape((accent&0x00ffffff)|0x22000000,0,15));
         LinearLayout.LayoutParams sb=new LinearLayout.LayoutParams(dp(53),dp(53));sb.rightMargin=dp(14);top.addView(symbolBox,sb);
         mark=new CenteredRing(a,accent);
+        // The ring is decorative; the adjacent status text conveys progress to TalkBack.
+        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         symbolBox.addView(mark,new FrameLayout.LayoutParams(dp(33),dp(33),Gravity.CENTER));
         LinearLayout titles=new LinearLayout(a);titles.setOrientation(LinearLayout.VERTICAL);
         heading=text("Обновление AX8 PRO CONTROL",20,foreground,true);titles.addView(heading);
@@ -109,8 +111,10 @@ public final class OtaProgressDialog {
         LinearLayout.LayoutParams subLp=new LinearLayout.LayoutParams(-1,-2);subLp.topMargin=dp(7);titles.addView(sub,subLp);
         top.addView(titles,new LinearLayout.LayoutParams(0,-2,1));root.addView(top);
         label=text("Проверка соединения...",15,foreground,true);
+        label.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         LinearLayout.LayoutParams sl=new LinearLayout.LayoutParams(-1,-2);sl.topMargin=dp(25);root.addView(label,sl);
         details=text("Подключение к серверу...",12,muted,false);
+        details.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         LinearLayout.LayoutParams dl=new LinearLayout.LayoutParams(-1,-2);dl.topMargin=dp(7);root.addView(details,dl);
         notesScroll=new android.widget.ScrollView(a);
         notesScroll.setFillViewport(false);
@@ -134,6 +138,7 @@ public final class OtaProgressDialog {
         bar.setProgressBackgroundTintList(ColorStateList.valueOf(light?0xffe9eef3:0xff2a3139));
         LinearLayout.LayoutParams bl=new LinearLayout.LayoutParams(-1,dp(7));bl.topMargin=dp(12);root.addView(bar,bl);
         bar.setIndeterminate(true);
+        bar.setContentDescription("Проверка обновления");
         LinearLayout actions=new LinearLayout(a);actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams al=new LinearLayout.LayoutParams(-1,-2);al.topMargin=dp(24);root.addView(actions,al);
@@ -222,6 +227,7 @@ public final class OtaProgressDialog {
     public void stage(String step,String hint){
         heading.setText("Обновление AX8 PRO CONTROL");label.setText(step);details.setText(hint);
         bytes.setText("");percent.setText("");bar.setIndeterminate(true);
+        bar.setContentDescription(step);
         primary.setVisibility(View.GONE);secondary.setText("СКРЫТЬ");rotating(true);
         if(numberAnim!=null)numberAnim.cancel();
         lastBytes=0;lastTotal=0;
@@ -231,6 +237,7 @@ public final class OtaProgressDialog {
         rotating(true);bar.setIndeterminate(total<=0);
         label.setText("Загрузка обновления");
         details.setText("Загрузка защищённого обновления");
+        bar.setContentDescription(total>0?"Загрузка обновления, "+Math.min(100L,(long)(100.0*received/Math.max(1L,total)))+"%":"Загрузка обновления");
         primary.setVisibility(View.GONE);
         if(numberAnim!=null)numberAnim.cancel();
         final long start=total==lastTotal?lastBytes:0;
@@ -259,6 +266,7 @@ public final class OtaProgressDialog {
         label.setText("Не удалось обновить AX8 PRO CONTROL");
         details.setText(message);bytes.setText("");percent.setText("");
         secondary.setText("ЗАКРЫТЬ");
+        bar.setContentDescription("Ошибка обновления");
         // The same action view is reused after an update offer: restore its retry label.
         primary.setText("ПОВТОРИТЬ");
         primary.setVisibility(retry==null?View.GONE:View.VISIBLE);
@@ -319,12 +327,14 @@ public final class OtaProgressDialog {
         details.setText(version);
         bytes.setText("");percent.setText("");
         bar.setIndeterminate(false);bar.setProgress(1000);
+        bar.setContentDescription("Установлена актуальная версия");
         primary.setVisibility(View.GONE);secondary.setText("ЗАКРЫТЬ");
     }
     public void offer(String version,Runnable install){offer(version,"",install);}
     public void offer(String version,String notes,Runnable install){
         showNotes(notes);
         rotating(false);bar.setIndeterminate(false);bar.setProgress(0);
+        bar.setContentDescription("Доступно обновление");
         heading.setText("Доступно обновление");
         label.setText("AX8 PRO CONTROL "+version);
         details.setText("Новая версия готова к загрузке");
