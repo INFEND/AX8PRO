@@ -142,6 +142,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state){super.onCreate(state);
         prefs=getSharedPreferences("ax8_control",MODE_PRIVATE);
+        expandedSettings.addAll(prefs.getStringSet("expanded_settings",Collections.emptySet()));
         autoPollMs=AutoPollController.clamp(prefs.getInt("auto_poll_ms",500));
         api=new RouterClient(prefs.getString("host","192.168.150.1"),prefs.getString("username","root"),prefs.getString("password","admin"));
         qos=new QosController(api,prefs);traffic=new DeviceTrafficMonitor(api,prefs);
@@ -151,6 +152,8 @@ public final class MainActivity extends Activity {
         restoreRecentRouterSnapshot();
         Ui.load(prefs);applySystemBarTheme();requestNotificationPermission();createShell();
         if(state!=null){
+            java.util.ArrayList<String> savedGroups=state.getStringArrayList("expanded_settings");
+            if(savedGroups!=null){expandedSettings.clear();expandedSettings.addAll(savedGroups);}
             int restored=state.getInt("active_tab",0);
             tab=restored>=0&&restored<TABS.length?restored:0;
             int[] positions=state.getIntArray("tab_scroll_y");
@@ -162,6 +165,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onSaveInstanceState(Bundle state){
         if(scroll!=null)tabScrollY[tab]=pendingScrollY>=0?pendingScrollY:scroll.getScrollY();
+        state.putStringArrayList("expanded_settings",new java.util.ArrayList<>(expandedSettings));
         state.putInt("active_tab",tab);
         state.putIntArray("tab_scroll_y",tabScrollY.clone());
         super.onSaveInstanceState(state);
@@ -2029,6 +2033,8 @@ public final class MainActivity extends Activity {
         head.addView(words,new LinearLayout.LayoutParams(0,-2,1));
         TextView arrow=Ui.text(this,expandedSettings.contains(key)?"⌃":"⌄",24,Ui.CYAN,true);
         arrow.setGravity(Gravity.CENTER);arrow.setMinWidth(d(30));head.addView(arrow);
+        head.setContentDescription(title+(expandedSettings.contains(key)?", раскрыто":", свёрнуто"));
+        head.setFocusable(true);
         wrapper.addView(head);
         LinearLayout body=Ui.vertical(this);body.setPadding(0,d(12),0,0);
         boolean opened=expandedSettings.contains(key);
@@ -2043,6 +2049,8 @@ public final class MainActivity extends Activity {
                 if(Ui.MOTION){body.setAlpha(0f);body.animate().alpha(1f).setDuration(190).start();}
                 else body.setAlpha(1f);
             }
+            prefs.edit().putStringSet("expanded_settings",new java.util.LinkedHashSet<>(expandedSettings)).apply();
+            head.setContentDescription(title+(expandedSettings.contains(key)?", раскрыто":", свёрнуто"));
             head.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
         });
         addCard(wrapper);
