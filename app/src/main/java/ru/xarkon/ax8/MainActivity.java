@@ -920,8 +920,10 @@ public final class MainActivity extends Activity {
     }
     private void rowCard(String heading,String detail,String badge,int accent,Runnable click){
         LinearLayout card=Ui.card(this);
-        boolean stacked=badge!=null&&(getResources().getConfiguration().screenWidthDp<=360
-                ||getResources().getConfiguration().fontScale>=1.4f);
+        // Reserve room for the badge before Android measures the title. On narrow
+        // screens and enlarged system fonts, horizontal layout clips long labels.
+        boolean stacked=badge!=null&&(getResources().getConfiguration().screenWidthDp<=400
+                ||getResources().getConfiguration().fontScale>=1.3f);
         LinearLayout head=stacked?Ui.vertical(this):Ui.horizontal(this);
         LinearLayout left=Ui.vertical(this);
         left.addView(Ui.text(this,heading,15,Ui.TEXT,true));Ui.addSpace(left,this,5);
@@ -936,7 +938,17 @@ public final class MainActivity extends Activity {
                 head.addView(b,badgeParams);
             }else head.addView(b);
         }
-        card.addView(head);if(click!=null){card.setOnClickListener(v->click.run());Ui.animateTouch(card);}
+        card.addView(head);
+        if(click!=null){
+            // The entire row is one accessible action, not a collection of
+            // unrelated text and badge elements. Preserve readable labels.
+            card.setMinimumHeight(d(48));
+            card.setFocusable(true);
+            card.setContentDescription(heading+(detail==null||detail.isEmpty()?"":". "+detail)
+                +(badge==null||badge.isEmpty()?"":". "+badge));
+            card.setOnClickListener(v->click.run());
+            Ui.animateTouch(card);
+        }
         addCard(card);
     }
     private static double parse(Object raw){try{return Double.parseDouble(String.valueOf(raw).replace("%","").trim());}catch(Exception e){return Double.NaN;}}
