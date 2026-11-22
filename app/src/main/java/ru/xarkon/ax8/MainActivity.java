@@ -1372,19 +1372,29 @@ public final class MainActivity extends Activity {
                 boolean live=liveLimits.containsKey(mac);
                 Integer savedCap=limits.get(mac);
                 Integer cap=live?liveLimits.get(mac):savedCap;
-                LinearLayout row=Ui.horizontal(this);
-                row.setPadding(d(14),d(7),d(4),d(7));
+                boolean stackedRow=getResources().getConfiguration().screenWidthDp<=400
+                        ||getResources().getConfiguration().fontScale>=1.3f;
+                LinearLayout row=stackedRow?Ui.vertical(this):Ui.horizontal(this);
+                row.setMinimumHeight(d(48));
+                row.setPadding(d(14),d(8),d(10),d(8));
                 LinearLayout address=Ui.vertical(this);
                 address.addView(Ui.text(this,mac,12,Ui.TEXT,true));
+                String state="";
                 if(live){
-                    String state="● Подключён";
+                    state="● Подключён";
                     if(!Objects.equals(cap,savedCap))state+=" · сохранено "+limitName(savedCap);
                     address.addView(Ui.text(this,state,10,Ui.MUTED,false));
                 }
-                row.addView(address,new LinearLayout.LayoutParams(0,-2,1));
+                row.addView(address,stackedRow?new LinearLayout.LayoutParams(-1,-2)
+                        :new LinearLayout.LayoutParams(0,-2,1));
                 TextView speed=Ui.text(this,limitName(cap),13,cap==null?Ui.GREEN:Ui.RED,true);
-                speed.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);row.addView(speed);
+                speed.setGravity(stackedRow?Gravity.START|Gravity.CENTER_VERTICAL:Gravity.END|Gravity.CENTER_VERTICAL);
+                if(stackedRow)Ui.addSpace(row,this,5);
+                row.addView(speed);
                 row.setClickable(true);row.setFocusable(true);
+                row.setContentDescription("MAC "+mac+(live?", подключён":"")+
+                        (state.contains("сохранено")?", "+state.substring(state.indexOf("сохранено")):"")+
+                        ", лимит "+limitName(cap)+", изменить ограничение");
                 row.setOnClickListener(v->editRememberedLimit(mac));Ui.animateTouch(row);
                 target.addView(row);
             }
