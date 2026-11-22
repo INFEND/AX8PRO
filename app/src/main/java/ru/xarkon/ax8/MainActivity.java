@@ -3109,15 +3109,18 @@ public final class MainActivity extends Activity {
         try{
             diagnosticWorker.execute(()->{
                 RouterDiagnostics.Result result;
+                boolean collectionFailed=false;
                 try{
                     RouterClient isolated=new RouterClient(host,username,password);
                     result=RouterDiagnostics.collect(isolated,input,message->handler.post(()->{
                         if(!isFinishing()&&!isDestroyed()&&dialog.isShowing())stage.setText("◌  "+message);
                     }));
                 }catch(Exception e){
+                    collectionFailed=true;
                     result=new RouterDiagnostics.Result("Ошибка глубокой диагностики: "+
                         String.valueOf(e.getMessage()),new JSONObject());
                 }
+                final boolean failed=collectionFailed;
                 final String text=result.report;
                 handler.post(()->{
                     diagnosticBusy=false;
@@ -3129,8 +3132,10 @@ public final class MainActivity extends Activity {
                     shareReport.setEnabled(true);
                     shareReport.setAlpha(1f);
                     shareReport.setContentDescription("Поделиться готовым отчётом");
-                    stage.setText("✓  Проверка завершена · можно скопировать или отправить");
-                    stage.setTextColor(Ui.GREEN);
+                    stage.setText(failed
+                        ?"Не удалось завершить диагностику · сообщение можно скопировать или отправить"
+                        :"✓  Проверка завершена · можно скопировать или отправить");
+                    stage.setTextColor(failed?Ui.MUTED:Ui.GREEN);
                     report.setText(text);
                 });
             });
