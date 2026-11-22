@@ -2375,6 +2375,14 @@ public final class MainActivity extends Activity {
                 // A rapid close during the fade-in must not leave a transparent
                 // expanded section on the next tap.
                 body.setAlpha(1f);body.setVisibility(View.GONE);
+                // Collapsing a long group can move its header above the visible
+                // viewport when ScrollView clamps the old scroll position.
+                // Keep the tapped header reachable without resetting the page.
+                head.post(()->{
+                    if(tab==4&&head.isAttachedToWindow()&&scroll!=null)
+                        head.requestRectangleOnScreen(new android.graphics.Rect(
+                            0,0,head.getWidth(),head.getHeight()),false);
+                });
             }else{
                 expandedSettings.add(key);arrow.setText("⌃");body.removeAllViews();
                 populateSettings(body,populate);body.setVisibility(View.VISIBLE);
