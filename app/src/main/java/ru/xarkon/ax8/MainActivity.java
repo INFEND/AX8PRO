@@ -1079,13 +1079,25 @@ public final class MainActivity extends Activity {
         TextView t=Ui.text(this,value,size,color,bold);overviewValues.put(key,t);return t;
     }
     private LinearLayout signalRow(String metric,String value){
-        LinearLayout row=Ui.horizontal(this);
+        // Keep live radio readings readable on narrow screens and with large system fonts.
+        boolean stacked=getResources().getConfiguration().screenWidthDp<=400
+            || getResources().getConfiguration().fontScale>=1.3f;
+        LinearLayout row=stacked?Ui.vertical(this):Ui.horizontal(this);
         TextView name=Ui.text(this,metric,13,Ui.MUTED,true);
-        row.addView(name,new LinearLayout.LayoutParams(0,-2,1));
         TextView val=Ui.text(this,value,12,signalColorForMetric(metric),true);
-        val.setSingleLine(true);val.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        val.setGravity(Gravity.END);
-        row.addView(val,new LinearLayout.LayoutParams(0,-2,1));
+        val.setSingleLine(false);
+        val.setHorizontallyScrolling(false);
+        if(stacked){
+            row.addView(name);
+            val.setGravity(Gravity.START);
+            LinearLayout.LayoutParams valueParams=new LinearLayout.LayoutParams(-1,-2);
+            valueParams.topMargin=d(3);
+            row.addView(val,valueParams);
+        }else{
+            row.addView(name,new LinearLayout.LayoutParams(0,-2,1));
+            val.setGravity(Gravity.END);
+            row.addView(val,new LinearLayout.LayoutParams(0,-2,1));
+        }
         overviewSignalValues.put(metric,val);
         return row;
     }
