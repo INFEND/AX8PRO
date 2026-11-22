@@ -172,7 +172,7 @@ final class Ui {
         caption.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
         // Use the actual tab width, not a fixed 90dp cap: narrow screens and
         // large display fonts must wrap inside their own navigation cell.
-        caption.setWidth(ViewGroup.LayoutParams.MATCH_PARENT);
+        caption.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
         wrap.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         caption.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         l.addView(wrap,wrapParams);addSpace(l,c,4);l.addView(caption);
