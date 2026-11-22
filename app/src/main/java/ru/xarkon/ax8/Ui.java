@@ -117,7 +117,7 @@ final class Ui {
         // On narrow screens or with large accessibility fonts, give both fields
         // their full width instead of squeezing long Russian labels into columns.
         float systemScale=c.getResources().getConfiguration().fontScale*FONT_SCALE;
-        boolean stacked=c.getResources().getConfiguration().screenWidthDp<=360 || systemScale>=1.4f;
+        boolean stacked=c.getResources().getConfiguration().screenWidthDp<=400 || systemScale>=1.3f;
         if(stacked){
             row.setOrientation(LinearLayout.VERTICAL);
             a.setPadding(0,0,0,dp(c,4));
