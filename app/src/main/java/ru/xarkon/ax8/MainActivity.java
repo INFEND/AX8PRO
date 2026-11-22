@@ -2344,8 +2344,13 @@ public final class MainActivity extends Activity {
             @Override public void onInitializeAccessibilityNodeInfo(View host,android.view.accessibility.AccessibilityNodeInfo info){
                 super.onInitializeAccessibilityNodeInfo(host,info);
                 info.setClassName(android.widget.Button.class.getName());
+                boolean expanded=expandedSettings.contains(key);
                 info.setCheckable(true);
-                info.setChecked(expandedSettings.contains(key));
+                info.setChecked(expanded);
+                // Make the action explicit instead of announcing an unlabeled click.
+                info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK,
+                    expanded?"Свернуть раздел":"Раскрыть раздел"));
             }
         });
         TextView emblem=Ui.text(this,symbol,22,Ui.CYAN,true);
