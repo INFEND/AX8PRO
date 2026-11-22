@@ -2437,11 +2437,17 @@ public final class MainActivity extends Activity {
         currentRate.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         settingsValues.put("poll_selected",currentRate);
         Ui.addSpace(refresh,this,8);
+        final TextView modeLabel=Ui.text(this,initialAuto?"РЕЖИМ: АВТОМАТИЧЕСКИЙ":"РЕЖИМ: РУЧНОЙ",11,initialAuto?Ui.CYAN:Ui.MUTED,true);
+        modeLabel.setContentDescription(initialAuto?"Режим мониторинга: автоматический":"Режим мониторинга: ручной");
+        refresh.addView(modeLabel);Ui.addSpace(refresh,this,6);
         final TextView[] autoButton={null};
         autoButton[0]=Ui.button(this,initialAuto?"✓  Автоматически":"○  Автоматически",initialAuto?Ui.CYAN:Ui.CARD2,
             initialAuto?Ui.contrastOn(Ui.CYAN):Ui.TEXT,()->{
                 prefs.edit().putBoolean("refresh_auto",true).apply();
                 currentRate.setText(String.format(Locale.US,"%.1f с",autoPollMs/1000f));
+                modeLabel.setText("РЕЖИМ: АВТОМАТИЧЕСКИЙ");
+                modeLabel.setTextColor(Ui.CYAN);
+                modeLabel.setContentDescription("Режим мониторинга: автоматический");
                 autoButton[0].setText("✓  Автоматически");
                 autoButton[0].setTextColor(Ui.contrastOn(Ui.CYAN));
                 autoButton[0].setBackground(Ui.shape(this,Ui.CYAN,0,Math.max(4,Ui.CORNER-7)));
@@ -2478,6 +2484,9 @@ public final class MainActivity extends Activity {
                 int selected=(Math.max(0,Math.min(45,b.getProgress()))+5)*100;
                 prefs.edit().putBoolean("refresh_auto",false).putInt("refresh_ms",selected).apply();
                 currentRate.setText(String.format(Locale.US,"%.1f с",selected/1000f));
+                modeLabel.setText("РЕЖИМ: РУЧНОЙ");
+                modeLabel.setTextColor(Ui.MUTED);
+                modeLabel.setContentDescription("Режим мониторинга: ручной");
                 autoButton[0].setText("○  Автоматически");autoButton[0].setTextColor(Ui.TEXT);
                 autoButton[0].setBackground(Ui.shape(MainActivity.this,Ui.CARD2,0,Math.max(4,Ui.CORNER-7)));
                 handler.removeCallbacks(ticker);if(running)handler.post(ticker);
