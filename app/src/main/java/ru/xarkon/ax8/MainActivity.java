@@ -2349,14 +2349,15 @@ public final class MainActivity extends Activity {
             }
         });
         TextView emblem=Ui.text(this,symbol,22,Ui.CYAN,true);
-        emblem.setGravity(Gravity.CENTER);emblem.setMinWidth(d(39));head.addView(emblem);
+        emblem.setGravity(Gravity.CENTER);emblem.setMinWidth(d(39));emblem.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);head.addView(emblem);
         LinearLayout words=Ui.vertical(this);words.setPadding(d(9),0,d(5),0);
         words.addView(Ui.text(this,title,16,Ui.TEXT,true));Ui.addSpace(words,this,4);
         words.addView(Ui.text(this,hint,12,Ui.MUTED,false));
+        words.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         head.addView(words,new LinearLayout.LayoutParams(0,-2,1));
         TextView arrow=Ui.text(this,expandedSettings.contains(key)?"⌃":"⌄",24,Ui.CYAN,true);
-        arrow.setGravity(Gravity.CENTER);arrow.setMinWidth(d(30));head.addView(arrow);
-        head.setContentDescription(title+(expandedSettings.contains(key)?", раскрыто":", свёрнуто"));
+        arrow.setGravity(Gravity.CENTER);arrow.setMinWidth(d(30));arrow.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);head.addView(arrow);
+        head.setContentDescription(title+", "+hint+(expandedSettings.contains(key)?", раскрыто":", свёрнуто"));
         head.setFocusable(true);
         wrapper.addView(head);
         LinearLayout body=Ui.vertical(this);body.setPadding(0,d(12),0,0);
@@ -2377,7 +2378,7 @@ public final class MainActivity extends Activity {
                 else body.setAlpha(1f);
             }
             prefs.edit().putStringSet("expanded_settings",new java.util.LinkedHashSet<>(expandedSettings)).apply();
-            head.setContentDescription(title+(expandedSettings.contains(key)?", раскрыто":", свёрнуто"));
+            head.setContentDescription(title+", "+hint+(expandedSettings.contains(key)?", раскрыто":", свёрнуто"));
             // Notify TalkBack immediately when a settings group changes state.
             head.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
             head.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
