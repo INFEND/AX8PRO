@@ -2768,7 +2768,10 @@ public final class MainActivity extends Activity {
                 // A fixed 48 dp height clipped labels on accessibility font scales.
                 v.setMinHeight(d(48));v.setMinimumHeight(d(48));
                 v.setSingleLine(false);v.setMaxLines(2);
-                if(active){themeAnchorView=v;themeAnchorKey=key;}
+                if((pendingThemeAnchorKey!=null && pendingThemeAnchorKey.equals(key)) ||
+                        (pendingThemeAnchorKey==null && active)){
+                    themeAnchorView=v;themeAnchorKey=key;
+                }
                 LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,-2,1);
                 l.rightMargin=d(8);line.addView(v,l);
             }
