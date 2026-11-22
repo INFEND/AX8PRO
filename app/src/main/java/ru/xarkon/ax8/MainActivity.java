@@ -3062,6 +3062,11 @@ public final class MainActivity extends Activity {
         final String password=prefs.getString("password","admin");
         final LinearLayout panel=Ui.vertical(this);
         final TextView stage=Ui.text(this,"Подготовка отдельного безопасного опроса…",13,Ui.CYAN,true);
+        // Progress messages can be long at large font scales and on narrow screens.
+        stage.setSingleLine(false);
+        stage.setHorizontallyScrolling(false);
+        stage.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY);
+        stage.setPadding(Ui.dp(this,2),Ui.dp(this,4),Ui.dp(this,2),Ui.dp(this,4));
         panel.addView(stage);Ui.addSpace(panel,this,12);
         final TextView report=Ui.text(this,"Собираем подтверждённые данные WebUI. "+
             "Текущий опрос интерфейса не блокируется. Никакие настройки не меняются.",12,Ui.TEXT,false);
