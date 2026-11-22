@@ -1331,7 +1331,11 @@ public final class MainActivity extends Activity {
                                      Map<String,Integer> limits,Map<String,Integer> liveLimits,Set<String> expanded){
         boolean multiple=group.macs.size()>1;
         boolean open=multiple&&expanded.contains(group.key);
-        LinearLayout header=Ui.horizontal(this);
+        // Keep the saved-device name and its limit readable on narrow displays
+        // and with enlarged accessibility fonts.
+        boolean stackedHeader=getResources().getConfiguration().screenWidthDp<=400
+                ||getResources().getConfiguration().fontScale>=1.3f;
+        LinearLayout header=stackedHeader?Ui.vertical(this):Ui.horizontal(this);
         header.setBackground(Ui.shape(this,Ui.CARD2,0,Math.max(4,Ui.CORNER-7)));
         header.setMinimumHeight(d(48));header.setPadding(d(12),d(12),d(12),d(12));
         LinearLayout identity=Ui.vertical(this);
@@ -1340,15 +1344,21 @@ public final class MainActivity extends Activity {
             Ui.addSpace(identity,this,4);
             identity.addView(Ui.text(this,group.macs.size()+" MAC"+(group.live?" · текущий лимит":group.limit!=null&&!group.conflicting?" · сохранённый лимит":""),10,Ui.MUTED,false));
         }
-        header.addView(identity,new LinearLayout.LayoutParams(0,-2,1));
+        header.addView(identity,stackedHeader?new LinearLayout.LayoutParams(-1,-2)
+                :new LinearLayout.LayoutParams(0,-2,1));
         String caption=group.conflicting?"Разные лимиты":limitName(group.limit);
+        LinearLayout trailing=Ui.horizontal(this);
         TextView value=Ui.text(this,caption,14,group.conflicting?Ui.ORANGE:group.limit==null?Ui.GREEN:Ui.RED,true);
         value.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
-        value.setPadding(d(8),0,0,0);header.addView(value);
+        value.setPadding(stackedHeader?0:d(8),0,0,0);trailing.addView(value);
         if(multiple){
             TextView arrow=Ui.text(this,open?"⌃":"⌄",18,Ui.MUTED,true);
-            arrow.setPadding(d(10),0,0,0);header.addView(arrow);
+            arrow.setPadding(d(10),0,0,0);trailing.addView(arrow);
         }
+        if(stackedHeader){
+            Ui.addSpace(header,this,6);
+            header.addView(trailing);
+        }else header.addView(trailing);
         header.setClickable(true);header.setFocusable(true);
         header.setOnClickListener(v->{
             if(!multiple){editRememberedLimit(group.primary);return;}
