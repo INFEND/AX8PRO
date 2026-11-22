@@ -98,6 +98,9 @@ public final class MainActivity extends Activity {
     private android.content.SharedPreferences prefs;
     private LinearLayout root,content,bar,nav,header;
     private ScrollView scroll;
+    private View themeAnchorView;
+    private String themeAnchorKey,pendingThemeAnchorKey;
+    private int pendingThemeAnchorOffset;
     private TextView connectionLabel,workLabel;
     private JSONObject status;
     private final Map<String,TextView> overviewValues=new HashMap<>();
@@ -272,6 +275,15 @@ public final class MainActivity extends Activity {
     }
     private void applyAppearance(){
         int keep=tab;
+        // Anchor the selected theme control to its on-screen position across a rebuild.
+        // This avoids jumping to a different category when text/card heights change.
+        if(keep==TABS.length-1 && scroll!=null && themeAnchorView!=null){
+            int[] control=new int[2],viewport=new int[2];
+            themeAnchorView.getLocationOnScreen(control);
+            scroll.getLocationOnScreen(viewport);
+            pendingThemeAnchorOffset=control[1]-viewport[1];
+            pendingThemeAnchorKey=themeAnchorKey;
+        }
         int keepY=pendingScrollY>=0?pendingScrollY:((scroll==null)?0:scroll.getScrollY());
         // Appearance changes can alter card and text heights. Preserve the
         // relative reading position instead of restoring stale absolute pixels.
@@ -911,6 +923,15 @@ public final class MainActivity extends Activity {
                     ?Math.round(pendingCompactScrollFraction*maxY):y;
                 pendingCompactScrollFraction=-1f;
                 target.scrollTo(0,Math.max(0,Math.min(restoredY,maxY)));
+                if(expectedTab==TABS.length-1 && pendingThemeAnchorKey!=null && themeAnchorView!=null
+                        && pendingThemeAnchorKey.equals(themeAnchorKey)){
+                    int[] control=new int[2],viewport=new int[2];
+                    themeAnchorView.getLocationOnScreen(control);
+                    target.getLocationOnScreen(viewport);
+                    int delta=control[1]-viewport[1]-pendingThemeAnchorOffset;
+                    target.scrollTo(0,Math.max(0,Math.min(target.getScrollY()+delta,maxY)));
+                }
+                pendingThemeAnchorKey=null;
             });
         }
     }
@@ -2736,6 +2757,7 @@ public final class MainActivity extends Activity {
         LinearLayout theme=Ui.card(this);Ui.title(theme,this,"Персонализация","Тема, цвета, шрифт и форма интерфейса");
         Ui.addSpace(theme,this,15);
         LinearLayout themes=Ui.vertical(this);
+        themeAnchorView=null;themeAnchorKey=null;
         String[] keys={"dark","amoled","slate","light"};String[] labels={"Тёмная","AMOLED","Графит","Светлая"};
         for(int i=0;i<4;i+=2){LinearLayout line=Ui.horizontal(this);
             for(int j=i;j<i+2;j++){final String key=keys[j];boolean active=key.equals(prefs.getString("theme","dark"));
@@ -2746,6 +2768,7 @@ public final class MainActivity extends Activity {
                 // A fixed 48 dp height clipped labels on accessibility font scales.
                 v.setMinHeight(d(48));v.setMinimumHeight(d(48));
                 v.setSingleLine(false);v.setMaxLines(2);
+                if(active){themeAnchorView=v;themeAnchorKey=key;}
                 LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,-2,1);
                 l.rightMargin=d(8);line.addView(v,l);
             }
