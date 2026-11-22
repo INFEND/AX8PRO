@@ -3066,6 +3066,11 @@ public final class MainActivity extends Activity {
         final TextView report=Ui.text(this,"Собираем подтверждённые данные WebUI. "+
             "Текущий опрос интерфейса не блокируется. Никакие настройки не меняются.",12,Ui.TEXT,false);
         report.setTextIsSelectable(true);
+        // Long diagnostic values must wrap instead of clipping on narrow displays.
+        report.setHorizontallyScrolling(false);
+        report.setSingleLine(false);
+        report.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY);
+        stage.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         final String[] complete={null};
         final TextView copyReport=Ui.button(this,"▣  Скопировать отчёт",Ui.CARD2,Ui.TEXT,()->{
             if(complete[0]==null){toast("Отчёт ещё формируется");return;}
@@ -3076,6 +3081,7 @@ public final class MainActivity extends Activity {
                 toast("Отчёт скопирован");
             }
         });
+        copyReport.setMinHeight(Ui.dp(this,48));
         copyReport.setEnabled(false);
         copyReport.setAlpha(0.5f);
         copyReport.setContentDescription("Скопировать отчёт. Доступно после завершения диагностики");
@@ -3089,6 +3095,7 @@ public final class MainActivity extends Activity {
             intent.putExtra(Intent.EXTRA_TEXT,complete[0]);
             startActivity(Intent.createChooser(intent,"Экспорт диагностики AX8"));
         });
+        shareReport.setMinHeight(Ui.dp(this,48));
         shareReport.setEnabled(false);
         shareReport.setAlpha(0.5f);
         shareReport.setContentDescription("Поделиться отчётом. Доступно после завершения диагностики");
