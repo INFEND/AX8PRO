@@ -159,9 +159,13 @@ final class Ui {
             wrap.addView(badge,bp);
         }
         TextView caption=text(c,label,10,active?TEXT:MUTED,active);caption.setGravity(Gravity.CENTER);
-        // Keep long Russian tab labels inside their allocated width at large font scales.
-        // TalkBack still receives the complete label from the parent tab.
-        caption.setSingleLine(true);caption.setEllipsize(TextUtils.TruncateAt.END);
+        // Allow two lines for long Russian tab labels instead of truncating them.
+        // Reserve the same caption height across tabs to keep the navigation aligned.
+        // TalkBack receives the complete label from the parent tab.
+        caption.setSingleLine(false);
+        caption.setMaxLines(2);
+        caption.setMinHeight(dp(c,32));
+        caption.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
         caption.setMaxWidth(dp(c,90));
         wrap.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         caption.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
