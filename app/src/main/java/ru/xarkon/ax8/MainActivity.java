@@ -2378,6 +2378,8 @@ public final class MainActivity extends Activity {
             }
             prefs.edit().putStringSet("expanded_settings",new java.util.LinkedHashSet<>(expandedSettings)).apply();
             head.setContentDescription(title+(expandedSettings.contains(key)?", раскрыто":", свёрнуто"));
+            // Notify TalkBack immediately when a settings group changes state.
+            head.sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
             head.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
         });
         addCard(wrapper);
