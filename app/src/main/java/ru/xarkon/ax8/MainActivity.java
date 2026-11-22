@@ -3077,7 +3077,7 @@ public final class MainActivity extends Activity {
         // Progress messages can be long at large font scales and on narrow screens.
         stage.setSingleLine(false);
         stage.setHorizontallyScrolling(false);
-        stage.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY);
+        stage.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
         stage.setPadding(Ui.dp(this,2),Ui.dp(this,4),Ui.dp(this,2),Ui.dp(this,4));
         panel.addView(stage);Ui.addSpace(panel,this,12);
         final TextView report=Ui.text(this,"Собираем подтверждённые данные WebUI. "+
@@ -3086,7 +3086,7 @@ public final class MainActivity extends Activity {
         // Long diagnostic values must wrap instead of clipping on narrow displays.
         report.setHorizontallyScrolling(false);
         report.setSingleLine(false);
-        report.setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY);
+        report.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
         stage.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         final String[] complete={null};
         final TextView copyReport=Ui.button(this,"▣  Скопировать отчёт",Ui.CARD2,Ui.TEXT,()->{
