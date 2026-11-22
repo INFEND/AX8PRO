@@ -3137,6 +3137,7 @@ public final class MainActivity extends Activity {
         }catch(RejectedExecutionException e){
             diagnosticBusy=false;
             stage.setText("Не удалось запустить диагностику");
+            report.setText("Очередь диагностики сейчас недоступна. Закройте окно и повторите попытку позже.");
         }
     }
 
