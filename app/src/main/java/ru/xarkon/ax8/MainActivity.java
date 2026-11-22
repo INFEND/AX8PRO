@@ -2741,7 +2741,13 @@ public final class MainActivity extends Activity {
             for(int j=i;j<i+2;j++){final String key=keys[j];boolean active=key.equals(prefs.getString("theme","dark"));
                 TextView v=Ui.button(this,labels[j],active?Ui.CYAN:Ui.CARD2,active?Ui.contrastOn(Ui.CYAN):Ui.TEXT,()->{
                     prefs.edit().putString("theme",key).remove("background_color").remove("card_color").apply();applyAppearance();
-                });LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,d(48),1);l.rightMargin=d(8);line.addView(v,l);
+                });
+                // Allow two-line theme names at enlarged system font sizes.
+                // A fixed 48 dp height clipped labels on accessibility font scales.
+                v.setMinHeight(d(48));v.setMinimumHeight(d(48));
+                v.setSingleLine(false);v.setMaxLines(2);
+                LinearLayout.LayoutParams l=new LinearLayout.LayoutParams(0,-2,1);
+                l.rightMargin=d(8);line.addView(v,l);
             }
             themes.addView(line);Ui.addSpace(themes,this,8);
         }
