@@ -2762,6 +2762,8 @@ public final class MainActivity extends Activity {
         for(int i=0;i<4;i+=2){LinearLayout line=Ui.horizontal(this);
             for(int j=i;j<i+2;j++){final String key=keys[j];boolean active=key.equals(prefs.getString("theme","dark"));
                 TextView v=Ui.button(this,labels[j],active?Ui.CYAN:Ui.CARD2,active?Ui.contrastOn(Ui.CYAN):Ui.TEXT,()->{
+                    // Selecting the current theme must not rebuild the screen or reset custom colors.
+                    if(key.equals(prefs.getString("theme","dark")))return;
                     prefs.edit().putString("theme",key).remove("background_color").remove("card_color").apply();applyAppearance();
                 });
                 // Allow two-line theme names at enlarged system font sizes.
