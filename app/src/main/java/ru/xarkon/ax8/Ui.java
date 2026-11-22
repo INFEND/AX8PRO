@@ -170,7 +170,9 @@ final class Ui {
         int twoLineHeight=(fm.descent-fm.ascent)*2+dp(c,4);
         caption.setMinHeight(Math.max(dp(c,32),twoLineHeight));
         caption.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
-        caption.setMaxWidth(dp(c,90));
+        // Use the actual tab width, not a fixed 90dp cap: narrow screens and
+        // large display fonts must wrap inside their own navigation cell.
+        caption.setWidth(ViewGroup.LayoutParams.MATCH_PARENT);
         wrap.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         caption.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         l.addView(wrap,wrapParams);addSpace(l,c,4);l.addView(caption);
