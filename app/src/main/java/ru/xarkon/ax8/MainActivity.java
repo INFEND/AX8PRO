@@ -3067,7 +3067,7 @@ public final class MainActivity extends Activity {
             "Текущий опрос интерфейса не блокируется. Никакие настройки не меняются.",12,Ui.TEXT,false);
         report.setTextIsSelectable(true);
         final String[] complete={null};
-        panel.addView(Ui.button(this,"▣  Скопировать отчёт",Ui.CARD2,Ui.TEXT,()->{
+        final TextView copyReport=Ui.button(this,"▣  Скопировать отчёт",Ui.CARD2,Ui.TEXT,()->{
             if(complete[0]==null){toast("Отчёт ещё формируется");return;}
             android.content.ClipboardManager manager=(android.content.ClipboardManager)
                 getSystemService(CLIPBOARD_SERVICE);
@@ -3075,16 +3075,24 @@ public final class MainActivity extends Activity {
                 manager.setPrimaryClip(ClipData.newPlainText("AX8 diagnostics",complete[0]));
                 toast("Отчёт скопирован");
             }
-        }));
+        });
+        copyReport.setEnabled(false);
+        copyReport.setAlpha(0.5f);
+        copyReport.setContentDescription("Скопировать отчёт. Доступно после завершения диагностики");
+        panel.addView(copyReport);
         Ui.addSpace(panel,this,8);
-        panel.addView(Ui.button(this,"⇧  Поделиться отчётом",Ui.CARD2,Ui.CYAN,()->{
+        final TextView shareReport=Ui.button(this,"⇧  Поделиться отчётом",Ui.CARD2,Ui.CYAN,()->{
             if(complete[0]==null){toast("Отчёт ещё формируется");return;}
             Intent intent=new Intent(Intent.ACTION_SEND);
             intent.setType("text/plain");
             intent.putExtra(Intent.EXTRA_SUBJECT,"AX8 PRO · глубокая диагностика");
             intent.putExtra(Intent.EXTRA_TEXT,complete[0]);
             startActivity(Intent.createChooser(intent,"Экспорт диагностики AX8"));
-        }));
+        });
+        shareReport.setEnabled(false);
+        shareReport.setAlpha(0.5f);
+        shareReport.setContentDescription("Поделиться отчётом. Доступно после завершения диагностики");
+        panel.addView(shareReport);
         Ui.addSpace(panel,this,11);
         panel.addView(Ui.text(this,"Отчёт может содержать IP-адреса и сведения о сети. Проверьте их перед отправкой.",11,Ui.MUTED,false));
         Ui.addSpace(panel,this,10);
@@ -3108,6 +3116,12 @@ public final class MainActivity extends Activity {
                     diagnosticBusy=false;
                     if(isFinishing()||isDestroyed()||!dialog.isShowing())return;
                     complete[0]=text;
+                    copyReport.setEnabled(true);
+                    copyReport.setAlpha(1f);
+                    copyReport.setContentDescription("Скопировать готовый отчёт");
+                    shareReport.setEnabled(true);
+                    shareReport.setAlpha(1f);
+                    shareReport.setContentDescription("Поделиться готовым отчётом");
                     stage.setText("✓  Проверка завершена · можно скопировать или отправить");
                     stage.setTextColor(Ui.GREEN);
                     report.setText(text);
