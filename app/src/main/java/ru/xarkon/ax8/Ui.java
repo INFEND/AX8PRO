@@ -163,8 +163,12 @@ final class Ui {
         // Reserve the same caption height across tabs to keep the navigation aligned.
         // TalkBack receives the complete label from the parent tab.
         caption.setSingleLine(false);
+        // At 150–200% system font size, two lines need more than 32dp.
+        // Grow the caption slot with actual font metrics to avoid clipping.
         caption.setMaxLines(2);
-        caption.setMinHeight(dp(c,32));
+        android.graphics.Paint.FontMetricsInt fm=caption.getPaint().getFontMetricsInt();
+        int twoLineHeight=(fm.descent-fm.ascent)*2+dp(c,4);
+        caption.setMinHeight(Math.max(dp(c,32),twoLineHeight));
         caption.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
         caption.setMaxWidth(dp(c,90));
         wrap.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
