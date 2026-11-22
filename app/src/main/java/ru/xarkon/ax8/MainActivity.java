@@ -2454,6 +2454,8 @@ public final class MainActivity extends Activity {
         refresh.addView(autoRow);Ui.addSpace(refresh,this,12);
         refresh.addView(Ui.text(this,"РУЧНОЙ ИНТЕРВАЛ",11,Ui.MUTED,true));Ui.addSpace(refresh,this,4);
         SeekBar poll=new SeekBar(this);poll.setMax(45);poll.setProgress((manual-500)/100);
+        poll.setContentDescription("Ручной интервал опроса, от 0,5 до 5 секунд");
+        if(Build.VERSION.SDK_INT>=30)poll.setStateDescription(String.format(Locale.US,"%.1f секунды",manual/1000f));
         poll.setProgressTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));
         poll.setThumbTintList(android.content.res.ColorStateList.valueOf(Ui.CYAN));
         refresh.addView(poll);
@@ -2467,7 +2469,10 @@ public final class MainActivity extends Activity {
         poll.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onStartTrackingTouch(SeekBar b){}
             public void onProgressChanged(SeekBar b,int value,boolean fromUser){
-                if(fromUser)currentRate.setText(String.format(Locale.US,"%.1f с",(value+5)/10f));
+                if(fromUser){
+                    currentRate.setText(String.format(Locale.US,"%.1f с",(value+5)/10f));
+                    if(Build.VERSION.SDK_INT>=30)b.setStateDescription(String.format(Locale.US,"%.1f секунды",(value+5)/10f));
+                }
             }
             public void onStopTrackingTouch(SeekBar b){
                 int selected=(Math.max(0,Math.min(45,b.getProgress()))+5)*100;
