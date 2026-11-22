@@ -2793,8 +2793,12 @@ public final class MainActivity extends Activity {
                 boolean enabled=!prefs.getBoolean("battery_level_icon",true);
                 prefs.edit().putBoolean("battery_level_icon",enabled).apply();
                 batteryToggle[0].setText("▣  Значок уровня батареи · "+(enabled?"ВКЛ":"ВЫКЛ"));
+                batteryToggle[0].setContentDescription("Значок уровня батареи");
+                if(Build.VERSION.SDK_INT>=30)batteryToggle[0].setStateDescription(enabled?"Включено":"Выключено");
                 // No screen rebuild: keep the current personalization scroll position.
             });
+        batteryToggle[0].setContentDescription("Значок уровня батареи");
+        if(Build.VERSION.SDK_INT>=30)batteryToggle[0].setStateDescription(showBattery?"Включено":"Выключено");
         theme.addView(batteryToggle[0]);
         Ui.addSpace(theme,this,5);
         theme.addView(Ui.text(this,"Молния появляется только при подтверждении зарядки роутером, независимо от значка уровня.",
