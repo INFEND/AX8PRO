@@ -121,6 +121,8 @@ public final class MainActivity extends Activity {
     private String sectionError="";
     private boolean knownClientsExpanded=false,savedLimitsExpanded=false;
     private final Set<String> expandedRememberedGroups=new HashSet<>();
+    // Selection is transient and refers to a complete remembered-name group, not a single IP.
+    private final Set<String> selectedClientGroups=new LinkedHashSet<>();
     private final Set<String> expandedRuleGroups=new HashSet<>();
     private List<RouterClient.Device> devices=new ArrayList<>();
     private List<RouterClient.Sms> messages=new ArrayList<>();
@@ -370,6 +372,7 @@ public final class MainActivity extends Activity {
         // Discard it on navigation so a pending restore cannot move another tab.
         pendingCompactScrollFraction=-1f;
         pendingThemeAnchorKey=null;
+        selectedClientGroups.clear();
         tab=index;pendingScrollY=tabScrollY[index];rebuildNav();draw(true);
         // Cancel the previous tab transition before starting another one. Rapid taps
         // must not let an older animation alter the newly selected page.
@@ -1283,6 +1286,7 @@ public final class MainActivity extends Activity {
             summary.addView(qosStatusLive);
         }
         addCard(summary);
+        addClientSelectionBar(content);
         if(devices.isEmpty())rowCard(clientsAt>0?"Устройства не обнаружены":"Список клиентов ещё не загружен",
             clientsAt>0?"Подключитесь к AX8 и обновите список":"Ожидание ответа AX8. При необходимости повторите обновление",null,Ui.MUTED,null);
         if(clientListStale()){
@@ -1294,7 +1298,11 @@ public final class MainActivity extends Activity {
             DeviceTrafficMonitor.Rate rate=displayedRate(dev);
             LinearLayout card=Ui.card(this);
             LinearLayout head=Ui.horizontal(this);
-            TextView name=Ui.text(this,friendlyName(dev),16,Ui.TEXT,true);
+            String key=clientGroupKey(dev);
+            boolean picking=!selectedClientGroups.isEmpty();
+            boolean chosen=selectedClientGroups.contains(key);
+            if(picking&&chosen)card.setBackground(Ui.shape(this,Ui.CARD2,Ui.CYAN,Ui.CORNER));
+            TextView name=Ui.text(this,(picking?(chosen?"☑  ":"☐  "):"")+friendlyName(dev),16,Ui.TEXT,true);
             head.addView(name,new LinearLayout.LayoutParams(0,-2,1));
             TextView badge=Ui.chip(this,deny?"ЗАБЛОКИРОВАН":"ДЕТАЛИ",deny?Ui.RED:Ui.CYAN);
             LinearLayout.LayoutParams bp=Ui.lp(this,-2,-2);bp.leftMargin=d(8);head.addView(badge,bp);
@@ -1306,7 +1314,10 @@ public final class MainActivity extends Activity {
                 (rate.dl>limit*1000d*1.30||rate.ul>limit*1000d*1.30);
             card.addView(strongMetric("◈","Лимит",limitName(limit)+(overspeed?" · ↑!":""),
                 limit==null?Ui.GREEN:Ui.RED,cap));
-            card.setOnClickListener(v->showDevice(dev));Ui.animateTouch(card);addCard(card);
+            card.setOnClickListener(v->{if(!selectedClientGroups.isEmpty())toggleClientSelection(key);else showDevice(dev);});
+            card.setOnLongClickListener(v->{toggleClientSelection(key);return true;});
+            card.setContentDescription(friendlyName(dev)+(picking?(chosen?", выбрано":", не выбрано"):", удерживайте для выбора"));
+            Ui.animateTouch(card);addCard(card);
             clientDlValues.put(dev.mac,down[0]);clientUlValues.put(dev.mac,up[0]);clientLimitValues.put(dev.mac,cap[0]);
         }
         showRememberedClients();
@@ -1329,7 +1340,8 @@ public final class MainActivity extends Activity {
                 .append(':').append(savedLimitDeviceName(live.getKey()));
         return signature.toString();
     }
-    private void showRememberedClients(){
+    /** MACs are remembered by alias, cached hostname, QoS and the router blacklist. */
+    private TreeSet<String> rememberedMacs(boolean includeLive){
         TreeSet<String> known=new TreeSet<>();
         for(String key:prefs.getAll().keySet()){
             String mac="";
@@ -1348,7 +1360,61 @@ public final class MainActivity extends Activity {
             String normalized=RouterClient.normalizeMac(mac);
             if(!normalized.isEmpty())known.add(normalized);
         }
-        for(RouterClient.Device active:devices)if(active!=null)known.remove(RouterClient.normalizeMac(active.mac));
+        for(RouterClient.Device active:devices)if(active!=null){
+            String mac=RouterClient.normalizeMac(active.mac);
+            if(!mac.isEmpty()){if(includeLive)known.add(mac);else known.remove(mac);}
+        }
+        return known;
+    }
+    private List<SavedClientGroups.Group> allClientGroups(){
+        return SavedClientGroups.build(rememberedMacs(true),this::savedLimitDeviceName,
+            qos.limits(),qos::limitRevision,activeGroupLimits());
+    }
+    private String clientGroupKey(RouterClient.Device dev){
+        return SavedClientGroups.key(friendlyName(dev),RouterClient.normalizeMac(dev.mac));
+    }
+    private SavedClientGroups.Group groupForMac(String mac){
+        String normalized=RouterClient.normalizeMac(mac);
+        for(SavedClientGroups.Group group:allClientGroups())if(group.macs.contains(normalized))return group;
+        return null;
+    }
+    private void toggleClientSelection(String key){
+        if(key==null||key.isEmpty())return;
+        if(!selectedClientGroups.add(key))selectedClientGroups.remove(key);
+        draw(true);
+    }
+    private void clearClientSelection(){selectedClientGroups.clear();draw(true);}
+    private void addClientSelectionBar(LinearLayout target){
+        if(selectedClientGroups.isEmpty())return;
+        LinearLayout bar=Ui.card(this);
+        bar.setBackground(Ui.shape(this,Ui.CARD2,Ui.CYAN,Math.max(6,Ui.CORNER-5)));
+        bar.addView(Ui.text(this,"☑  Выбрано устройств: "+selectedClientGroups.size(),14,Ui.CYAN,true));
+        Ui.addSpace(bar,this,8);
+        bar.addView(Ui.button(this,"⊘  Заблокировать выбранные",0xFF442637,Ui.RED,this::blockSelectedClients));
+        Ui.addSpace(bar,this,7);
+        bar.addView(Ui.button(this,"✕  Снять выделение",Ui.CARD,Ui.TEXT,this::clearClientSelection));
+        if(target==content)addCard(bar);else{target.addView(bar);Ui.addSpace(target,this,7);}
+    }
+    private void blockSelectedClients(){
+        if(selectedClientGroups.isEmpty())return;
+        List<SavedClientGroups.Group> all=allClientGroups();
+        LinkedHashSet<String> addresses=new LinkedHashSet<>();
+        List<String> selectedNames=new ArrayList<>();
+        for(String selectedKey:selectedClientGroups){
+            SavedClientGroups.Group found=null;
+            for(SavedClientGroups.Group group:all)if(group.key.equals(selectedKey)){found=group;break;}
+            if(found==null){
+                alert("Выделение устарело","Состав устройств изменился. Снимите выделение и выберите их повторно.");
+                return;
+            }
+            selectedNames.add(found.name);
+            addresses.addAll(found.macs);
+        }
+        String label=selectedNames.size()+" устройств: "+String.join(", ",selectedNames);
+        changeMacBlocks(label,addresses,true,true);
+    }
+    private void showRememberedClients(){
+        TreeSet<String> known=rememberedMacs(false);
         if(known.isEmpty())return;
         Map<String,Integer> limits=qos.limits();
         Map<String,Integer> liveLimits=activeGroupLimits();
@@ -1359,8 +1425,9 @@ public final class MainActivity extends Activity {
                 if(!knownClientsExpanded)expandedRememberedGroups.clear();draw(true);}));
         if(knownClientsExpanded){
             Ui.addSpace(saved,this,9);
-            saved.addView(Ui.text(this,"Лимиты скорости сохраняются отдельно для каждого MAC. Кнопка блокировки применяет правило доступа сразу ко всем MAC с этим именем.",12,Ui.MUTED,false));
+            saved.addView(Ui.text(this,"Нажмите на устройство для подробностей и блокировки всех его MAC. Удерживайте для выбора нескольких; стрелка раскрывает отдельные MAC и лимиты.",12,Ui.MUTED,false));
             Ui.addSpace(saved,this,9);
+            addClientSelectionBar(saved);
             for(SavedClientGroups.Group group:groups)
                 addSavedClientGroup(saved,group,limits,liveLimits,expandedRememberedGroups);
         }
@@ -1380,10 +1447,11 @@ public final class MainActivity extends Activity {
         boolean stackedHeader=getResources().getConfiguration().screenWidthDp<=400
                 ||getResources().getConfiguration().fontScale>=1.3f;
         LinearLayout header=stackedHeader?Ui.vertical(this):Ui.horizontal(this);
-        header.setBackground(Ui.shape(this,Ui.CARD2,0,Math.max(4,Ui.CORNER-7)));
+        boolean chosen=selectedClientGroups.contains(group.key);
+        header.setBackground(Ui.shape(this,Ui.CARD2,chosen?Ui.CYAN:0,Math.max(4,Ui.CORNER-7)));
         header.setMinimumHeight(d(48));header.setPadding(d(12),d(12),d(12),d(12));
         LinearLayout identity=Ui.vertical(this);
-        identity.addView(Ui.text(this,group.name,14,Ui.TEXT,true));
+        identity.addView(Ui.text(this,(selectedClientGroups.isEmpty()?"":(chosen?"☑  ":"☐  "))+group.name,14,Ui.TEXT,true));
         if(multiple){
             Ui.addSpace(identity,this,4);
             identity.addView(Ui.text(this,group.macs.size()+" MAC"+(group.live?" · текущий лимит":group.limit!=null&&!group.conflicting?" · сохранённый лимит":""),10,Ui.MUTED,false));
@@ -1396,8 +1464,14 @@ public final class MainActivity extends Activity {
         value.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         value.setPadding(stackedHeader?0:d(8),0,0,0);trailing.addView(value);
         if(multiple){
-            TextView arrow=Ui.text(this,open?"⌃":"⌄",18,Ui.MUTED,true);
-            arrow.setPadding(d(10),0,0,0);trailing.addView(arrow);
+            TextView arrow=Ui.text(this,open?"⌃":"⌄",18,Ui.CYAN,true);
+            arrow.setPadding(d(10),d(7),d(4),d(7));
+            arrow.setOnClickListener(v->{
+                if(!expanded.add(group.key))expanded.remove(group.key);
+                draw(true);
+            });
+            arrow.setContentDescription(open?"Скрыть MAC-адреса":"Показать MAC-адреса");
+            trailing.addView(arrow);
         }
         if(stackedHeader){
             Ui.addSpace(header,this,6);
@@ -1405,24 +1479,13 @@ public final class MainActivity extends Activity {
         }else header.addView(trailing);
         header.setClickable(true);header.setFocusable(true);
         header.setOnClickListener(v->{
-            if(!multiple){editRememberedLimit(group.primary);return;}
-            if(!expanded.add(group.key))expanded.remove(group.key);
-            draw(true);
+            if(!selectedClientGroups.isEmpty())toggleClientSelection(group.key);
+            else showSavedClientGroup(group);
         });
-        header.setContentDescription(group.name+", "+caption+(multiple?", "+(open?"свернуть":"раскрыть")+" MAC-адреса":""));
+        header.setOnLongClickListener(v->{toggleClientSelection(group.key);return true;});
+        header.setContentDescription(group.name+", "+caption+
+            (chosen?", выбрано":", удерживайте для множественного выбора"));
         Ui.animateTouch(header);target.addView(header);Ui.addSpace(target,this,5);
-
-        int blockedCount=0;
-        if(blocked!=null)for(String mac:group.macs)if(blocked.black.contains(mac))blockedCount++;
-        boolean allBlocked=blocked!=null&&blockedCount==group.macs.size();
-        String actionLabel=allBlocked?"✓  Разблокировать":"⊘  Заблокировать";
-        if(group.macs.size()>1)actionLabel+=" · "+group.macs.size()+" MAC";
-        TextView accessButton=Ui.button(this,actionLabel,allBlocked?Ui.CARD2:0xFF442637,
-            allBlocked?Ui.GREEN:Ui.RED,()->changeSavedGroupBlock(group,!allBlocked));
-        accessButton.setContentDescription((allBlocked?"Разблокировать":"Заблокировать")+
-            " все MAC-адреса устройства "+group.name+", количество "+group.macs.size());
-        target.addView(accessButton,new LinearLayout.LayoutParams(-1,-2));
-        Ui.addSpace(target,this,7);
         if(open){
             for(String mac:group.macs){
                 boolean live=liveLimits.containsKey(mac);
@@ -1457,33 +1520,74 @@ public final class MainActivity extends Activity {
             Ui.addSpace(target,this,8);
         }
     }
-    /** Apply ACL to every MAC currently associated with this remembered display name. */
+    /** Display the access action inside a device sheet, never below each list row. */
+    private void showSavedClientGroup(SavedClientGroups.Group group){
+        LinearLayout body=Ui.vertical(this);
+        body.addView(Ui.text(this,group.macs.size()+" сохранённых MAC-адресов",13,Ui.MUTED,true));
+        Ui.addSpace(body,this,10);
+        final Dialog[] sheet={null};
+        for(String mac:group.macs){
+            LinearLayout row=Ui.horizontal(this);
+            TextView name=Ui.text(this,mac,12,Ui.TEXT,true);
+            row.addView(name,new LinearLayout.LayoutParams(0,-2,1));
+            TextView limit=Ui.button(this,"◉  "+limitName(qos.effectiveLimit(mac)),Ui.CARD2,Ui.CYAN,()->{
+                sheet[0].dismiss();editRememberedLimit(mac);
+            });
+            LinearLayout.LayoutParams lp=Ui.lp(this,-2,-2);lp.leftMargin=d(8);
+            row.addView(limit,lp);
+            body.addView(row);Ui.addSpace(body,this,7);
+        }
+        Ui.addSpace(body,this,8);
+        addGroupAccessButton(body,group,()->sheet[0].dismiss());
+        sheet[0]=Ui.sheet(this,group.name,"Подробности сохранённого устройства",body);
+    }
+    private boolean groupFullyBlocked(SavedClientGroups.Group group){
+        if(blocked==null||group.macs.isEmpty())return false;
+        for(String mac:group.macs)if(!blocked.black.contains(mac))return false;
+        return true;
+    }
+    private void addGroupAccessButton(LinearLayout body,SavedClientGroups.Group group,Runnable before){
+        boolean allBlocked=groupFullyBlocked(group);
+        String label=allBlocked?"✓  Разблокировать":"⊘  Заблокировать";
+        if(group.macs.size()>1)label+=" все "+group.macs.size()+" MAC";
+        body.addView(Ui.button(this,label,allBlocked?Ui.CARD2:0xFF442637,
+            allBlocked?Ui.GREEN:Ui.RED,()->{
+                if(before!=null)before.run();
+                changeSavedGroupBlock(group,!allBlocked);
+            }));
+    }
     private void changeSavedGroupBlock(SavedClientGroups.Group group,boolean block){
+        changeMacBlocks("устройство «"+group.name+"»",group.macs,block,false);
+    }
+    /** One verified router write for all selected devices and their remembered MACs. */
+    private void changeMacBlocks(String description,Collection<String> members,boolean block,boolean clearSelection){
         if(blocked==null){
             toast("Список блокировок ещё загружается. Обновите данные AX8.");
             refresh(true);return;
         }
         LinkedHashSet<String> distinct=new LinkedHashSet<>();
-        for(String mac:group.macs){
+        for(String mac:members){
             String normalized=RouterClient.normalizeMac(mac);
             if(!normalized.isEmpty())distinct.add(normalized);
         }
         if(distinct.isEmpty()){toast("У устройства нет корректных MAC-адресов");return;}
         OwnerIdentity.Result identity=OwnerIdentity.resolve(this,devices,blocked,ownerMac);
         final String protectedMac=identity.resolved()?identity.mac:ownerMac;
-        if(block&&distinct.contains(RouterClient.normalizeMac(protectedMac))){
-            alert("Управляющее устройство","Нельзя заблокировать группу, содержащую MAC телефона, управляющего AX8.");
+        String fromRouter=RouterClient.normalizeMac(blocked.userMac);
+        if(block&&(distinct.contains(RouterClient.normalizeMac(protectedMac))||distinct.contains(fromRouter))){
+            alert("Управляющее устройство","Нельзя заблокировать MAC телефона, управляющего AX8.");
             return;
         }
-        final ArrayList<String> groupMacs=new ArrayList<>(distinct);
+        final ArrayList<String> macs=new ArrayList<>(distinct);
         String verb=block?"Заблокировать":"Разблокировать";
-        String message=verb+" устройство «"+group.name+"» по всем "+groupMacs.size()+
-            " сохранённым MAC-адресам?\n\n"+String.join("\n",groupMacs)+
-            "\n\nДругие записи чёрного списка останутся без изменений.";
+        String message=verb+" "+description+" по "+macs.size()+" MAC-адресам?\n\n"+
+            String.join("\n",macs)+"\n\nДругие записи чёрного списка останутся без изменений.";
         if(block&&!identity.resolved())
-            message+="\n\nВнимание: управляющий телефон не удалось надёжно определить. Проверьте список MAC, чтобы не потерять доступ к AX8.";
-        confirm("Контроль доступа",message,
-            ()->action("Список доступа",progress->api.setBlockedGroup(groupMacs,block,protectedMac)));
+            message+="\n\nВнимание: управляющий телефон не удалось надёжно определить. Проверьте MAC-адреса перед подтверждением.";
+        confirm("Контроль доступа",message,()->action("Список доступа",p->{
+            api.setBlockedGroup(macs,block,protectedMac);
+            if(clearSelection)handler.post(()->{selectedClientGroups.clear();draw(true);});
+        }));
     }
     private static String humanRate(double bps){
         if(Double.isNaN(bps))return "—";
@@ -1497,6 +1601,7 @@ public final class MainActivity extends Activity {
     private void showDevice(RouterClient.Device dev){
         LinearLayout body=Ui.vertical(this);
         String name=friendlyName(dev);
+        SavedClientGroups.Group matchingGroup=groupForMac(dev.mac);
         boolean isBlocked=blocked!=null&&blocked.black.contains(dev.mac);
         TextView state=Ui.chip(this,isBlocked?"● ЗАБЛОКИРОВАН":"● ПОДКЛЮЧЕНО",isBlocked?Ui.RED:Ui.GREEN);
         body.addView(state);Ui.addSpace(body,this,12);
@@ -1536,12 +1641,18 @@ public final class MainActivity extends Activity {
         pair.addView(rename,new LinearLayout.LayoutParams(0,d(46),1));
         LinearLayout.LayoutParams pr=new LinearLayout.LayoutParams(0,d(46),1);pr.leftMargin=d(8);pair.addView(copy,pr);
         body.addView(pair);Ui.addSpace(body,this,9);
-        body.addView(Ui.button(this,isBlocked?"✓  Разблокировать":"⊘  Заблокировать",
-            isBlocked?0xFF173A39:0xFF442637,isBlocked?Ui.GREEN:Ui.RED,()->{
-                sheet[0].dismiss();confirm("Контроль доступа",(isBlocked?"Разблокировать ":"Заблокировать ")+name+"?",
-                    ()->action("Список доступа",p->api.setBlocked(dev.mac,!isBlocked)));
-            }));
-        Ui.addSpace(body,this,9);
+        if(matchingGroup!=null){
+            addGroupAccessButton(body,matchingGroup,()->sheet[0].dismiss());
+            Ui.addSpace(body,this,9);
+        }
+        if(matchingGroup==null||matchingGroup.macs.size()>1){
+            body.addView(Ui.button(this,isBlocked?"✓  Разблокировать этот MAC":"⊘  Заблокировать этот MAC",
+                isBlocked?Ui.CARD2:0xFF442637,isBlocked?Ui.GREEN:Ui.RED,()->{
+                    sheet[0].dismiss();
+                    changeMacBlocks("MAC "+dev.mac,Collections.singletonList(dev.mac),!isBlocked,false);
+                }));
+            Ui.addSpace(body,this,9);
+        }
         body.addView(Ui.button(this,"↯  Отключить на 10 секунд",Ui.CARD2,Ui.ORANGE,()->{
             sheet[0].dismiss();confirm("Временно отключить клиента",
                 "MAC будет временно добавлен в чёрный список на 10 секунд и затем восстановлен. При сбое проверьте blacklist.",
