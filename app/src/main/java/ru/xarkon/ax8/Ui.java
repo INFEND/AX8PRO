@@ -139,6 +139,15 @@ final class Ui {
         LinearLayout l=vertical(c);l.setGravity(Gravity.CENTER);
         l.setPadding(dp(c,2),dp(c,10),dp(c,2),dp(c,10));
         l.setClickable(!active);l.setFocusable(true);l.setSelected(active);
+        // Expose the navigation role and selected state to accessibility services.
+        l.setAccessibilityDelegate(new View.AccessibilityDelegate(){
+            @Override public void onInitializeAccessibilityNodeInfo(View host,android.view.accessibility.AccessibilityNodeInfo info){
+                super.onInitializeAccessibilityNodeInfo(host,info);
+                info.setClassName(android.widget.Button.class.getName());
+                info.setSelected(active);
+                if(active)info.setClickable(false);
+            }
+        });
         // Expose the tab as one accessible target, not separate icon, label and badge.
         l.setContentDescription(label+(badgeCount>0?", непрочитанных: "+badgeCount:""));
         if(active)l.setBackground(shape(c,CARD2,0,Math.max(4,CORNER-6)));
