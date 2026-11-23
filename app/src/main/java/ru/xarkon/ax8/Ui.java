@@ -237,7 +237,10 @@ final class Ui {
                     super.onMeasure(ws,MeasureSpec.makeMeasureSpec(limit,MeasureSpec.AT_MOST));
                 }
             };
-            sc.setFillViewport(false);sc.setVerticalScrollBarEnabled(false);
+            sc.setFillViewport(false);
+            // Make overflowing form fields discoverable when text scaling or the keyboard reduces space.
+            sc.setVerticalScrollBarEnabled(true);
+            sc.setScrollbarFadingEnabled(false);
             sc.addView(body);
             panel.addView(sc,new LinearLayout.LayoutParams(-1,-2));
         }
@@ -311,7 +314,10 @@ final class Ui {
                 super.onMeasure(ws,MeasureSpec.makeMeasureSpec(Math.min(maxContent,available),MeasureSpec.AT_MOST));
             }
         };
-        scroller.setFillViewport(false);scroller.setVerticalScrollBarEnabled(false);
+        scroller.setFillViewport(false);
+        // Keep the scroll affordance visible in long bottom sheets and with the IME open.
+        scroller.setVerticalScrollBarEnabled(true);
+        scroller.setScrollbarFadingEnabled(false);
         scroller.setClipToPadding(false);scroller.addView(content);
         panel.addView(scroller,new LinearLayout.LayoutParams(-1,-2));
         addSpace(panel,activity,12);
