@@ -121,8 +121,8 @@ final class Ui {
         if(stacked){
             row.setOrientation(LinearLayout.VERTICAL);
             a.setPadding(0,0,0,dp(c,4));
-            b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
-            b.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+            b.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+            b.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
             row.addView(a,new LinearLayout.LayoutParams(-1,-2));
             row.addView(b,new LinearLayout.LayoutParams(-1,-2));
         }else{
