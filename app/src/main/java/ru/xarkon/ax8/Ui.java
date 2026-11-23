@@ -318,7 +318,9 @@ final class Ui {
         dialog.setContentView(panel);
         android.view.Window win=dialog.getWindow();
         if(win!=null){win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));win.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            win.setDimAmount(.68f);win.setGravity(Gravity.BOTTOM);}
+            win.setDimAmount(.68f);win.setGravity(Gravity.BOTTOM);
+            // Keep bottom-sheet inputs and the dismiss action visible when the keyboard opens.
+            win.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);}
         dialog.show();
         win=dialog.getWindow();if(win!=null){
             WindowManager.LayoutParams attr=win.getAttributes();
