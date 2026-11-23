@@ -105,30 +105,19 @@ final class Ui {
         animateTouch(t);return t;
     }
     static LinearLayout infoRow(Context c,String label,String value,int accent){
-        LinearLayout row=horizontal(c);row.setPadding(0,dp(c,9),0,dp(c,9));
-        // Keep information rows touch-friendly and legible with larger system fonts.
-        row.setMinimumHeight(dp(c,48));
+        // Read-only metrics are compact two-column rows, not 48dp tap targets.
+        // Keep values anchored to the right even on narrow phones or large fonts.
+        // Both labels and values may wrap naturally without hiding battery icons.
+        LinearLayout row=horizontal(c);row.setPadding(0,dp(c,6),0,dp(c,6));
+        row.setMinimumHeight(dp(c,34));
         TextView a=text(c,label,13,MUTED,false),b=text(c,value,14,accent,true);
         a.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
-        a.setPadding(0,0,dp(c,12),0);
+        a.setPadding(0,0,dp(c,8),0);
         b.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         b.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
         b.setBreakStrategy(android.graphics.text.LineBreaker.BREAK_STRATEGY_HIGH_QUALITY);
-        // On narrow screens or with large accessibility fonts, give both fields
-        // their full width instead of squeezing long Russian labels into columns.
-        float systemScale=c.getResources().getConfiguration().fontScale*FONT_SCALE;
-        boolean stacked=c.getResources().getConfiguration().screenWidthDp<320 || systemScale>=1.3f;
-        if(stacked){
-            row.setOrientation(LinearLayout.VERTICAL);
-            a.setPadding(0,0,0,dp(c,4));
-            b.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
-            b.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
-            row.addView(a,new LinearLayout.LayoutParams(-1,-2));
-            row.addView(b,new LinearLayout.LayoutParams(-1,-2));
-        }else{
-            row.addView(a,new LinearLayout.LayoutParams(0,-2,.94f));
-            row.addView(b,new LinearLayout.LayoutParams(0,-2,1.06f));
-        }
+        row.addView(a,new LinearLayout.LayoutParams(0,-2,.94f));
+        row.addView(b,new LinearLayout.LayoutParams(0,-2,1.06f));
         return row;
     }
     static View rule(Context c){View v=new View(c);v.setBackgroundColor(BORDER);return v;}
