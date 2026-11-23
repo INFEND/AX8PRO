@@ -219,7 +219,9 @@ final class Ui {
                 }
             };
             messageScroll.setFillViewport(false);
-            messageScroll.setVerticalScrollBarEnabled(false);
+            // Expose the scroll affordance for long explanations, especially with large fonts.
+            messageScroll.setVerticalScrollBarEnabled(true);
+            messageScroll.setScrollbarFadingEnabled(false);
             messageScroll.addView(text(activity,message,15,TEXT,false));
             panel.addView(messageScroll,new LinearLayout.LayoutParams(-1,-2));
         }
