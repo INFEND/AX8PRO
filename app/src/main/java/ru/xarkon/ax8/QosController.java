@@ -43,6 +43,25 @@ final class QosController implements AutoCloseable {
     }
     String diagnostics(){return diagnostics;}
     private TelnetShell.Result exec(String cmd)throws Exception{try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){return shell.exec(cmd);}}
+    /** Diagnostic connection: never enables Telnet or changes its settings. */
+    private TelnetShell.Result execReadOnly(String cmd)throws Exception {
+        try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){
+            return shell.execReadOnly(cmd);
+        }
+    }
+    private ArrayList<String> readOnlyInterfaces()throws Exception {
+        ArrayList<String> result=new ArrayList<>();
+        TelnetShell.Result listing=execReadOnly(
+            "for d in /sys/class/net/br0/brif/*; do [ -e \"$d\" ] || continue; n=$(basename \"$d\"); case \"$n\" in wlan*|ra*|ath*|ap*) echo \"$n\";; esac; done");
+        for(String line:listing.output.split("\n")){
+            String name=line.trim();
+            if(name.matches("[a-zA-Z0-9_.:-]+")&&!result.contains(name))result.add(name);
+        }
+        if(result.isEmpty() && execReadOnly("test -e /sys/class/net/wlan0").code==0)
+            result.add("wlan0");
+        if(result.isEmpty())throw new IOException("Не найден интерфейс Wi-Fi для чтения статистики");
+        return result;
+    }
     private void checked(String cmd)throws Exception {TelnetShell.Result r=exec(cmd);if(r.code!=0)throw new IOException("Команда tc/iptables отклонена: "+r.output+" / "+cmd);}
     private ArrayList<String> interfaces()throws Exception{
         ArrayList<String> result=new ArrayList<>();
@@ -316,7 +335,7 @@ final class QosController implements AutoCloseable {
      */
     synchronized String auditReadOnlyCounters() throws Exception {
         StringBuilder out=new StringBuilder();
-        List<String> ifaces=interfaces();
+        List<String> ifaces=readOnlyInterfaces();
         out.append("Интерфейсы: ").append(ifaces).append("\n");
         int visited=0;
         for(String iface:ifaces){
@@ -324,13 +343,13 @@ final class QosController implements AutoCloseable {
             if(++visited>6){out.append("Остальные интерфейсы пропущены для ограничения длительности.\n");break;}
             if(!iface.matches("[A-Za-z0-9_.:-]+"))continue;
             out.append("\n[").append(iface).append("]\n");
-            appendReadOnlyStat(out,"qdisc",exec("tc -s qdisc show dev "+iface),1500);
-            appendReadOnlyStat(out,"классы/байты/пакеты",exec("tc -s class show dev "+iface),4500);
-            appendReadOnlyStat(out,"фильтры загрузки",exec("tc -s filter show dev "+iface+" parent 1:"),2200);
-            appendReadOnlyStat(out,"фильтры отдачи",exec("tc -s filter show dev "+iface+" parent ffff:"),2200);
+            appendReadOnlyStat(out,"qdisc",execReadOnly("tc -s qdisc show dev "+iface),1500);
+            appendReadOnlyStat(out,"классы/байты/пакеты",execReadOnly("tc -s class show dev "+iface),4500);
+            appendReadOnlyStat(out,"фильтры загрузки",execReadOnly("tc -s filter show dev "+iface+" parent 1:"),2200);
+            appendReadOnlyStat(out,"фильтры отдачи",execReadOnly("tc -s filter show dev "+iface+" parent ffff:"),2200);
         }
-        appendReadOnlyStat(out,"IPv4 AX8_ZERO",exec("iptables -nvL AX8_ZERO 2>/dev/null"),1000);
-        appendReadOnlyStat(out,"IPv6 AX8_ZERO6",exec("ip6tables -nvL AX8_ZERO6 2>/dev/null"),1000);
+        appendReadOnlyStat(out,"IPv4 AX8_ZERO",execReadOnly("iptables -nvL AX8_ZERO 2>/dev/null"),1000);
+        appendReadOnlyStat(out,"IPv6 AX8_ZERO6",execReadOnly("ip6tables -nvL AX8_ZERO6 2>/dev/null"),1000);
         out.append("\nЭто накопленные счётчики. Без трафика в течение двух замеров их рост не доказан; ");
         out.append("при NAT/offload фактический лимит нужно проверять отдельным тестом скорости.\n");
         return out.toString();
