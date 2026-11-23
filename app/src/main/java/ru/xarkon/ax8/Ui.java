@@ -227,14 +227,17 @@ final class Ui {
         addSpace(panel,activity,22);
         // Stack actions when two equal-width buttons cannot fit large Russian labels.
         DisplayMetrics actionMetrics=activity.getResources().getDisplayMetrics();
-        float availableDp=actionMetrics.widthPixels/actionMetrics.density-70f;
+        // Match the actual dialog width (capped at 500dp), including on tablets and landscape.
+        int dialogWidth=Math.min(actionMetrics.widthPixels-dp(activity,30),dp(activity,500));
+        int actionWidth=Math.max(0,dialogWidth-dp(activity,40));
+        float availableDp=actionWidth/actionMetrics.density;
         float fontScale=activity.getResources().getConfiguration().fontScale*FONT_SCALE;
         // Measure the actual translated action labels, not just the screen width.
         // Equal-width buttons must never clip a long confirmation label.
         TextView actionMeasure=text(activity,positive,14,TEXT,true);
         float positiveWidth=actionMeasure.getPaint().measureText(positive);
         float cancelWidth=actionMeasure.getPaint().measureText("Отмена");
-        float buttonWidth=(actionMetrics.widthPixels-dp(activity,70)-dp(activity,9))/2f;
+        float buttonWidth=(actionWidth-dp(activity,9))/2f;
         float buttonPadding=dp(activity,28);
         boolean stacked=accept!=null&&(availableDp<300f||fontScale>=1.4f
                 ||Math.max(positiveWidth,cancelWidth)+buttonPadding>buttonWidth);
