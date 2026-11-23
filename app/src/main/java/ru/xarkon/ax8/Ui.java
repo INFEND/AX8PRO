@@ -138,7 +138,7 @@ final class Ui {
     static LinearLayout navItem(Context c,String symbol,String label,boolean active,int badgeCount,Runnable run){
         LinearLayout l=vertical(c);l.setGravity(Gravity.CENTER);
         l.setPadding(dp(c,2),dp(c,10),dp(c,2),dp(c,10));
-        l.setClickable(true);l.setFocusable(true);l.setSelected(active);
+        l.setClickable(!active);l.setFocusable(true);l.setSelected(active);
         // Expose the tab as one accessible target, not separate icon, label and badge.
         l.setContentDescription(label+(badgeCount>0?", непрочитанных: "+badgeCount:""));
         if(active)l.setBackground(shape(c,CARD2,0,Math.max(4,CORNER-6)));
@@ -177,8 +177,11 @@ final class Ui {
         caption.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         l.addView(wrap,wrapParams);addSpace(l,c,4);l.addView(caption);
         // Tapping the current tab must not rebuild its screen or reset scroll position.
-        l.setOnClickListener(v->{if(!active)run.run();});
-        animateTouch(l);return l;
+        if(!active){
+            l.setOnClickListener(v->run.run());
+            animateTouch(l);
+        }
+        return l;
     }
     static TextView chip(Context c,String value,int fg){
         TextView x=text(c,value,11,fg,true);x.setPadding(dp(c,10),dp(c,6),dp(c,10),dp(c,6));
