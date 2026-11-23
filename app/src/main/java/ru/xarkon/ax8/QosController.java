@@ -344,7 +344,17 @@ final class QosController implements AutoCloseable {
             if(!iface.matches("[A-Za-z0-9_.:-]+"))continue;
             out.append("\n[").append(iface).append("]\n");
             appendReadOnlyStat(out,"qdisc",execReadOnly("tc -s qdisc show dev "+iface),1500);
-            appendReadOnlyStat(out,"классы/байты/пакеты",execReadOnly("tc -s class show dev "+iface),4500);
+            TelnetShell.Result before=execReadOnly("tc -s class show dev "+iface);
+            appendReadOnlyStat(out,"классы/байты/пакеты",before,4500);
+            long start=System.nanoTime();
+            Thread.sleep(650); // read-only observation window; never generates traffic
+            TelnetShell.Result after=execReadOnly("tc -s class show dev "+iface);
+            long elapsedMs=(System.nanoTime()-start)/1_000_000L;
+            long b0=sentClassBytes(before.output),b1=sentClassBytes(after.output);
+            if(before.code==0 && after.code==0 && b0>=0 && b1>=0 && b1>=b0)
+                out.append("Изменение счётчиков классов за ").append(elapsedMs)
+                    .append(" мс: +").append(b1-b0).append(" байт (сумма классов; не измерение скорости)\n");
+            else out.append("Изменение счётчиков классов: не подтверждено\n");
             appendReadOnlyStat(out,"фильтры загрузки",execReadOnly("tc -s filter show dev "+iface+" parent 1:"),2200);
             appendReadOnlyStat(out,"фильтры отдачи",execReadOnly("tc -s filter show dev "+iface+" parent ffff:"),2200);
         }
@@ -353,6 +363,21 @@ final class QosController implements AutoCloseable {
         out.append("\nЭто накопленные счётчики. Без трафика в течение двух замеров их рост не доказан; ");
         out.append("при NAT/offload фактический лимит нужно проверять отдельным тестом скорости.\n");
         return out.toString();
+    }
+
+    private static long sentClassBytes(String text){
+        if(text==null||text.isEmpty())return -1;
+        java.util.regex.Matcher matcher=java.util.regex.Pattern
+            .compile("(?m)^\\s*Sent\\s+([0-9]+)\\s+bytes").matcher(text);
+        long sum=0;boolean matched=false;
+        while(matcher.find()){
+            try{
+                long value=Long.parseLong(matcher.group(1));
+                if(value>Long.MAX_VALUE-sum)return -1;
+                sum+=value;matched=true;
+            }catch(NumberFormatException invalid){return -1;}
+        }
+        return matched?sum:-1;
     }
 
     private static void appendReadOnlyStat(StringBuilder out,String label,
