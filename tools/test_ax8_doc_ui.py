@@ -26,7 +26,9 @@ class Ax8DocumentUiTest(unittest.TestCase):
     def test_remembered_clients_collapsible_and_not_reported_online(self):
         body = MAIN.split("private void showRememberedClients()", 1)[1].split("private static String humanRate", 1)[0]
         self.assertIn("knownClientsExpanded=false", MAIN)
-        self.assertIn("known.remove(RouterClient.normalizeMac(active.mac))", body)
+        memory = MAIN.split("private TreeSet<String> rememberedMacs(boolean includeLive)", 1)[1].split("private List<SavedClientGroups.Group> allClientGroups()", 1)[0]
+        self.assertIn("TreeSet<String> known=rememberedMacs(false)", body)
+        self.assertIn("if(includeLive)known.add(mac);else known.remove(mac)", memory)
         self.assertIn("chooseLimit(remembered)", body)
         self.assertIn("SavedClientGroups.build(known", body)
         self.assertIn("qos::limitRevision,liveLimits", body)
