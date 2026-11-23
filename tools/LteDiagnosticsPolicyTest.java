@@ -13,8 +13,8 @@ public final class LteDiagnosticsPolicyTest {
         contains(LteDiagnosticsPolicy.rsrp("30"),"-111");
         contains(LteDiagnosticsPolicy.rsrp("30"),"не подтверждена");
         contains(LteDiagnosticsPolicy.rsrp("-111"),"dBm");
-        contains(LteDiagnosticsPolicy.rsrp("97"),"-44");
-        contains(LteDiagnosticsPolicy.rsrp("0"),"-140");
+        contains(LteDiagnosticsPolicy.rsrp("97"),"−44");
+        contains(LteDiagnosticsPolicy.rsrp("0"),"−140");
         contains(LteDiagnosticsPolicy.rsrp("999"),"не интерпретировано");
         contains(LteDiagnosticsPolicy.rsrq("21"),"-9,5");
         contains(LteDiagnosticsPolicy.rsrq("21"),"-9");
