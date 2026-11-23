@@ -2440,6 +2440,7 @@ public final class MainActivity extends Activity {
         final TextView modeLabel=Ui.text(this,initialAuto?"РЕЖИМ: АВТОМАТИЧЕСКИЙ":"РЕЖИМ: РУЧНОЙ",11,initialAuto?Ui.CYAN:Ui.MUTED,true);
         modeLabel.setContentDescription(initialAuto?"Режим мониторинга: автоматический":"Режим мониторинга: ручной");
         refresh.addView(modeLabel);Ui.addSpace(refresh,this,6);
+        final TextView manualLabel=Ui.text(this,initialAuto?"РУЧНОЙ ИНТЕРВАЛ · НЕ ВЫБРАН":"РУЧНОЙ ИНТЕРВАЛ · АКТИВЕН",11,initialAuto?Ui.MUTED:Ui.CYAN,true);
         final TextView[] autoButton={null};
         autoButton[0]=Ui.button(this,initialAuto?"✓  Автоматически":"○  Автоматически",initialAuto?Ui.CYAN:Ui.CARD2,
             initialAuto?Ui.contrastOn(Ui.CYAN):Ui.TEXT,()->{
@@ -2460,7 +2461,6 @@ public final class MainActivity extends Activity {
         currentRate.setPadding(d(8),0,0,0);
         autoRow.addView(currentRate,new LinearLayout.LayoutParams(0,-2,1f));
         refresh.addView(autoRow);Ui.addSpace(refresh,this,12);
-        final TextView manualLabel=Ui.text(this,initialAuto?"РУЧНОЙ ИНТЕРВАЛ · НЕ ВЫБРАН":"РУЧНОЙ ИНТЕРВАЛ · АКТИВЕН",11,initialAuto?Ui.MUTED:Ui.CYAN,true);
         refresh.addView(manualLabel);Ui.addSpace(refresh,this,4);
         SeekBar poll=new SeekBar(this);poll.setMax(45);poll.setProgress((manual-500)/100);
         poll.setContentDescription("Ручной интервал опроса, от 0,5 до 5 секунд");
