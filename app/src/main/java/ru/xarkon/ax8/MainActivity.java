@@ -2444,6 +2444,8 @@ public final class MainActivity extends Activity {
         final TextView[] autoButton={null};
         autoButton[0]=Ui.button(this,initialAuto?"✓  Автоматически":"○  Автоматически",initialAuto?Ui.CYAN:Ui.CARD2,
             initialAuto?Ui.contrastOn(Ui.CYAN):Ui.TEXT,()->{
+                // The selected mode is already active: keep scroll, focus and polling cadence intact.
+                if(automaticPolling())return;
                 prefs.edit().putBoolean("refresh_auto",true).apply();
                 currentRate.setText(String.format(Locale.US,"%.1f с",autoPollMs/1000f));
                 modeLabel.setText("РЕЖИМ: АВТОМАТИЧЕСКИЙ");
