@@ -2440,7 +2440,7 @@ public final class MainActivity extends Activity {
         final TextView modeLabel=Ui.text(this,initialAuto?"РЕЖИМ: АВТОМАТИЧЕСКИЙ":"РЕЖИМ: РУЧНОЙ",11,initialAuto?Ui.CYAN:Ui.MUTED,true);
         modeLabel.setContentDescription(initialAuto?"Режим мониторинга: автоматический":"Режим мониторинга: ручной");
         refresh.addView(modeLabel);Ui.addSpace(refresh,this,6);
-        final TextView manualLabel=Ui.text(this,initialAuto?"РУЧНОЙ ИНТЕРВАЛ · НЕ ВЫБРАН":"РУЧНОЙ ИНТЕРВАЛ · АКТИВЕН",11,initialAuto?Ui.MUTED:Ui.CYAN,true);
+        final TextView manualLabel=Ui.text(this,initialAuto?"РУЧНОЙ ИНТЕРВАЛ · НЕАКТИВЕН":"РУЧНОЙ ИНТЕРВАЛ · АКТИВЕН",11,initialAuto?Ui.MUTED:Ui.CYAN,true);
         final TextView[] autoButton={null};
         autoButton[0]=Ui.button(this,initialAuto?"✓  Автоматически":"○  Автоматически",initialAuto?Ui.CYAN:Ui.CARD2,
             initialAuto?Ui.contrastOn(Ui.CYAN):Ui.TEXT,()->{
@@ -2451,7 +2451,7 @@ public final class MainActivity extends Activity {
                 modeLabel.setText("РЕЖИМ: АВТОМАТИЧЕСКИЙ");
                 modeLabel.setTextColor(Ui.CYAN);
                 modeLabel.setContentDescription("Режим мониторинга: автоматический");
-                manualLabel.setText("РУЧНОЙ ИНТЕРВАЛ · НЕ ВЫБРАН");
+                manualLabel.setText("РУЧНОЙ ИНТЕРВАЛ · НЕАКТИВЕН");
                 manualLabel.setTextColor(Ui.MUTED);
                 autoButton[0].setText("✓  Автоматически");
                 autoButton[0].setSelected(true);
@@ -2510,7 +2510,7 @@ public final class MainActivity extends Activity {
                 b.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
             }
         });
-        refresh.addView(Ui.text(this,"Автоматически: приложение измеряет длительность полных ответов роутера и выбирает кратчайший устойчивый интервал от 0,5 до 5 секунд. При ошибках интервал увеличивается, после восстановления связи сокращается. Один последовательный цикл для всех данных, без одновременных запросов.",12,Ui.MUTED,false));
+        refresh.addView(Ui.text(this,"Автоматически: интервал 0,5–5 с подбирается по скорости ответа роутера. При ошибках опрос замедляется, после восстановления ускоряется. Для ручного режима переместите ползунок.",12,Ui.MUTED,false));
         Ui.addSpace(refresh,this,8);
         LinearLayout lastRow=Ui.infoRow(this,"Последний полный опрос",lastCompleteAt==0?"—":android.text.format.DateFormat.format("HH:mm:ss",lastCompleteAt).toString(),Ui.CYAN);
         settingsValues.put("last_poll",(TextView)lastRow.getChildAt(1));refresh.addView(lastRow);
