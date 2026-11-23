@@ -2454,10 +2454,17 @@ public final class MainActivity extends Activity {
                 manualLabel.setText("РУЧНОЙ ИНТЕРВАЛ · НЕ ВЫБРАН");
                 manualLabel.setTextColor(Ui.MUTED);
                 autoButton[0].setText("✓  Автоматически");
+                autoButton[0].setSelected(true);
+                if(Build.VERSION.SDK_INT>=30)autoButton[0].setStateDescription("Выбрано");
                 autoButton[0].setTextColor(Ui.contrastOn(Ui.CYAN));
                 autoButton[0].setBackground(Ui.shape(this,Ui.CYAN,0,Math.max(4,Ui.CORNER-7)));
                 handler.removeCallbacks(ticker);if(running)handler.post(ticker);
             });
+        // Expose the selected state without relying on the decorative checkmark.
+        autoButton[0].setContentDescription("Автоматический интервал мониторинга");
+        autoButton[0].setSelected(initialAuto);
+        if(Build.VERSION.SDK_INT>=30)autoButton[0].setStateDescription(initialAuto?"Выбрано":"Не выбрано");
+        autoButton[0].setMinimumHeight(d(48));
         LinearLayout autoRow=Ui.horizontal(this);
         autoRow.addView(autoButton[0],new LinearLayout.LayoutParams(0,-2,1.6f));
         currentRate.setPadding(d(8),0,0,0);
@@ -2494,7 +2501,10 @@ public final class MainActivity extends Activity {
                 modeLabel.setContentDescription("Режим мониторинга: ручной");
                 manualLabel.setText("РУЧНОЙ ИНТЕРВАЛ · АКТИВЕН");
                 manualLabel.setTextColor(Ui.CYAN);
-                autoButton[0].setText("○  Автоматически");autoButton[0].setTextColor(Ui.TEXT);
+                autoButton[0].setText("○  Автоматически");
+                autoButton[0].setSelected(false);
+                if(Build.VERSION.SDK_INT>=30)autoButton[0].setStateDescription("Не выбрано");
+                autoButton[0].setTextColor(Ui.TEXT);
                 autoButton[0].setBackground(Ui.shape(MainActivity.this,Ui.CARD2,0,Math.max(4,Ui.CORNER-7)));
                 handler.removeCallbacks(ticker);if(running)handler.post(ticker);
                 b.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
