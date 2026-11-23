@@ -1474,10 +1474,10 @@ public final class MainActivity extends Activity {
         final ArrayList<String> groupMacs=new ArrayList<>(distinct);
         String verb=block?"Заблокировать":"Разблокировать";
         String message=verb+" устройство «"+group.name+"» по всем "+groupMacs.size()+
-            " сохранённым MAC-адресам?\\n\\n"+String.join("\\n",groupMacs)+
-            "\\n\\nДругие записи чёрного списка останутся без изменений.";
+            " сохранённым MAC-адресам?\n\n"+String.join("\n",groupMacs)+
+            "\n\nДругие записи чёрного списка останутся без изменений.";
         if(block&&!identity.resolved())
-            message+="\\n\\nВнимание: управляющий телефон не удалось надёжно определить. Проверьте список MAC, чтобы не потерять доступ к AX8.";
+            message+="\n\nВнимание: управляющий телефон не удалось надёжно определить. Проверьте список MAC, чтобы не потерять доступ к AX8.";
         confirm("Контроль доступа",message,
             ()->action("Список доступа",progress->api.setBlockedGroup(groupMacs,block,protectedMac)));
     }
