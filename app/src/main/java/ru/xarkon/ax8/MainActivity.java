@@ -2448,6 +2448,8 @@ public final class MainActivity extends Activity {
                 modeLabel.setText("РЕЖИМ: АВТОМАТИЧЕСКИЙ");
                 modeLabel.setTextColor(Ui.CYAN);
                 modeLabel.setContentDescription("Режим мониторинга: автоматический");
+                manualLabel.setText("РУЧНОЙ ИНТЕРВАЛ · НЕ ВЫБРАН");
+                manualLabel.setTextColor(Ui.MUTED);
                 autoButton[0].setText("✓  Автоматически");
                 autoButton[0].setTextColor(Ui.contrastOn(Ui.CYAN));
                 autoButton[0].setBackground(Ui.shape(this,Ui.CYAN,0,Math.max(4,Ui.CORNER-7)));
@@ -2458,7 +2460,8 @@ public final class MainActivity extends Activity {
         currentRate.setPadding(d(8),0,0,0);
         autoRow.addView(currentRate,new LinearLayout.LayoutParams(0,-2,1f));
         refresh.addView(autoRow);Ui.addSpace(refresh,this,12);
-        refresh.addView(Ui.text(this,"РУЧНОЙ ИНТЕРВАЛ",11,Ui.MUTED,true));Ui.addSpace(refresh,this,4);
+        final TextView manualLabel=Ui.text(this,initialAuto?"РУЧНОЙ ИНТЕРВАЛ · НЕ ВЫБРАН":"РУЧНОЙ ИНТЕРВАЛ · АКТИВЕН",11,initialAuto?Ui.MUTED:Ui.CYAN,true);
+        refresh.addView(manualLabel);Ui.addSpace(refresh,this,4);
         SeekBar poll=new SeekBar(this);poll.setMax(45);poll.setProgress((manual-500)/100);
         poll.setContentDescription("Ручной интервал опроса, от 0,5 до 5 секунд");
         if(Build.VERSION.SDK_INT>=30)poll.setStateDescription(String.format(Locale.US,"%.1f секунды",manual/1000f));
@@ -2487,6 +2490,8 @@ public final class MainActivity extends Activity {
                 modeLabel.setText("РЕЖИМ: РУЧНОЙ");
                 modeLabel.setTextColor(Ui.MUTED);
                 modeLabel.setContentDescription("Режим мониторинга: ручной");
+                manualLabel.setText("РУЧНОЙ ИНТЕРВАЛ · АКТИВЕН");
+                manualLabel.setTextColor(Ui.CYAN);
                 autoButton[0].setText("○  Автоматически");autoButton[0].setTextColor(Ui.TEXT);
                 autoButton[0].setBackground(Ui.shape(MainActivity.this,Ui.CARD2,0,Math.max(4,Ui.CORNER-7)));
                 handler.removeCallbacks(ticker);if(running)handler.post(ticker);
