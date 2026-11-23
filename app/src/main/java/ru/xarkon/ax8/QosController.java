@@ -43,6 +43,25 @@ final class QosController implements AutoCloseable {
     }
     String diagnostics(){return diagnostics;}
     private TelnetShell.Result exec(String cmd)throws Exception{try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){return shell.exec(cmd);}}
+    /** Diagnostic connection: never enables Telnet or changes its settings. */
+    private TelnetShell.Result execReadOnly(String cmd)throws Exception {
+        try(RouterOperationGate.Lease ignored=RouterOperationGate.enter()){
+            return shell.execReadOnly(cmd);
+        }
+    }
+    private ArrayList<String> readOnlyInterfaces()throws Exception {
+        ArrayList<String> result=new ArrayList<>();
+        TelnetShell.Result listing=execReadOnly(
+            "for d in /sys/class/net/br0/brif/*; do [ -e \"$d\" ] || continue; n=$(basename \"$d\"); case \"$n\" in wlan*|ra*|ath*|ap*) echo \"$n\";; esac; done");
+        for(String line:listing.output.split("\n")){
+            String name=line.trim();
+            if(name.matches("[a-zA-Z0-9_.:-]+")&&!result.contains(name))result.add(name);
+        }
+        if(result.isEmpty() && execReadOnly("test -e /sys/class/net/wlan0").code==0)
+            result.add("wlan0");
+        if(result.isEmpty())throw new IOException("Не найден интерфейс Wi-Fi для чтения статистики");
+        return result;
+    }
     private void checked(String cmd)throws Exception {TelnetShell.Result r=exec(cmd);if(r.code!=0)throw new IOException("Команда tc/iptables отклонена: "+r.output+" / "+cmd);}
     private ArrayList<String> interfaces()throws Exception{
         ArrayList<String> result=new ArrayList<>();
@@ -307,5 +326,70 @@ final class QosController implements AutoCloseable {
             .append("Не отключайте ускорение без проверки совместимости AX8.");
         return report.toString();
     }
+
+    /**
+     * Explicit read-only traffic-counter snapshot. Fixed commands only: no tc add/del,
+     * iptables changes, resync, firewall flush, or network scanning.
+     * Kernel counters are evidence of packet matches, not a speed test or proof
+     * that bridge/hardware-offloaded packets are shaped.
+     */
+    synchronized String auditReadOnlyCounters() throws Exception {
+        StringBuilder out=new StringBuilder();
+        List<String> ifaces=readOnlyInterfaces();
+        out.append("Интерфейсы: ").append(ifaces).append("\n");
+        int visited=0;
+        for(String iface:ifaces){
+            if(Thread.currentThread().isInterrupted())break;
+            if(++visited>6){out.append("Остальные интерфейсы пропущены для ограничения длительности.\n");break;}
+            if(!iface.matches("[A-Za-z0-9_.:-]+"))continue;
+            out.append("\n[").append(iface).append("]\n");
+            appendReadOnlyStat(out,"qdisc",execReadOnly("tc -s qdisc show dev "+iface),1500);
+            TelnetShell.Result before=execReadOnly("tc -s class show dev "+iface);
+            appendReadOnlyStat(out,"классы/байты/пакеты",before,4500);
+            long start=System.nanoTime();
+            Thread.sleep(650); // read-only observation window; never generates traffic
+            TelnetShell.Result after=execReadOnly("tc -s class show dev "+iface);
+            long elapsedMs=(System.nanoTime()-start)/1_000_000L;
+            long b0=sentClassBytes(before.output),b1=sentClassBytes(after.output);
+            if(before.code==0 && after.code==0 && b0>=0 && b1>=0 && b1>=b0)
+                out.append("Изменение счётчиков классов за ").append(elapsedMs)
+                    .append(" мс: +").append(b1-b0).append(" байт (сумма классов; не измерение скорости)\n");
+            else out.append("Изменение счётчиков классов: не подтверждено\n");
+            appendReadOnlyStat(out,"фильтры загрузки",execReadOnly("tc -s filter show dev "+iface+" parent 1:"),2200);
+            appendReadOnlyStat(out,"фильтры отдачи",execReadOnly("tc -s filter show dev "+iface+" parent ffff:"),2200);
+        }
+        appendReadOnlyStat(out,"IPv4 AX8_ZERO",execReadOnly("iptables -nvL AX8_ZERO 2>/dev/null"),1000);
+        appendReadOnlyStat(out,"IPv6 AX8_ZERO6",execReadOnly("ip6tables -nvL AX8_ZERO6 2>/dev/null"),1000);
+        out.append("\nЭто накопленные счётчики. Без трафика в течение двух замеров их рост не доказан; ");
+        out.append("при NAT/offload фактический лимит нужно проверять отдельным тестом скорости.\n");
+        return out.toString();
+    }
+
+    private static long sentClassBytes(String text){
+        if(text==null||text.isEmpty())return -1;
+        java.util.regex.Matcher matcher=java.util.regex.Pattern
+            .compile("(?m)^\\s*Sent\\s+([0-9]+)\\s+bytes").matcher(text);
+        long sum=0;boolean matched=false;
+        while(matcher.find()){
+            try{
+                long value=Long.parseLong(matcher.group(1));
+                if(value>Long.MAX_VALUE-sum)return -1;
+                sum+=value;matched=true;
+            }catch(NumberFormatException invalid){return -1;}
+        }
+        return matched?sum:-1;
+    }
+
+    private static void appendReadOnlyStat(StringBuilder out,String label,
+                                          TelnetShell.Result value,int limit){
+        out.append(label).append(" (код ").append(value.code).append("):\n");
+        String data=value.output==null?"":value.output.trim();
+        if(data.isEmpty()) {out.append("данных нет\n");return;}
+        // Output may contain external station addresses: keep it bounded and printable.
+        data=data.replace('\r',' ').replaceAll("[\\p{Cntrl}&&[^\n\t]]","");
+        if(data.length()>limit)data=data.substring(0,limit)+"\n[…обрезано]";
+        out.append(data).append("\n");
+    }
+
     @Override public synchronized void close(){shell.close();}
 }

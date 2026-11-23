@@ -3382,6 +3382,25 @@ public final class MainActivity extends Activity {
                     result=RouterDiagnostics.collect(isolated,input,message->handler.post(()->{
                         if(!isFinishing()&&!isDestroyed()&&dialog.isShowing())stage.setText("◌  "+message);
                     }));
+                    handler.post(()->{
+                        if(!isFinishing()&&!isDestroyed()&&dialog.isShowing())
+                            stage.setText("◌  Чтение счётчиков tc / iptables (только чтение)");
+                    });
+                    String counters;
+                    try { counters=qos.auditReadOnlyCounters(); }
+                    catch(Exception readError){
+                        counters="Счётчики не получены: "+
+                            String.valueOf(readError.getMessage())+
+                            "\nЭто не означает, что QoS выключен. Проверка не меняла правила.";
+                    }
+                    String section="\n━━ СЧЁТЧИКИ QOS (TELNET, ТОЛЬКО ЧТЕНИЕ) ━━\n"+
+                            counters+"\n";
+                    String original=result.report;
+                    int marker=original.indexOf("\n━━ ПОЛЯ ПРОШИВКИ");
+                    String combined=marker<0?original+section:
+                            original.substring(0,marker)+section+original.substring(marker);
+                    try{result.raw.put("qos_counters_report",counters);}catch(Exception ignored){}
+                    result=new RouterDiagnostics.Result(combined,result.raw);
                 }catch(Exception e){
                     collectionFailed=true;
                     result=new RouterDiagnostics.Result("Ошибка глубокой диагностики: "+

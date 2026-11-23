@@ -1,6 +1,9 @@
 package ru.xarkon.ax8;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
+import java.util.ArrayList;
+import java.util.List;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -10,7 +13,8 @@ import java.util.Map;
 /**
  * On-demand, read-only diagnostics. Uses a SEPARATE WebUI session so it cannot
  * stall or invalidate the foreground 0.5 s polling/authentication session.
- * No Telnet, configuration writes, automatic reconnects or network scans.
+ * No configuration writes, automatic reconnects or network scans.
+ * The optional tc audit is performed separately by its read-only caller.
  */
 public final class RouterDiagnostics {
     private RouterDiagnostics() {}
@@ -52,12 +56,15 @@ public final class RouterDiagnostics {
             "sim_status,simcard_status,sim_card_status,pin_status,sim_pin_status,"+
             "modem_main_state,network_register_status,network_reg_status,reg_status,"+
             "network_selection,net_select,net_select_mode,m_netselect_save,"+
-            "roam_status,roaming_status,plmn,plmn_mode,service_domain"),
+            "roam_status,roaming_status,plmn,plmn_mode,mcc,mnc,mccmnc,"+
+            "service_domain,cellular_reg_status,sim_state,sim_detected"),
         new Group("wan", "WAN / APN / IP",
             "ppp_status,wan_ipaddr,wan_ip,wan_connect_status,wan_state,"+
             "wan_gateway,wan_dns,wan_dns1,wan_dns2,dns1,dns2,"+
             "ipv6_wan_ipaddr,wan_ipv6_addr,ipv4_pdp_type,ipv6_pdp_type,"+
-            "pdp_type,wan_apn,Current_index,network_provider"),
+            "pdp_type,wan_apn,Current_index,network_provider,"+
+            "wan_netmask,wan_mtu,wan_dns_primary,wan_dns_secondary,"+
+            "primary_dns,secondary_dns,ipv6_dns1,ipv6_dns2,wan_ipv6_gateway"),
         new Group("advanced", "ДОПОЛНИТЕЛЬНЫЕ ПОКАЗАТЕЛИ LTE / CA / NR",
             "LteBandLockSet,wan_active_band,wan_active_channel,"+
             "lte_ca_status,lte_ca_state,lte_ca_pcell_band,lte_ca_scell_band,"+
@@ -68,7 +75,12 @@ public final class RouterDiagnostics {
             "wifi_onoff,wifi_enable,wifi_status,wifi_band,wifi_channel,"+
             "wifi_channel_2g,wifi_channel_5g,wifi_2g_channel,wifi_5g_channel,"+
             "wifi_access_sta_num,wifi_2g_access_sta_num,wifi_5g_access_sta_num,"+
-            "wifi_max_sta_num,wifi_5g_max_sta_num,wlan_mode,wifi_mode"),
+            "wifi_max_sta_num,wifi_5g_max_sta_num,wlan_mode,wifi_mode,"+
+            "wifi_2g_onoff,wifi_5g_onoff,wifi_2g_enable,wifi_5g_enable,"+
+            "wifi_2g_bandwidth,wifi_5g_bandwidth,wifi_channel_width,"+
+            "wifi_2g_channel_width,wifi_5g_channel_width,"+
+            "wifi_tx_power,wifi_2g_tx_power,wifi_5g_tx_power,"+
+            "wifi_sta_num,wifi_connected_sta_num"),
         new Group("system", "СИСТЕМА / ПИТАНИЕ",
             "battery_charging,battery_vol_percent,battery_pers,Battery_voltage,battery_value,"+
             "device_uptime,uptime,system_uptime,wa_inner_version,cr_version,"+
@@ -121,7 +133,6 @@ public final class RouterDiagnostics {
             }
         }
 
-        long elapsed=(System.nanoTime()-start)/1_000_000L;
         JSONObject live=answers.get("radio");
         boolean hasLive=live!=null && (!raw(live,"network_type").isEmpty() ||
                 !raw(live,"ppp_status").isEmpty() || !raw(live,"nv_rsrp").isEmpty() ||
@@ -141,9 +152,38 @@ public final class RouterDiagnostics {
         boolean noService="no service".equalsIgnoreCase(tech)||
                 "no service".equalsIgnoreCase(raw(radio,"sub_network_type"));
         boolean registered=knownRegistered(sim);
-        String simState=first(sim,radio,"sim_status","simcard_status","sim_card_status",
-                "pin_status","sim_pin_status");
-        StringBuilder out=new StringBuilder(6500);
+        String simState=first(sim,radio,"sim_status","simcard_status","sim_card_status","sim_state");
+        String pinState=first(sim,radio,"pin_status","sim_pin_status");
+        List<String> rsrpTrace=new ArrayList<>(),sinrTrace=new ArrayList<>();
+        JSONArray radioSamples=new JSONArray();
+        String sampleError="";
+        if(hasLive && !noService && authorized) {
+            for(int sampleIndex=0;sampleIndex<3;sampleIndex++){
+                if(Thread.currentThread().isInterrupted()){sampleError="опрос прерван";break;}
+                try {
+                    JSONObject sample;
+                    if(sampleIndex==0) sample=radio;
+                    else {
+                        if(progress!=null)progress.stage("Повторное измерение LTE "+(sampleIndex+1)+"/3");
+                        Thread.sleep(550);
+                        sample=client.get("nv_rsrp,nv_rsrq,nv_sinr,nv_rssi,nv_cqi0,nv_cqi1");
+                    }
+                    JSONObject filtered=new JSONObject();
+                    for(String k:new String[]{"nv_rsrp","nv_rsrq","nv_sinr","nv_rssi","nv_cqi0","nv_cqi1"}) {
+                        String value=raw(sample,k);
+                        if(!value.isEmpty())filtered.put(k,value);
+                    }
+                    if(filtered.length()==0){sampleError="повторный ответ пуст";break;}
+                    radioSamples.put(filtered);
+                    rsrpTrace.add(raw(filtered,"nv_rsrp"));
+                    sinrTrace.add(raw(filtered,"nv_sinr"));
+                }catch(InterruptedException interrupted){
+                    Thread.currentThread().interrupt();sampleError="опрос прерван";break;
+                }catch(Exception ex){sampleError=safe(ex.getMessage());break;}
+            }
+        }
+        long elapsed=(System.nanoTime()-start)/1_000_000L;
+        StringBuilder out=new StringBuilder(9500);
         out.append("AX8 PRO CONTROL · ГЛУБОКАЯ ДИАГНОСТИКА\n");
         out.append(new SimpleDateFormat("dd.MM.yyyy HH:mm:ss",Locale.getDefault()).format(new Date(now))).append("\n");
         out.append("Только чтение. Никаких изменений настроек, поиска операторов или перезапусков.\n\n");
@@ -154,9 +194,11 @@ public final class RouterDiagnostics {
         out.append("Радиоданные: ").append(hasLive?"текущий отдельный запрос":
                 cacheFresh?"только последний снимок приложения (НЕ новый опрос)":"нет достоверных данных").append("\n");
         out.append("Мобильная сеть: ").append(show(tech)).append("\n");
-        out.append("Оператор: ").append(show(first(radio,wan,"network_provider"))).append("\n");
+        out.append("Оператор: ").append(LteDiagnosticsPolicy.provider(
+                first(radio,wan,"network_provider"),first(sim,radio,"plmn","mccmnc"))).append("\n");
         out.append("PPP / WAN: ").append(show(ppp)).append("\n");
-        out.append("SIM: ").append(show(simState)).append("\n");
+        out.append("SIM: ").append(simState.isEmpty()?"статус SIM не получен":show(simState)).append("\n");
+        out.append("PIN (сырой статус, НЕ состояние SIM): ").append(show(pinState)).append("\n");
         out.append("Регистрация: ").append(show(first(sim,radio,
                 "network_register_status","network_reg_status","reg_status","modem_main_state"))).append("\n");
         out.append("Режим: ").append(show(first(sim,advanced,"net_select","net_select_mode",
@@ -167,15 +209,19 @@ public final class RouterDiagnostics {
         out.append("Время глубокого опроса: ").append(elapsed).append(" мс\n\n");
 
         out.append("━━ СИГНАЛ И РАДИОТРАКТ ━━\n");
-        metric(out,"RSRP",radio,noService,"dBm",-140,-40,"nv_rsrp");
-        metric(out,"RSRQ",radio,noService,"dB",-30,0,"nv_rsrq");
+        out.append("RSRP: ").append(noService?"— (нет обслуживания)":LteDiagnosticsPolicy.rsrp(raw(radio,"nv_rsrp"))).append("\n");
+        out.append("RSRQ: ").append(noService?"— (нет обслуживания)":LteDiagnosticsPolicy.rsrq(raw(radio,"nv_rsrq"))).append("\n");
         metric(out,"SINR",radio,noService,"dB",-25,45,"nv_sinr");
         metric(out,"RSSI",radio,noService,"dBm",-120,-20,"nv_rssi","lte_rssi","rssi");
         out.append("Band: ").append(show(raw(radio,"nv_band"))).append("\n");
-        out.append("Ширина канала: ").append(show(first(radio,advanced,"nv_bandwidth",
-                "lte_bandwidth","bandwidth","current_bandwidth"))).append("\n");
+        out.append("Ширина канала: ").append(LteDiagnosticsPolicy.bandwidth(
+                first(radio,advanced,"lte_bandwidth","lte_bw","current_bandwidth",
+                        "CurrentBandwidth","dl_bandwidth","lte_dl_bandwidth"),
+                first(radio,advanced,"nv_bandwidth"))).append("\n");
         out.append("EARFCN: ").append(show(raw(radio,"nv_arfcn"))).append("\n");
         out.append("PCI: ").append(show(raw(radio,"nv_pci"))).append("\n");
+        out.append("Частоты: ").append(LteDiagnosticsPolicy.bandFrequency(
+                raw(radio,"nv_band"),raw(radio,"nv_arfcn"))).append("\n");
         out.append("eNodeB / Cell ID: ").append(show(raw(radio,"nv_enodbid")))
                 .append(" / ").append(show(raw(radio,"nv_cellid"))).append("\n");
         out.append("RI / Rank: ").append(show(first(radio,advanced,"nv_rank",
@@ -199,6 +245,16 @@ public final class RouterDiagnostics {
                 "wifi_channel","wifi_channel_2g","wifi_2g_channel"))).append("\n");
         out.append("Wi-Fi статус: ").append(show(first(wifi,radio,"wifi_onoff","wifi_enable",
                 "wifi_status"))).append("\n");
+        out.append("Wi-Fi диапазон / режим: ").append(show(raw(wifi,"wifi_band")))
+                .append(" / ").append(show(first(wifi,radio,"wlan_mode","wifi_mode"))).append("\n");
+        out.append("Wi-Fi 2.4 ГГц: канал ").append(show(first(wifi,radio,"wifi_channel_2g","wifi_2g_channel")))
+                .append(", ширина ").append(show(first(wifi,radio,"wifi_2g_bandwidth","wifi_2g_channel_width")))
+                .append(", состояние ").append(show(first(wifi,radio,"wifi_2g_onoff","wifi_2g_enable"))).append("\n");
+        out.append("Wi-Fi 5 ГГц: канал ").append(show(first(wifi,radio,"wifi_channel_5g","wifi_5g_channel")))
+                .append(", ширина ").append(show(first(wifi,radio,"wifi_5g_bandwidth","wifi_5g_channel_width")))
+                .append(", состояние ").append(show(first(wifi,radio,"wifi_5g_onoff","wifi_5g_enable"))).append("\n");
+        out.append("Wi-Fi мощность (поле прошивки): ").append(show(first(wifi,radio,
+                "wifi_tx_power","wifi_2g_tx_power","wifi_5g_tx_power"))).append("\n");
         String batteryPercent=first(system,radio,"battery_vol_percent");
         out.append("Батарея (процент от модема): ")
                 .append(batteryPercent.isEmpty()?"—":batteryPercent+"%").append("\n");
@@ -226,6 +282,21 @@ public final class RouterDiagnostics {
                 .append(" / ").append(show(first(wan,radio,"wan_dns2","dns2"))).append("\n");
         out.append("APN: ").append(show(first(wan,radio,"wan_apn"))).append("\n");
         out.append("Тип PDP: ").append(show(first(wan,radio,"pdp_type","ipv4_pdp_type"))).append("\n");
+        out.append("Маска WAN / MTU: ").append(show(raw(wan,"wan_netmask")))
+                .append(" / ").append(show(raw(wan,"wan_mtu"))).append("\n");
+        out.append("IPv6 DNS / gateway: ").append(show(raw(wan,"ipv6_dns1")))
+                .append(" / ").append(show(raw(wan,"ipv6_dns2")))
+                .append(" / ").append(show(raw(wan,"wan_ipv6_gateway"))).append("\n");
+        out.append("\n━━ ДИНАМИКА СИГНАЛА (ПОВТОРНЫЙ ОПРОС) ━━\n");
+        out.append(LteDiagnosticsPolicy.trend(rsrpTrace,sinrTrace)).append("\n");
+        if(!sampleError.isEmpty())out.append("Неполная серия: ").append(sampleError).append("\n");
+        out.append("\n━━ ПРОВЕРКА СОГЛАСОВАННОСТИ ━━\n");
+        out.append("ECGI: ").append(LteDiagnosticsPolicy.cellIdentity(
+                raw(radio,"nv_enodbid"),raw(radio,"nv_cellid"),raw(radio,"nv_globecellid"))).append("\n");
+        out.append(LteDiagnosticsPolicy.consistency(raw(radio,"nv_rsrp"),
+                first(radio,advanced,"nv_rssi","lte_rssi","rssi"),raw(radio,"nv_sinr"),
+                raw(radio,"nv_cqi0"),raw(radio,"nv_cqi1"),
+                first(radio,advanced,"nv_txpower","nv_tx_power","txpower")));
         out.append("\n━━ ДИАГНОСТИЧЕСКИЕ ВЫВОДЫ ━━\n");
         if(!authorized)out.append("• Сначала восстановите доступ/авторизацию WebUI. Остальные проверки не выполнены.\n");
         if(noService) {
@@ -246,6 +317,11 @@ public final class RouterDiagnostics {
         if(input.savedLimitCount>0)
             out.append("• Наличие конфигурации tc не доказывает ограничения реальной скорости при аппаратном NAT/offload. Используйте отдельную проверку QoS.\n");
         if(!hasLive&&cacheFresh)out.append("• Радиосводка взята из свежего кэша, а не из успешного глубокого запроса.\n");
+        if("0.0.0.0".equals(raw(wan,"wan_gateway")) && "ppp_connected".equals(ppp))
+            out.append("• Для PPP шлюз 0.0.0.0 не обязательно является ошибкой; маршрут и DNS данным WebUI не подтверждены.\n");
+        if(first(wan,radio,"wan_dns","wan_dns1","dns1").isEmpty())
+            out.append("• DNS в WebUI не получен: это не доказывает отсутствие DNS на устройстве.\n");
+        out.append("• Отдельный индикатор LTE ONLINE относится к проверке приложения; маршрут именно через WAN AX8 здесь не доказан.\n");
 
         out.append("\n━━ ПОЛЯ ПРОШИВКИ (ТОЛЬКО ПОЛУЧЕННЫЕ) ━━\n");
         for(Group group:GROUPS){
@@ -274,6 +350,8 @@ public final class RouterDiagnostics {
             all.put("nonempty_fields",found);
             all.put("elapsed_ms",elapsed);
             all.put("errors",new JSONObject(errors));
+            all.put("dynamic_radio_samples",radioSamples);
+            all.put("dynamic_radio_error",sampleError);
         }catch(Exception ignored){}
         if(progress!=null)progress.stage("Отчёт готов");
         return new Result(out.toString(),all);

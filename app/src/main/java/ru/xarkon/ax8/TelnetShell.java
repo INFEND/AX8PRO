@@ -47,8 +47,12 @@ final class TelnetShell implements Closeable {
         while(!TelnetReadPolicy.expired(deadline)){TelnetReadPolicy.appendBounded(result,read(550));for(String s:needles)if(result.indexOf(s)>=0)return result.toString();}
         throw new SocketTimeoutException("Telnet не отвечает: "+String.join("/",needles));
     }
-    private void connect()throws Exception {
-        close();if(!portOpen())startDaemon();
+    private void connect(boolean allowStartDaemon)throws Exception {
+        close();
+        if(!portOpen()) {
+            if(!allowStartDaemon)throw new IOException("Telnet закрыт: диагностика только для чтения не включает службу");
+            startDaemon();
+        }
         socket=new Socket();socket.connect(new InetSocketAddress(api.hostname(),4719),3000);
         in=socket.getInputStream();out=socket.getOutputStream();state=0;
         until(new String[]{"login:"},5000);send(user+"\r\n");
@@ -58,7 +62,14 @@ final class TelnetShell implements Closeable {
     }
     static final class Result {final String output;final int code;Result(String s,int c){output=s;code=c;}}
     synchronized Result exec(String command,int timeoutMs)throws Exception {
-        if(socket==null||socket.isClosed())connect();
+        return execInternal(command,timeoutMs,true);
+    }
+    /** Never starts or configures Telnet. Suitable for explicit read-only diagnostics. */
+    synchronized Result execReadOnly(String command)throws Exception {
+        return execInternal(command,6000,false);
+    }
+    private synchronized Result execInternal(String command,int timeoutMs,boolean allowStartDaemon)throws Exception {
+        if(socket==null||socket.isClosed())connect(allowStartDaemon);
         String marker="__AX8M_"+Math.abs(System.nanoTime()%1_000_000_000L)+"__";
         try {
             send(command+"\n"+"echo "+marker+":$?\n");
