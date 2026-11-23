@@ -307,5 +307,45 @@ final class QosController implements AutoCloseable {
             .append("Не отключайте ускорение без проверки совместимости AX8.");
         return report.toString();
     }
+
+    /**
+     * Explicit read-only traffic-counter snapshot. Fixed commands only: no tc add/del,
+     * iptables changes, resync, firewall flush, or network scanning.
+     * Kernel counters are evidence of packet matches, not a speed test or proof
+     * that bridge/hardware-offloaded packets are shaped.
+     */
+    synchronized String auditReadOnlyCounters() throws Exception {
+        StringBuilder out=new StringBuilder();
+        List<String> ifaces=interfaces();
+        out.append("Интерфейсы: ").append(ifaces).append("\n");
+        int visited=0;
+        for(String iface:ifaces){
+            if(Thread.currentThread().isInterrupted())break;
+            if(++visited>6){out.append("Остальные интерфейсы пропущены для ограничения длительности.\n");break;}
+            if(!iface.matches("[A-Za-z0-9_.:-]+"))continue;
+            out.append("\n[").append(iface).append("]\n");
+            appendReadOnlyStat(out,"qdisc",exec("tc -s qdisc show dev "+iface),1500);
+            appendReadOnlyStat(out,"классы/байты/пакеты",exec("tc -s class show dev "+iface),4500);
+            appendReadOnlyStat(out,"фильтры загрузки",exec("tc -s filter show dev "+iface+" parent 1:"),2200);
+            appendReadOnlyStat(out,"фильтры отдачи",exec("tc -s filter show dev "+iface+" parent ffff:"),2200);
+        }
+        appendReadOnlyStat(out,"IPv4 AX8_ZERO",exec("iptables -nvL AX8_ZERO 2>/dev/null"),1000);
+        appendReadOnlyStat(out,"IPv6 AX8_ZERO6",exec("ip6tables -nvL AX8_ZERO6 2>/dev/null"),1000);
+        out.append("\nЭто накопленные счётчики. Без трафика в течение двух замеров их рост не доказан; ");
+        out.append("при NAT/offload фактический лимит нужно проверять отдельным тестом скорости.\n");
+        return out.toString();
+    }
+
+    private static void appendReadOnlyStat(StringBuilder out,String label,
+                                          TelnetShell.Result value,int limit){
+        out.append(label).append(" (код ").append(value.code).append("):\n");
+        String data=value.output==null?"":value.output.trim();
+        if(data.isEmpty()) {out.append("данных нет\n");return;}
+        // Output may contain external station addresses: keep it bounded and printable.
+        data=data.replace('\r',' ').replaceAll("[\\p{Cntrl}&&[^\n\t]]","");
+        if(data.length()>limit)data=data.substring(0,limit)+"\n[…обрезано]";
+        out.append(data).append("\n");
+    }
+
     @Override public synchronized void close(){shell.close();}
 }
