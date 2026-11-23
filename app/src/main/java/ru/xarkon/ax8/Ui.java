@@ -206,7 +206,22 @@ final class Ui {
         panel.setBackground(shape(activity,CARD,0,Math.max(9,CORNER)));
         panel.addView(text(activity,heading,20,TEXT,true));
         if(message!=null&&!message.isEmpty()){
-            addSpace(panel,activity,12);panel.addView(text(activity,message,15,TEXT,false));
+            addSpace(panel,activity,12);
+            // Long explanations must not push the action buttons off-screen.
+            final int maxMessageHeight=Math.min(dp(activity,220),
+                    (int)(activity.getResources().getDisplayMetrics().heightPixels*.24f));
+            ScrollView messageScroll=new ScrollView(activity){
+                @Override protected void onMeasure(int ws,int hs){
+                    super.onMeasure(ws,MeasureSpec.makeMeasureSpec(
+                            Math.min(maxMessageHeight,MeasureSpec.getSize(hs)>0
+                                    ?MeasureSpec.getSize(hs):maxMessageHeight),
+                            MeasureSpec.AT_MOST));
+                }
+            };
+            messageScroll.setFillViewport(false);
+            messageScroll.setVerticalScrollBarEnabled(false);
+            messageScroll.addView(text(activity,message,15,TEXT,false));
+            panel.addView(messageScroll,new LinearLayout.LayoutParams(-1,-2));
         }
         if(body!=null){
             addSpace(panel,activity,13);
