@@ -367,9 +367,16 @@ public final class MainActivity extends Activity {
         if(index==tab)return;
         tabScrollY[tab]=pendingScrollY>=0?pendingScrollY:scroll.getScrollY();
         tab=index;pendingScrollY=tabScrollY[index];rebuildNav();draw(true);
-        if(Ui.MOTION){content.setAlpha(0);content.setTranslationY(d(14));
-            content.animate().alpha(1).translationY(0).setDuration(230).start();}
-        else{content.setAlpha(1);content.setTranslationY(0);}
+        // Cancel the previous tab transition before starting another one. Rapid taps
+        // must not let an older animation alter the newly selected page.
+        content.animate().cancel();
+        content.setAlpha(1f);
+        content.setTranslationY(0f);
+        if(Ui.MOTION){
+            content.setAlpha(0f);
+            content.setTranslationY(d(14));
+            content.animate().alpha(1f).translationY(0f).setDuration(230).start();
+        }
         if(index==1||index==2||index==3)refresh(true);
     }
     /** Update the shared progress banner only when its visible state actually changes. */
