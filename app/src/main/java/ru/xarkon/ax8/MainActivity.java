@@ -1355,7 +1355,7 @@ public final class MainActivity extends Activity {
                 if(!knownClientsExpanded)expandedRememberedGroups.clear();draw(true);}));
         if(knownClientsExpanded){
             Ui.addSpace(saved,this,9);
-            saved.addView(Ui.text(this,"Группа показывает текущий лимит подключённого MAC, а без подключения — последнее сохранённое ограничение. Правила каждого MAC независимы.",12,Ui.MUTED,false));
+            saved.addView(Ui.text(this,"Лимиты скорости сохраняются отдельно для каждого MAC. Кнопка блокировки применяет правило доступа сразу ко всем MAC с этим именем.",12,Ui.MUTED,false));
             Ui.addSpace(saved,this,9);
             for(SavedClientGroups.Group group:groups)
                 addSavedClientGroup(saved,group,limits,liveLimits,expandedRememberedGroups);
@@ -1407,6 +1407,18 @@ public final class MainActivity extends Activity {
         });
         header.setContentDescription(group.name+", "+caption+(multiple?", "+(open?"свернуть":"раскрыть")+" MAC-адреса":""));
         Ui.animateTouch(header);target.addView(header);Ui.addSpace(target,this,5);
+
+        int blockedCount=0;
+        if(blocked!=null)for(String mac:group.macs)if(blocked.black.contains(mac))blockedCount++;
+        boolean allBlocked=blocked!=null&&blockedCount==group.macs.size();
+        String actionLabel=allBlocked?"✓  Разблокировать":"⊘  Заблокировать";
+        if(group.macs.size()>1)actionLabel+=" · "+group.macs.size()+" MAC";
+        TextView accessButton=Ui.button(this,actionLabel,allBlocked?Ui.CARD2:0xFF442637,
+            allBlocked?Ui.GREEN:Ui.RED,()->changeSavedGroupBlock(group,!allBlocked));
+        accessButton.setContentDescription((allBlocked?"Разблокировать":"Заблокировать")+
+            " все MAC-адреса устройства "+group.name+", количество "+group.macs.size());
+        target.addView(accessButton,new LinearLayout.LayoutParams(-1,-2));
+        Ui.addSpace(target,this,7);
         if(open){
             for(String mac:group.macs){
                 boolean live=liveLimits.containsKey(mac);
@@ -1440,6 +1452,34 @@ public final class MainActivity extends Activity {
             }
             Ui.addSpace(target,this,8);
         }
+    }
+    /** Apply ACL to every MAC currently associated with this remembered display name. */
+    private void changeSavedGroupBlock(SavedClientGroups.Group group,boolean block){
+        if(blocked==null){
+            toast("Список блокировок ещё загружается. Обновите данные AX8.");
+            refresh(true);return;
+        }
+        LinkedHashSet<String> distinct=new LinkedHashSet<>();
+        for(String mac:group.macs){
+            String normalized=RouterClient.normalizeMac(mac);
+            if(!normalized.isEmpty())distinct.add(normalized);
+        }
+        if(distinct.isEmpty()){toast("У устройства нет корректных MAC-адресов");return;}
+        OwnerIdentity.Result identity=OwnerIdentity.resolve(this,devices,blocked,ownerMac);
+        final String protectedMac=identity.resolved()?identity.mac:ownerMac;
+        if(block&&distinct.contains(RouterClient.normalizeMac(protectedMac))){
+            alert("Управляющее устройство","Нельзя заблокировать группу, содержащую MAC телефона, управляющего AX8.");
+            return;
+        }
+        final ArrayList<String> groupMacs=new ArrayList<>(distinct);
+        String verb=block?"Заблокировать":"Разблокировать";
+        String message=verb+" устройство «"+group.name+"» по всем "+groupMacs.size()+
+            " сохранённым MAC-адресам?\\n\\n"+String.join("\\n",groupMacs)+
+            "\\n\\nДругие записи чёрного списка останутся без изменений.";
+        if(block&&!identity.resolved())
+            message+="\\n\\nВнимание: управляющий телефон не удалось надёжно определить. Проверьте список MAC, чтобы не потерять доступ к AX8.";
+        confirm("Контроль доступа",message,
+            ()->action("Список доступа",progress->api.setBlockedGroup(groupMacs,block,protectedMac)));
     }
     private static String humanRate(double bps){
         if(Double.isNaN(bps))return "—";

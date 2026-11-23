@@ -616,13 +616,16 @@ public final class RouterClient {
         }
         JSONObject r=postWithAd(p);if(!success(r))throw new IOException("Блокировка не принята: "+r);
     }
-    public synchronized void setBlocked(String mac,boolean block)throws Exception {
-        ensureAuth();mac=normalizeMac(mac);if(mac.isEmpty())throw new IllegalArgumentException("MAC не распознан");
+    /** Set the deny state for a named group in one verified ACL write. */
+    public synchronized void setBlockedGroup(Collection<String> macs,boolean block,String protectedMac)throws Exception {
+        ensureAuth();
         BlockState state=blockState();
-        if(block&&!state.userMac.isEmpty()&&state.userMac.equals(mac))throw new IOException("Нельзя заблокировать устройство управления");
-        ArrayList<String> wanted=new ArrayList<>(state.black);
-        if(block){if(!wanted.contains(mac))wanted.add(mac);}else wanted.remove(mac);
+        ArrayList<String> wanted=MacBlockPolicy.target(state.black,macs,block,state.userMac,protectedMac);
+        if(new LinkedHashSet<>(wanted).equals(new LinkedHashSet<>(state.black)))return;
         writeBlocked(wanted,state);
+    }
+    public synchronized void setBlocked(String mac,boolean block)throws Exception {
+        setBlockedGroup(Collections.singletonList(mac),block,"");
     }
     public synchronized void writeBlocked(List<String> wanted,BlockState state)throws Exception {
         if(!wanted.isEmpty()&&!macList(state.white).isEmpty()&&!state.mode.matches("0|2|"))throw new IOException("Whitelist активен; DENY не включён");
