@@ -366,6 +366,10 @@ public final class MainActivity extends Activity {
     private void showTab(int index){
         if(index==tab)return;
         tabScrollY[tab]=pendingScrollY>=0?pendingScrollY:scroll.getScrollY();
+        // A theme/compact-layout anchor belongs only to the settings page.
+        // Discard it on navigation so a pending restore cannot move another tab.
+        pendingCompactScrollFraction=-1f;
+        pendingThemeAnchorKey=null;
         tab=index;pendingScrollY=tabScrollY[index];rebuildNav();draw(true);
         // Cancel the previous tab transition before starting another one. Rapid taps
         // must not let an older animation alter the newly selected page.
