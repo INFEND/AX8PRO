@@ -1122,15 +1122,17 @@ public final class MainActivity extends Activity {
         TextView val=Ui.text(this,value,12,signalColorForMetric(metric),true);
         val.setSingleLine(false);
         val.setHorizontallyScrolling(false);
+        // Preserve right-edge alignment for values in both stacked (phone)
+        // and horizontal (tablet) layouts. Names stay on the left.
+        val.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
+        val.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
         if(stacked){
             row.addView(name);
-            val.setGravity(Gravity.START);
             LinearLayout.LayoutParams valueParams=new LinearLayout.LayoutParams(-1,-2);
             valueParams.topMargin=d(3);
             row.addView(val,valueParams);
         }else{
             row.addView(name,new LinearLayout.LayoutParams(0,-2,1));
-            val.setGravity(Gravity.END);
             row.addView(val,new LinearLayout.LayoutParams(0,-2,1));
         }
         overviewSignalValues.put(metric,val);
