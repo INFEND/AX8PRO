@@ -1114,27 +1114,17 @@ public final class MainActivity extends Activity {
         TextView t=Ui.text(this,value,size,color,bold);overviewValues.put(key,t);return t;
     }
     private LinearLayout signalRow(String metric,String value){
-        // Keep live radio readings readable on narrow screens and with large system fonts.
-        boolean stacked=getResources().getConfiguration().screenWidthDp<=400
-            || getResources().getConfiguration().fontScale>=1.3f;
-        LinearLayout row=stacked?Ui.vertical(this):Ui.horizontal(this);
+        // Restore the original compact two-column layout on every screen size.
+        // The value column stays right aligned even when accessibility text wraps.
+        LinearLayout row=Ui.horizontal(this);
         TextView name=Ui.text(this,metric,13,Ui.MUTED,true);
+        row.addView(name,new LinearLayout.LayoutParams(0,-2,1));
         TextView val=Ui.text(this,value,12,signalColorForMetric(metric),true);
         val.setSingleLine(false);
         val.setHorizontallyScrolling(false);
-        // Preserve right-edge alignment for values in both stacked (phone)
-        // and horizontal (tablet) layouts. Names stay on the left.
         val.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         val.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
-        if(stacked){
-            row.addView(name);
-            LinearLayout.LayoutParams valueParams=new LinearLayout.LayoutParams(-1,-2);
-            valueParams.topMargin=d(3);
-            row.addView(val,valueParams);
-        }else{
-            row.addView(name,new LinearLayout.LayoutParams(0,-2,1));
-            row.addView(val,new LinearLayout.LayoutParams(0,-2,1));
-        }
+        row.addView(val,new LinearLayout.LayoutParams(0,-2,1));
         overviewSignalValues.put(metric,val);
         return row;
     }
@@ -2166,8 +2156,19 @@ public final class MainActivity extends Activity {
         Ui.addSpace(q,this,12);q.addView(Ui.infoRow(this,"Сохранено правил",String.valueOf(savedLimits.size()),Ui.CYAN));
         if(savedLimits.isEmpty())q.addView(Ui.text(this,"Сохранённых правил пока нет. Добавьте лимит в разделе «Клиенты».",12,Ui.MUTED,false));
         else {
+            // Restore the former compact saved-limit list by default:
+            // one device per line, with its configured speed against the right edge.
             Ui.addSpace(q,this,8);
-            q.addView(Ui.button(this,(savedLimitsExpanded?"⌃  ":"⌄  ")+"Сохранённые ограничения ("+savedLimits.size()+")",
+            q.addView(Ui.text(this,"Список сохранённых ограничений",13,Ui.MUTED,true));
+            Ui.addSpace(q,this,5);
+            if(!savedLimitsExpanded){
+                ArrayList<String> macs=new ArrayList<>(savedLimits.keySet());
+                macs.sort((left,right)->savedLimitDeviceName(left).compareToIgnoreCase(savedLimitDeviceName(right)));
+                for(String mac:macs)savedLimitRow(q,mac,savedLimits.get(mac));
+            }
+            // Preserve the newer grouped MAC editing UI without replacing the old overview.
+            Ui.addSpace(q,this,8);
+            q.addView(Ui.button(this,(savedLimitsExpanded?"⌃  ":"⌄  ")+"Управление группами MAC",
                 Ui.CARD2,Ui.TEXT,()->{savedLimitsExpanded=!savedLimitsExpanded;if(!savedLimitsExpanded)expandedRuleGroups.clear();draw(true);}));
             if(savedLimitsExpanded){
                 Ui.addSpace(q,this,8);
