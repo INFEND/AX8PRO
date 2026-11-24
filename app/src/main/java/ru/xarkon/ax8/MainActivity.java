@@ -1441,7 +1441,21 @@ public final class MainActivity extends Activity {
         header.setBackground(Ui.shape(this,Ui.CARD2,chosen?Ui.CYAN:0,Math.max(4,Ui.CORNER-7)));
         header.setMinimumHeight(d(48));header.setPadding(d(12),d(8),d(12),d(8));
         LinearLayout identity=Ui.vertical(this);
-        identity.addView(Ui.text(this,(selectedClientGroups.isEmpty()?"":(chosen?"☑  ":"☐  "))+group.name,14,Ui.TEXT,true));
+        LinearLayout titleRow=Ui.horizontal(this);
+        TextView name=Ui.text(this,(selectedClientGroups.isEmpty()?"":(chosen?"☑  ":"☐  "))+group.name,14,Ui.TEXT,true);
+        titleRow.addView(name,new LinearLayout.LayoutParams(0,-2,1));
+        if(multiple){
+            // Expansion belongs to the device identity, not the speed column.
+            TextView arrow=Ui.text(this,open?"⌃":"⌄",18,Ui.CYAN,true);
+            arrow.setGravity(Gravity.CENTER);
+            arrow.setContentDescription(open?"Скрыть MAC-адреса":"Показать MAC-адреса");
+            arrow.setOnClickListener(v->{
+                if(!expanded.add(group.key))expanded.remove(group.key);
+                draw(true);
+            });
+            titleRow.addView(arrow,new LinearLayout.LayoutParams(d(36),d(40)));
+        }
+        identity.addView(titleRow);
         if(multiple){
             Ui.addSpace(identity,this,4);
             identity.addView(Ui.text(this,group.macs.size()+" MAC"+(group.live?" · текущий лимит":group.limit!=null&&!group.conflicting?" · сохранённый лимит":""),10,Ui.MUTED,false));
@@ -1449,20 +1463,25 @@ public final class MainActivity extends Activity {
         header.addView(identity,new LinearLayout.LayoutParams(0,-2,1));
         String caption=group.conflicting?"Разные лимиты":limitName(group.limit);
         LinearLayout trailing=Ui.horizontal(this);
+        int blockedCount=0;
+        if(blocked!=null){
+            for(String mac:group.macs)if(blocked.black.contains(mac))blockedCount++;
+        }
+        if(blockedCount>0){
+            // Read-only outline indicator: no router/blocking commands are invoked.
+            ImageView lock=new ImageView(this);
+            lock.setImageResource(R.drawable.ic_lock_outline);
+            lock.setColorFilter(blockedCount==group.macs.size()?Ui.RED:Ui.ORANGE);
+            lock.setContentDescription(blockedCount==group.macs.size()?"Устройство заблокировано":"Часть MAC-адресов заблокирована");
+            lock.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            LinearLayout.LayoutParams lockParams=new LinearLayout.LayoutParams(d(18),d(18));
+            lockParams.rightMargin=d(6);
+            trailing.addView(lock,lockParams);
+        }
         TextView value=Ui.text(this,caption,14,group.conflicting?Ui.ORANGE:group.limit==null?Ui.GREEN:Ui.RED,true);
         value.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
         value.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
         value.setPadding(d(8),0,0,0);trailing.addView(value);
-        if(multiple){
-            TextView arrow=Ui.text(this,open?"⌃":"⌄",18,Ui.CYAN,true);
-            arrow.setPadding(d(10),d(7),d(4),d(7));
-            arrow.setOnClickListener(v->{
-                if(!expanded.add(group.key))expanded.remove(group.key);
-                draw(true);
-            });
-            arrow.setContentDescription(open?"Скрыть MAC-адреса":"Показать MAC-адреса");
-            trailing.addView(arrow);
-        }
         header.addView(trailing);
         header.setClickable(true);header.setFocusable(true);
         header.setOnClickListener(v->{
@@ -1471,6 +1490,7 @@ public final class MainActivity extends Activity {
         });
         header.setOnLongClickListener(v->{toggleClientSelection(group.key);return true;});
         header.setContentDescription(group.name+", "+caption+
+            (blockedCount==0?"":blockedCount==group.macs.size()?", заблокировано":", часть MAC-адресов заблокирована")+
             (chosen?", выбрано":", удерживайте для множественного выбора"));
         Ui.animateTouch(header);target.addView(header);Ui.addSpace(target,this,5);
         if(open){
