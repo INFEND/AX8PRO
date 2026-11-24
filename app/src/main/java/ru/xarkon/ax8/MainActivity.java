@@ -1434,27 +1434,25 @@ public final class MainActivity extends Activity {
                                      Map<String,Integer> limits,Map<String,Integer> liveLimits,Set<String> expanded){
         boolean multiple=group.macs.size()>1;
         boolean open=multiple&&expanded.contains(group.key);
-        // Keep the saved-device name and its limit readable on narrow displays
-        // and with enlarged accessibility fonts.
-        boolean stackedHeader=getResources().getConfiguration().screenWidthDp<=400
-                ||getResources().getConfiguration().fontScale>=1.3f;
-        LinearLayout header=stackedHeader?Ui.vertical(this):Ui.horizontal(this);
+        // A device name and its saved speed belong on the same horizontal row.
+        // The name column may wrap for accessibility fonts; the limit stays at the right edge.
+        LinearLayout header=Ui.horizontal(this);
         boolean chosen=selectedClientGroups.contains(group.key);
         header.setBackground(Ui.shape(this,Ui.CARD2,chosen?Ui.CYAN:0,Math.max(4,Ui.CORNER-7)));
-        header.setMinimumHeight(d(48));header.setPadding(d(12),d(12),d(12),d(12));
+        header.setMinimumHeight(d(48));header.setPadding(d(12),d(8),d(12),d(8));
         LinearLayout identity=Ui.vertical(this);
         identity.addView(Ui.text(this,(selectedClientGroups.isEmpty()?"":(chosen?"☑  ":"☐  "))+group.name,14,Ui.TEXT,true));
         if(multiple){
             Ui.addSpace(identity,this,4);
             identity.addView(Ui.text(this,group.macs.size()+" MAC"+(group.live?" · текущий лимит":group.limit!=null&&!group.conflicting?" · сохранённый лимит":""),10,Ui.MUTED,false));
         }
-        header.addView(identity,stackedHeader?new LinearLayout.LayoutParams(-1,-2)
-                :new LinearLayout.LayoutParams(0,-2,1));
+        header.addView(identity,new LinearLayout.LayoutParams(0,-2,1));
         String caption=group.conflicting?"Разные лимиты":limitName(group.limit);
         LinearLayout trailing=Ui.horizontal(this);
         TextView value=Ui.text(this,caption,14,group.conflicting?Ui.ORANGE:group.limit==null?Ui.GREEN:Ui.RED,true);
         value.setGravity(Gravity.END|Gravity.CENTER_VERTICAL);
-        value.setPadding(stackedHeader?0:d(8),0,0,0);trailing.addView(value);
+        value.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_END);
+        value.setPadding(d(8),0,0,0);trailing.addView(value);
         if(multiple){
             TextView arrow=Ui.text(this,open?"⌃":"⌄",18,Ui.CYAN,true);
             arrow.setPadding(d(10),d(7),d(4),d(7));
@@ -1465,10 +1463,7 @@ public final class MainActivity extends Activity {
             arrow.setContentDescription(open?"Скрыть MAC-адреса":"Показать MAC-адреса");
             trailing.addView(arrow);
         }
-        if(stackedHeader){
-            Ui.addSpace(header,this,6);
-            header.addView(trailing);
-        }else header.addView(trailing);
+        header.addView(trailing);
         header.setClickable(true);header.setFocusable(true);
         header.setOnClickListener(v->{
             if(!selectedClientGroups.isEmpty())toggleClientSelection(group.key);
